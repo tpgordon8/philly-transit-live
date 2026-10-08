@@ -168,15 +168,15 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .veh-wrap{background:none;border:0;transition:transform 1.6s cubic-bezier(.25,.1,.25,1)}
 #map.noglide .veh-wrap{transition:none!important}
 .veh-wrap{width:80px;height:44px}
-.veh-wrap .vb{position:absolute;left:8px;top:2px;overflow:visible}
+.veh-wrap .vb{position:absolute;left:8px;top:2px;overflow:visible;z-index:0} /* Leaflet gives map-pane svgs z-index:200, which would hide the badges */
 .veh-wrap .vb .bd{fill:var(--c)}
 .veh-wrap .vb .wn{fill:#fff;opacity:.88}
 .veh-wrap .vb .wh{fill:#0f1c2c}
 .veh-wrap .vb .ln{stroke:#0f1c2c;stroke-width:1.6;fill:none;opacity:.7}
 .veh-wrap .vb .hl{fill:#ffe27a}
 .veh-wrap .vb .pole{stroke:#0f1c2c;stroke-width:2;stroke-linecap:round;fill:none}
-.veh-wrap .rt{position:absolute;left:40px;top:23px;transform:translate(-50%,-50%);min-width:20px;max-width:56px;padding:0 4px;border-radius:4px;background:#fff;color:#0f1c2c;font:700 13px/17px var(--f-display);text-align:center;letter-spacing:.02em;box-shadow:0 0 0 1px rgba(15,28,44,.35);white-space:nowrap}
-.veh-wrap .dr{position:absolute;left:57px;top:23px;width:21px;height:21px;border-radius:50%;background:#0f1c2c;color:#fff;border:2px solid #fff;font:700 9px/17px var(--f-body);text-align:center;letter-spacing:-.02em}
+.veh-wrap .rt{z-index:1;position:absolute;left:40px;top:23px;transform:translate(-50%,-50%);min-width:20px;max-width:56px;padding:0 4px;border-radius:4px;background:#fff;color:#0f1c2c;font:700 13px/17px var(--f-display);text-align:center;letter-spacing:.02em;box-shadow:0 0 0 1px rgba(15,28,44,.35);white-space:nowrap}
+.veh-wrap .dr{z-index:1;position:absolute;left:57px;top:23px;width:21px;height:21px;border-radius:50%;background:#0f1c2c;color:#fff;border:2px solid #fff;font:700 9px/17px var(--f-body);text-align:center;letter-spacing:-.02em}
 .veh-wrap .dr.none{background:#6b7a8a}
 .veh-wrap.stale{opacity:.4;filter:grayscale(1)}
 .veh-wrap.sel .vb{filter:drop-shadow(0 0 5px var(--accent)) drop-shadow(0 0 2px var(--accent))}
