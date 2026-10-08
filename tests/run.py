@@ -1,0 +1,52 @@
+"""Run every tests/test_*.py against a checkout.
+
+    python3 tests/run.py                       # this checkout
+    python3 tests/run.py --root /path/to/wt    # a feature-branch worktree
+    python3 tests/run.py --only my_routes      # only test files / names containing this text
+
+Prints PASS/FAIL per test, writes tests/out/report.txt as evidence, exits 1 if anything failed.
+"""
+import argparse
+import importlib.util
+import pathlib
+import sys
+import time
+import traceback
+
+HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--root", default=str(HERE.parent))
+    ap.add_argument("--only", default="")
+    args = ap.parse_args()
+    lines, failed = [], 0
+    for path in sorted(HERE.glob("test_*.py")):
+        spec = importlib.util.spec_from_file_location(path.stem, path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        for name in sorted(n for n in dir(mod) if n.startswith("test_")):
+            if args.only and args.only not in name and args.only not in path.stem:
+                continue
+            t0 = time.time()
+            try:
+                getattr(mod, name)(args.root)
+                lines.append(f"PASS  {path.stem}::{name}  ({time.time() - t0:.1f}s)")
+            except Exception as e:  # noqa: BLE001
+                failed += 1
+                msg = (str(e) or e.__class__.__name__).splitlines()[0][:300]
+                lines.append(f"FAIL  {path.stem}::{name}  {msg}")
+                if not isinstance(e, AssertionError):
+                    lines.append("      " + traceback.format_exc().strip().splitlines()[-1][:300])
+    out = HERE / "out"
+    out.mkdir(exist_ok=True)
+    report = "\n".join(lines) + f"\n\n{len(lines) - failed} passed, {failed} failed  (root: {args.root})\n"
+    (out / "report.txt").write_text(report)
+    print(report)
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    main()
