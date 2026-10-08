@@ -382,21 +382,21 @@ var state={
 };
 function savePrefs(){store.set('septa.prefs.v1',{center:state.center,radius:state.radius,filters:state.filters})}
 
-/* ----- Network: every SEPTA call goes through a CORS proxy; retry once on the second proxy ----- */
-var PROXIES=[
-  function(u){return 'https://api.allorigins.win/raw?url='+encodeURIComponent(u)},
-  function(u){return 'https://corsproxy.io/?url='+encodeURIComponent(u)}
-];
-function fetchVia(target,i){
+/* ----- Network: SEPTA's API sends no CORS headers, so every call goes through our own Cloudflare Worker.
+   The Worker forwards three fixed endpoints (TransitView, TrainView, Alerts) and adds CORS. Retry once on failure. ----- */
+var WORKER='https://septa-proxy.tpgordon8.workers.dev';
+function fetchOnce(name){
   var ctl=new AbortController(),t=setTimeout(function(){ctl.abort()},15000);
-  return fetch(PROXIES[i](target),{signal:ctl.signal,cache:'no-store'}).then(function(r){
+  return fetch(WORKER+'/'+name,{signal:ctl.signal,cache:'no-store'}).then(function(r){
     if(!r.ok)throw new Error('HTTP '+r.status);
-    return r.text();
-  }).then(function(txt){return JSON.parse(txt)}).finally(function(){clearTimeout(t)});
+    return r.json();
+  }).finally(function(){clearTimeout(t)});
 }
 function septa(path){
-  var target=API+path+(path.indexOf('?')>-1?'&':'?')+'_t='+Date.now();
-  return fetchVia(target,0).catch(function(){return fetchVia(target,1)});
+  var name=path.split('/')[0];
+  return fetchOnce(name).catch(function(){
+    return new Promise(function(res){setTimeout(res,1500)}).then(function(){return fetchOnce(name)});
+  });
 }
 
 /* ----- Map ----- */
@@ -531,7 +531,7 @@ function renderStatus(){
     dot.className='dot err';
     txt.innerHTML='<b>Live data unavailable</b>';
     var dropped=okAny&&false;
-    showBanner('','<b>Live data unavailable.</b> Couldn\'t reach SEPTA\'s API through the CORS proxy. No vehicle positions are shown, and none are guessed. Retrying every '+(REFRESH_MS/1000)+' seconds.');
+    showBanner('','<b>Live data unavailable.</b> Couldn\'t reach SEPTA\'s API through the proxy. No vehicle positions are shown, and none are guessed. Retrying every '+(REFRESH_MS/1000)+' seconds.');
     return;
   }
   var newest=Math.max(b.ok,t.ok),ago=Math.max(0,Math.round((now-newest)/1000));
