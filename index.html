@@ -562,7 +562,10 @@ function clearSelection(){
 function toggleStar(k){
   var i=routesStore.stars.indexOf(k);
   if(i>=0)routesStore.stars.splice(i,1);else routesStore.stars.push(k);
-  saveRoutes();apply();
+  saveRoutes();
+  /* Unstarring the open vehicle's route while the filter is on hides it; close the card instead of calling it "not reporting". */
+  if(i>=0&&routeFilterOn()&&state.selected)clearSelection();
+  apply();
 }
 function starName(k){return k.indexOf('train:')===0?k.slice(6):k}
 function renderMyRoutes(){

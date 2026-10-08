@@ -143,3 +143,18 @@ def test_mobile_no_horizontal_scroll_with_three_routes(root):
         sw = s.page.evaluate("[document.documentElement.scrollWidth, document.documentElement.clientWidth, document.body.scrollWidth]")
         assert sw[0] <= sw[1] and sw[2] <= sw[1], f"horizontal scroll: {sw}"
         assert not s.console_errors, s.console_errors
+
+
+def test_unstarring_open_vehicles_route_closes_card_not_misleading(root):
+    with Session(root) as s:
+        boot(s)
+        routes = list(dict.fromkeys(badges(s)))
+        assert len(routes) >= 2, "fixture needs a second route"
+        first, other = routes[0], routes[1]
+        s.page.evaluate(f"localStorage.setItem('{KEY}', JSON.stringify({{stars: ['{first}', '{other}'], onlyMine: true}}))")
+        s.page.reload()
+        s.wait_live()
+        s.page.evaluate("document.querySelector('.veh-wrap').click()")
+        s.page.click("#starBtn")  # unstar the open vehicle's route; the other star keeps the filter on
+        hidden = s.page.evaluate("document.querySelector('#detail').hidden")
+        assert hidden, "card for a vehicle that the filter just removed from the map should close"
