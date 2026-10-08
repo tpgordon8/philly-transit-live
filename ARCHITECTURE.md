@@ -240,3 +240,71 @@ client-side: rules live in `localStorage` (`septa.rules.v1`), nothing is sent an
 Limitation, stated in the UI: alerts only fire while the page is open (background tabs on phones may be paused by the
 browser). Task 3.3 (true push) stays deferred; if wanted later it needs a Durable Object or KV design that stays
 under the limits above.
+
+## 12. Trip planner (multi-modal "leave now" directions)
+
+Scope (decided with the repo owner): leave-now trips from A to B made of walking, Indego bike share, ONE bus ride
+and car; walk-only, bike-only and car-only are shown for comparison. No bus-to-bus transfers, no Regional Rail, no
+arrive-by times in v1. Car is a standalone comparison option, never combined with a bus.
+
+### 12.1 Data sources
+| Need | Source | Notes |
+|---|---|---|
+| Street paths and times for walk, bike, car | OSM-based routing service `https://routing.openstreetmap.de/routed-foot|routed-bike|routed-car/route/v1/driving/<lng,lat;lng,lat>` (OSRM API, CORS open) | Fair use only. Only finalist legs are requested (at most about a dozen calls per plan), results cached in memory per coordinate pair and profile. Coordinates leave the browser to this third party, like typed addresses already go to Nominatim; the UI and README say so. |
+| Indego stations and live bike/dock counts | GBFS: `https://gbfs.bcycle.com/bcycle_indego/station_information.json` (cached for the page session) and `station_status.json` (fetched fresh for each plan, ttl 60 s). CORS open, no key | `num_bikes_available`, `num_bikes_available_types` (electric/classic/smart), `num_docks_available`, `is_renting`, `is_returning`. Direct from the browser, so it costs no Worker requests. |
+| Bus network topology and scheduled running times | SEPTA static GTFS (`https://www3.septa.org/developer/gtfs_public.zip`, inner `google_bus.zip`) preprocessed offline by `tools/build_network.py` into `data/bus-network.json` | Committed to the repo, served by GitHub Pages, fetched lazily the first time the planner opens. Regenerate when SEPTA publishes a new feed. The file records the feed's validity dates and the UI shows "schedule data as of ...". |
+| Live buses | existing TransitView feed already in the page | Used for "is this route running now" and for the wait at the boarding stop. |
+
+### 12.2 `data/bus-network.json` schema (version 1)
+```
+{ "v": 1,
+  "generated": "YYYY-MM-DD",
+  "feed": { "start": "YYYYMMDD", "end": "YYYYMMDD" },          // from feed_info.txt
+  "stops": { "<stop_id>": [lat, lng, "name"], ... },            // only stops used by a pattern; lat/lng rounded to 5 dp
+  "patterns": [
+    { "id": "47-0-1",            // route-direction-index, unique
+      "route": "47",             // GTFS route_short_name; MUST equal TransitView route_id for live matching
+      "kind": "bus",             // "bus" (route_type 3) or "trolley" (route_type 0)
+      "dir": 0,                  // GTFS direction_id
+      "head": "Frankford TC",    // most common trip_headsign
+      "stops": ["id", ...],      // ordered stop ids
+      "mins": [0, 1.5, ...],     // cumulative scheduled minutes from the first stop, same length as stops, median over weekday 10:00-15:00 trips, 0.5 min resolution, non-decreasing
+      "hw": 12,                  // typical weekday midday headway in minutes (integer), null if unknown
+      "trips": 34 }              // weekday trips this pattern runs (all day), used to rank variants
+  ] }
+```
+Selection rules: per (route, direction) keep the patterns with distinct stop sequences that each cover at least 15% of that
+route-direction's weekday trips, at most 3, plus always the most common one. "Weekday" = service ids active on a typical
+Wednesday inside the feed validity window. Shapes are not used: the bus leg is drawn as straight segments along the stop
+sequence. Budget: under 2.5 MB raw (gzipped by Pages in transit). `tests/test_network_data.py` checks integrity.
+
+### 12.3 Planner algorithm (pure functions in `index.html`, exposed on `window.__SEPTA_TEST__`)
+Inputs: origin O, destination D, `now`, the network JSON, Indego info and status, live buses (`collect()`).
+1. Always compute WALK (foot route O to D), CAR (car route), and BIKE: nearest rentable station S1 to O with at least
+   one bike (rank by straight-line distance, consider the nearest 3), nearest station S2 to D with at least one free
+   dock (nearest 3); legs: walk O to S1, bike S1 to S2, walk S2 to D. Overheads: 90 s to unlock, 60 s to dock.
+2. BUS candidates: for each pattern whose route is currently running (at least one live vehicle with that route id in
+   the feed), for each access mode in {walk, bike} and egress mode in {walk, bike}:
+   - boarding stop b within 0.6 mi (walk) or 2.0 mi (bike) straight-line of O, alighting stop a within the same limits of D,
+     with index(b) < index(a) in the pattern. Pre-rank by estimated total using straight-line distance x 1.3 and speeds
+     walk 1.25 m/s, bike 3.6 m/s, bus ride = `mins[a] - mins[b]`. Keep the best 2 per (pattern, access, egress) and the best
+     6 overall for exact routing.
+   - Bike access needs an Indego station S1 near O with a bike and a station S2 within 0.15 mi of b with a free dock; the
+     leg is walk O to S1, bike S1 to S2, walk S2 to b. Bike egress mirrors it: walk a to S3 (bike available, within
+     0.15 mi of a), bike S3 to S4 (free dock, near D), walk S4 to D. If no such station exists the combination is dropped.
+   - Exact times come from the routing service for every foot/bike leg (finalists only). Boarding buffer 60 s.
+   - Wait at b: let `tArr` be the time the traveller reaches b. For every live vehicle on the pattern's route whose
+     `next_stop_id` is in the pattern at index `i <= index(b)`, its time to reach b is `(mins[index(b)] - mins[i])` minutes
+     (scheduled running time; its current lateness is assumed to persist). Take the first such vehicle with time >= `tArr`
+     minus 1 minute: wait = time - `tArr`, flagged "live". If none is tracked: wait = `hw`/2 flagged "typical, from
+     schedule". If `hw` is null and no vehicle: drop the option. Ride time is `mins[a] - mins[b]` (scheduled), flagged
+     "scheduled".
+3. Rank by total minutes; return at most 5 options with at most 2 per structure (walk-bus-walk, bike-bus-walk, ...) so
+   the list is varied. Every option carries its legs: `{mode, from, to, meters, minutes, basis: 'routed'|'scheduled'|'live'|'typical', path:[[lat,lng],...], notes}`.
+4. Honesty rules: no invented live data; label scheduled and typical numbers; Indego counts are as of the status timestamp
+   and are shown with their age; no costs are shown; car has no traffic or parking data and says so.
+
+### 12.4 Privacy and budget
+Planning never touches the Worker. Third parties receive only what a leg needs: Indego (nothing), the routing service
+(coordinates of leg endpoints), Nominatim (typed addresses, already the case). Nothing is stored except an optional,
+user-confirmed "last plan" is NOT stored in v1. The 15 s refresh loop and idle pause are unchanged.
