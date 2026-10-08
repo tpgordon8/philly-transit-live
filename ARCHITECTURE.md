@@ -157,3 +157,23 @@ makes it fail.
 | 3.3 | Push notifications | deferred | 3.2 live and verified |
 
 Order: 0.1 → 1.1 → W1 → 1.2 → 2.1 → 3.x. Tasks that edit `index.html` run one at a time to avoid merge conflicts.
+
+## 11. Phase 3 decision: "Leave now" alerts are evaluated in the page, not in a Worker cron
+
+Checked against Cloudflare's current limits (developers.cloudflare.com, 2026-10-08):
+
+| Limit (free plan) | Value | Why it matters |
+|---|---|---|
+| Workers KV writes | 1,000/day | Every rule created or fired is a write; a public page can be spammed past this. |
+| Workers KV reads | 100,000/day | Fine. |
+| Worker CPU per cron invocation | 10 ms | Parsing the ~350 KB TransitView feed plus distance maths for every rule is likely to exceed it. |
+| Worker requests | 100,000/day | The docs do not say whether cron invocations count toward it. |
+| Cron triggers | 5 per account | Fine. |
+
+A server-side engine also needs per-vehicle speed history between runs (state), would store a visitor's stops on
+Cloudflare, and only pays off with push notifications (page closed). The page already receives the same live feed
+every 15 s and already computes stop ETAs, so Task 3.1 (evaluation) and Task 3.2 (in-page notifications) are built
+client-side: rules live in `localStorage` (`septa.rules.v1`), nothing is sent anywhere, no KV, no cron.
+Limitation, stated in the UI: alerts only fire while the page is open (background tabs on phones may be paused by the
+browser). Task 3.3 (true push) stays deferred; if wanted later it needs a Durable Object or KV design that stays
+under the limits above.
