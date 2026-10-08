@@ -175,6 +175,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 #stopCard .sbdist{color:var(--mute)}
 #stopCard .sbeta{display:grid;justify-items:end;text-align:right;font-size:12px;color:var(--mute)}
 #stopCard .sbeta b{font:700 16px var(--f-display);color:var(--ink)}
+#stopCard .sbeta b.rough{font-style:italic;font-weight:500;color:var(--mute)}
 #stopCard .sbmsg{color:var(--mute);font-size:13px}
 #stopCard .sbstale{color:var(--warn);font-weight:600;font-size:12.5px}
 #stopCard .sbfine{color:var(--mute);font-size:12px}
@@ -392,7 +393,7 @@ function shortText(s,n){s=String(s||'').replace(/\s+/g,' ').trim();return s.leng
 
 /* ----- Stop board math. SEPTA publishes no bus predictions here, so an ETA exists only when it can be computed from
    measured data: straight-line distance (padded 15 %) over speed measured from successive GPS reports. ----- */
-var speedHist={},HIST_WINDOW_S=120,HIST_MAX=6,MIN_SPAN_S=20,STILL_MPS=0.9,MAX_MPS=20,ROAD_PAD=1.15;
+var speedHist={},HIST_WINDOW_S=120,HIST_MAX=6,MIN_SPAN_S=20,STILL_MPS=0.9,MAX_MPS=20,ROAD_PAD=1.15,ROUGH_DEG=45;
 function distM(a,b){return distMi(a,b)*1609.344}
 /* Keep a short GPS history per vehicle: only new timestamps, only the last 120 s of feed time, at most 6 samples,
    and nothing for vehicles that left the feed. Called with every vehicle from each successful TransitView refresh. */
@@ -423,13 +424,20 @@ function speedMps(key){
   if(sp>MAX_MPS)return null;
   return sp<STILL_MPS?0:sp;
 }
-/* Only the bus whose very next stop is this stop gets a number. */
+/* The bus whose very next stop is this stop gets a plain estimate. A bus heading toward the stop (within 45 degrees,
+   1.5 mi, its own next stop known and different) gets a ROUGH one, flagged rough:true. Both need a measured speed. */
 function etaFor(v,stop){
-  if(!v||!stop||v.nextId!==stop.id)return {min:null,note:'not its next stop yet'};
+  if(!v||!stop)return {min:null,note:'not its next stop yet',rough:false};
+  var isNext=v.nextId===stop.id,rough=false;
+  if(!isNext){
+    var d=distMi(v,stop);
+    rough=!!v.nextId&&d<=1.5&&v.heading!=null&&angDiff(v.heading,bearing(v,stop))<=ROUGH_DEG;
+    if(!rough)return {min:null,note:'not its next stop yet',rough:false};
+  }
   var sp=speedMps(v.key);
-  if(sp==null)return {min:null,note:'measuring speed'};
-  if(sp===0)return {min:null,note:'not moving'};
-  return {min:Math.max(1,Math.ceil(distM(v,stop)*ROAD_PAD/sp/60)),note:''};
+  if(sp==null)return {min:null,note:'measuring speed',rough:false};
+  if(sp===0)return {min:null,note:'not moving',rough:false};
+  return {min:Math.max(1,Math.ceil(distM(v,stop)*ROAD_PAD/sp/60)),note:rough?'rough: not its next stop yet':'',rough:rough};
 }
 
 if(typeof window!=='undefined'&&window.__SEPTA_TEST__){
@@ -1084,7 +1092,7 @@ function boardRow(r){
   mid.appendChild(el('span','pill '+li.cls,li.txt));
   btn.appendChild(mid);
   var eta=el('span','sbeta');
-  eta.appendChild(el('b',null,r.eta.min==null?'—':r.eta.min+' min'));
+  eta.appendChild(el('b',r.eta.rough?'rough':null,r.eta.min==null?'—':(r.eta.rough?'~':'')+r.eta.min+' min'));
   if(r.eta.note)eta.appendChild(el('small',null,r.eta.note));
   btn.appendChild(eta);
   return btn;

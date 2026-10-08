@@ -32,6 +32,10 @@ SEPTA public hackathon API (no key, no CORS headers)
   within 1.5 mi and heading within 60° of the stop are listed as "Heading toward this stop" with distance only. The card
   always says these are estimates, not SEPTA predictions. No new network calls and no new localStorage keys: the board
   is rebuilt from in-memory data on every refresh, and nothing about the viewer is stored or sent.
+  Rough estimate: a bus that is not yet bound for this stop but is within 1.5 mi, heading within 45° of the stop, with
+  its own next stop known and a measured speed above zero gets "~N min" in muted italics, labelled "rough: not its next
+  stop yet". It uses the same padded straight-line formula and is an unverified estimate: the bus may turn, stop at
+  its own next stop first, or never reach this stop. Buses 45–60° off stay listed with "—".
 - The page never calls SEPTA directly. `api.septa.org` and `www3.septa.org` send no CORS headers, and the free
   public CORS proxies are dead (corsproxy.io wants a key; allorigins and codetabs time out).
 - Third-party calls that remain: OpenStreetMap tiles, Google Fonts, cdnjs (Leaflet 1.9.4), and Nominatim for

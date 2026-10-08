@@ -126,9 +126,9 @@ def test_unit_speed_and_eta(root):
         assert abs(out["speed"] - 10) / 10 < 0.1
         # 2000 m * 1.15 / 10 m/s = 230 s -> 3.83 -> 4 min (the padding-sensitive case is the next test)
         assert out["eta"]["min"] == 4, out
-        assert out["other"]["min"] is None
-        assert out["nospeed"] == {"min": None, "note": "measuring speed"}
-        assert out["notmoving"] == {"min": None, "note": "not moving"}
+        assert out["other"]["min"] is None and out["eta"]["rough"] is False
+        assert out["nospeed"] == {"min": None, "note": "measuring speed", "rough": False}
+        assert out["notmoving"] == {"min": None, "note": "not moving", "rough": False}
 
 
 def test_unit_padding_changes_the_minute(root):
@@ -199,7 +199,7 @@ def test_heading_toward_and_away_and_other_route(root):
         heads = board(s)
         assert "Heading toward this stop" in heads
         r = s.page.locator('#stopBoard button[data-key="b3689"]')
-        assert "—" in r.inner_text() and "not its next stop yet" in r.inner_text()
+        assert "—" in r.inner_text() and "measuring speed" in r.inner_text()
         assert re.search(r"0\.\d mi", r.inner_text()), r.inner_text()
         s.page.wait_for_timeout(50)
         assert s.page.locator(f'#stopBoard .rbadge:text-is("12")').count() == 0
@@ -301,3 +301,50 @@ def test_no_new_storage_keys(root):
         before = s.page.evaluate("Object.keys(localStorage).sort()")
         step(s, "3678", 120)
         assert s.page.evaluate("Object.keys(localStorage).sort()") == before
+
+
+def test_rough_eta_for_heading_toward_bus(root):
+    with Session(root) as s:
+        # 3689 (next stop is some other stop) 1200 m out, heading straight at the stop; 3050 heads 50 degrees off
+        la, ln = offset(90, 1200)
+        place(bus(s, "3689"), la, ln, bearing_to_stop(la, ln))
+        la, ln = offset(270, 1200)
+        place(bus(s, "3050"), la, ln, (bearing_to_stop(la, ln) + 50) % 360)
+        la, ln = offset(0, 1200)  # moving toward, but heading known; speed stays unknown because it never moves
+        place(bus(s, "3391"), la, ln, bearing_to_stop(la, ln))
+        open_board(s)
+        r = s.page.locator('#stopBoard button[data-key="b3689"]')
+        assert "~" not in r.inner_text() and "measuring speed" in r.inner_text()
+        for _ in range(3):
+            step(s, "3689", 120)
+            step_others = None
+        # 3050 and 3391 never move: 3050 is 50 deg off so plain note; 3391 is "not moving"
+        e = s.page.locator('#stopBoard button[data-key="b3689"] .sbeta')
+        txt = e.inner_text()
+        assert "rough: not its next stop yet" in txt, txt
+        m = re.search(r"~(\d+) min", txt)
+        assert m, txt
+        b = bus(s, "3689")
+        want = math.ceil(dist_m(float(b["lat"]), float(b["lng"])) * 1.15 / 8 / 60)
+        assert abs(int(m.group(1)) - want) <= 1, (m.group(1), want)
+        assert s.page.locator('#stopBoard button[data-key="b3689"] .sbeta b.rough').count() == 1
+        assert s.page.evaluate("getComputedStyle(document.querySelector('#stopBoard .sbeta b.rough')).fontStyle") == "italic"
+        far = s.page.locator('#stopBoard button[data-key="b3050"]')
+        if far.count():
+            assert "~" not in far.inner_text() and "not its next stop yet" in far.inner_text()
+        still = s.page.locator('#stopBoard button[data-key="b3391"]')
+        assert still.count() == 1 and "not moving" in still.inner_text() and "~" not in still.inner_text()
+        # the plain (a) estimate for 3678 is unchanged: no tilde
+        assert "~" not in s.page.inner_text('#stopBoard button[data-key="b3678"] .sbeta')
+
+
+def test_rough_eta_fifty_degrees_off_has_no_number(root):
+    with Session(root) as s:
+        la, ln = offset(90, 1200)
+        place(bus(s, "3689"), la, ln, (bearing_to_stop(la, ln) + 50) % 360)
+        open_board(s)
+        for _ in range(3):
+            step(s, "3689", 120)
+        r = s.page.locator('#stopBoard button[data-key="b3689"]')
+        assert r.count() == 1, "45-60 degree rows stay listed"
+        assert "~" not in r.inner_text() and "\u2014" in r.inner_text() and "not its next stop yet" in r.inner_text()
