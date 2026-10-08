@@ -46,9 +46,8 @@ A bus is kept only if all of these hold:
    freshness alone lets them through; this rule drops them.
 3. `lat`/`lng` parse and are non-zero.
 
-`late` handling: values of 900 or more (`999` no data, `998` schedule-only) become `null` and display
-"Delay data unavailable". **Audit finding:** the plan also requires *dropping* `late: 998` records; today they are
-only treated as unknown. Fixed by Task 0.1.
+`late` handling: `late: 998` records (schedule-only trips) are **dropped**. Other values of 900 or more (`999` = no delay
+data) are kept and shown as "Delay data unavailable".
 
 Trains (`normTrains`): `TrainView` has no timestamps, so there is no freshness rule. Coordinates must parse and be
 non-zero. The train detail card says positions have no timestamp. Headings may be null (gray "?" badge).

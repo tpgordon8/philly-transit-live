@@ -317,6 +317,8 @@ function normBuses(json){
        feed's own timestamp, so a freshness test alone lets them through. A real bus always has an ID and label. */
     var vid=String(b.VehicleID==null?'':b.VehicleID).trim(),lbl=String(b.label==null?'':b.label).trim();
     if(!vid||vid==='None'||!lbl||lbl==='None')continue;
+    /* late:998 marks a schedule-only trip (no live vehicle behind it); 999 only means no delay data and is kept. */
+    if(Number(b.late)===998)continue;
     var age=newest-ts; if(age>GHOST_MAX_S)continue;
     var route=String(b.route_id);
     out.push({key:'b'+vid,kind:TROLLEY.has(route)?'trolley':'bus',route:route,badge:route,
