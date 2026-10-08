@@ -103,7 +103,7 @@ def test_unit_speed_and_eta(root):
             r.still = T.speedMps('still');
             H.slow = [at(0, 0.5), at(15, 0.5), at(30, 0.5)];
             r.slow = T.speedMps('slow');
-            H.jump = [at(0, 0), { ts: 1020, lat: lat0, lng: lng0 + 500 / mlng }];
+            H.jump = [at(0, 0), { ts: 1020, lat: lat0, lng: lng0 + 1000 / mlng }];
             r.jump = T.speedMps('jump');
             H.jump2 = [at(0, 0), at(15, 0), { ts: 1030, lat: lat0, lng: lng0 + 500 / mlng }];
             r.jump2 = T.speedMps('jump2');
