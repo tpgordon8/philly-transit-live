@@ -31,3 +31,7 @@ page itself through GitHub Pages.
 Personal state (search center, saved places, starred routes, alert rules) lives only in your browser's `localStorage`.
 It is never sent to the Worker or anywhere else. The one exception is an address you type into search, which goes to
 Nominatim (OpenStreetMap) to be geocoded.
+
+Planning a trip sends the start and end points of each leg to an OpenStreetMap-based routing service and reads Indego's
+public station feed. Nothing is stored: the From and To text, the options and the drawn plan live only in the open page.
+Typed addresses are geocoded by Nominatim, as in search.

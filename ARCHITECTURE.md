@@ -313,5 +313,8 @@ Inputs: origin O, destination D, `now`, the network JSON, Indego info and status
 
 ### 12.4 Privacy and budget
 Planning never touches the Worker. Third parties receive only what a leg needs: Indego (nothing), the routing service
-(coordinates of leg endpoints), Nominatim (typed addresses, already the case). Nothing is stored except an optional,
-user-confirmed "last plan" is NOT stored in v1. The 15 s refresh loop and idle pause are unchanged.
+(coordinates of leg endpoints), Nominatim (typed addresses, already the case). The UI says: "Planning sends the start and
+end points of each leg to an OpenStreetMap-based routing service and reads Indego's public station feed. Nothing is
+stored." (same wording in README.md). Nothing is stored in v1: no localStorage key for trips, the From and To text is
+not saved, and a "last plan" is NOT stored. The 15 s refresh loop and idle pause are unchanged; planning does not count
+as a user interaction and never resumes a paused page.
