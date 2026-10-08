@@ -269,7 +269,7 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
 /* ---------- Pure logic (no DOM) ---------- */
 var API='https://api.septa.org/hackathon/';
 var REFRESH_MS=15000, GHOST_MAX_S=150, STALE_AFTER_MS=22000, DROP_AFTER_MS=120000;
-var TROLLEY=new Set(['10','11','13','15','34','36','101','102']);
+var TROLLEY=new Set(['10','101','102','11','13','15','34','36']);
 var CARD=['N','NE','E','SE','S','SW','W','NW'];
 var CARD_LONG={N:'north',NE:'northeast',E:'east',SE:'southeast',S:'south',SW:'southwest',W:'west',NW:'northwest'};
 var SEATS={EMPTY:'Plenty of room',MANY_SEATS_AVAILABLE:'Many seats open',FEW_SEATS_AVAILABLE:'Few seats open',STANDING_ROOM_ONLY:'Standing room only',CRUSHED_STANDING_ROOM_ONLY:'Very crowded',FULL:'Full',NOT_ACCEPTING_PASSENGERS:'Not accepting passengers'};
