@@ -300,7 +300,7 @@ def test_phone_banner_over_stop_card_when_feed_down(root):
         s.page.wait_for_selector("#stopCard:not([hidden]) #copyStop", timeout=15000)
         txt = s.page.inner_text("#banner")
         assert txt.startswith("Live data unavailable. Couldn't reach SEPTA"), txt
-        assert "Retrying every 15 seconds." in txt
+        assert "Retrying automatically." in txt
         b = rect(s, "#banner")
         z = s.page.evaluate("['#banner', '#detail', '#stopCard'].map(s => Number(getComputedStyle(document.querySelector(s)).zIndex))")
         assert z[0] > z[1] and z[0] > z[2], z
@@ -450,7 +450,7 @@ def test_focus_stays_on_close_across_refresh(root):
 def test_phone_empty_card_clear_of_zoom_buttons(root):
     with Session(root, viewport=PHONE) as s:
         boot(s)
-        for m in ("bus", "trolley", "train"):
+        for m in ("bus", "trolley", "subway", "train"):
             s.page.evaluate(f"document.querySelector('input[data-mode={m}]').click()")
         s.page.wait_for_selector("#empty:not([hidden])")
         e = rect(s, "#empty")
