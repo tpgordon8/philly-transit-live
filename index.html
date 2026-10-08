@@ -218,6 +218,21 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 path.rad{stroke:var(--accent);fill:var(--accent);fill-opacity:.06;stroke-width:1.5}
 path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-linecap:round;fill:none}
 
+#stopCard .alertrow{display:flex;flex-wrap:wrap;gap:6px 6px;align-items:center;font-size:12.5px;color:var(--mute);min-width:0}
+#stopCard .alertrow select{padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.rules{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.rule{border:1px solid var(--line);border-radius:7px;padding:9px 11px;min-width:0}
+.rule .rt1{font-weight:600;overflow-wrap:anywhere}
+.rule .rstatus{margin:2px 0 6px;color:var(--mute);font-size:12.5px}
+.rule .rctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.rule .rtog{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600}
+.rule .rtog input{accent-color:var(--accent);width:16px;height:16px;margin:0}
+#notifyBox{margin-top:10px}
+#notifyBox p{margin:6px 0 0;color:var(--mute);font-size:12.5px}
+#toasts{position:fixed;z-index:1300;top:calc(8px + env(safe-area-inset-top,0px));left:404px;width:min(420px,calc(100vw - 416px));display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{pointer-events:auto;display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:8px;box-shadow:var(--shadow);background:var(--good-bg);color:var(--ink);border:1px solid color-mix(in srgb,var(--good) 55%,transparent);font-weight:600;min-width:0}
+.toast .tmsg{flex:1;min-width:0;overflow-wrap:anywhere}
+
 @media (max-width:820px){
   #app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,46%) minmax(0,54%)}
   #panel{order:2;border-right:0;border-top:1px solid var(--line)}
@@ -227,6 +242,7 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
   #detail:not([hidden]) ~ #stopCard{display:none}
   #detail{left:8px;right:8px;width:auto;bottom:8px;max-height:calc(100% - 16px)}
   .brand h1{font-size:22px}
+  #toasts{left:8px;right:8px;width:auto}
 }
 </style>
 
@@ -277,6 +293,14 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
       </div>
     </section>
 
+    <section class="sec" aria-labelledby="h-leave">
+      <h2 id="h-leave" tabindex="-1">Leave-now alerts</h2>
+      <p class="empty-line" style="margin-top:0">Alerts only work while this page is open. Phones may pause background tabs.</p>
+      <div id="notifyBox"></div>
+      <p class="empty-line" id="rulesEmpty">Open a stop, then tap Add alert.</p>
+      <ul class="rules" id="rules"></ul>
+    </section>
+
     <section class="sec" aria-labelledby="h-alerts">
       <h2 id="h-alerts">Service alerts <span id="alertCount"></span></h2>
       <div class="seg" role="group" aria-label="Alert scope">
@@ -297,6 +321,7 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
     <div id="stopCard" hidden></div>
   </main>
 </div>
+<div id="toasts"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
@@ -440,8 +465,35 @@ function etaFor(v,stop){
   return {min:Math.max(1,Math.ceil(distM(v,stop)*ROAD_PAD/sp/60)),note:rough?'rough: not its next stop yet':'',rough:rough};
 }
 
+/* ----- Leave-now rules. A rule may fire only from a numeric, non-rough etaFor result for a bus whose very next stop is the
+   rule's stop, while the bus source is fresh. `src` is {ok,stale} for the bus source (defaults to the live one). ----- */
+var RULE_DEDUPE_MS=15*60000;
+function evalRule(rule,vehicles,now,src){
+  if(!rule||rule.enabled===false)return {state:'paused'};
+  if(src===undefined)src=(typeof state!=='undefined'&&state&&state.src)?state.src.bus:null;
+  if(!src||!src.ok||now-src.ok>DROP_AFTER_MS||src.stale)return {state:'unavailable'};
+  var stop={id:rule.stopId,lat:rule.lat,lng:rule.lng},cands=[],any=false,still=false;
+  (vehicles||[]).forEach(function(v){
+    if(!v||v.kind==='train'||v.route!==rule.route||v.nextId!==rule.stopId)return;
+    any=true;
+    var e=etaFor(v,stop);
+    if(e.min!=null&&!e.rough)cands.push({key:v.key,min:e.min});
+    else if(e.note==='not moving')still=true;
+  });
+  if(!cands.length)return {state:any?(still?'still':'measuring'):'none'};
+  cands.sort(function(a,b){return a.min-b.min});
+  var res={state:'watching',min:cands[0].min,key:cands[0].key,fire:false};
+  for(var i=0;i<cands.length;i++){
+    var c=cands[i];
+    if(c.min>rule.minutes)break;
+    if(rule.last&&rule.last.key===c.key&&now-rule.last.t<RULE_DEDUPE_MS)continue;
+    res.fire=true;res.fireKey=c.key;res.fireMin=c.min;break;
+  }
+  return res;
+}
+
 if(typeof window!=='undefined'&&window.__SEPTA_TEST__){
-  window.__SEPTA_TEST__={normBuses:normBuses,normTrains:normTrains,lateVal:lateVal,lateInfo:lateInfo,cardinal:cardinal,distMi:distMi,bearing:bearing,angDiff:angDiff,parseSeptaDate:parseSeptaDate,alertKey:alertKey,esc:esc,etaFor:etaFor,speedMps:speedMps,updateSpeedHist:updateSpeedHist,speedHist:speedHist};
+  window.__SEPTA_TEST__={normBuses:normBuses,normTrains:normTrains,lateVal:lateVal,lateInfo:lateInfo,cardinal:cardinal,distMi:distMi,bearing:bearing,angDiff:angDiff,parseSeptaDate:parseSeptaDate,alertKey:alertKey,esc:esc,etaFor:etaFor,speedMps:speedMps,updateSpeedHist:updateSpeedHist,speedHist:speedHist,evalRule:evalRule};
 }
 if(typeof document==='undefined')return;
 
@@ -614,6 +666,7 @@ function apply(){
   renderAlerts();
   renderStatus();
   renderStopBoard();
+  evalRules();
 }
 function renderEmpty(totalLoaded,visCount,counts,routeHides){
   var box=$('#empty'),anyOk=state.src.bus.ok||state.src.train.ok;
@@ -714,7 +767,8 @@ function refresh(){
   }).catch(function(){var s=state.src.train;s.stale=true;s.err=true});
   return Promise.all([p1,p2]).then(function(){state.fetchedAt=Date.now();inflight=false;apply()},function(){inflight=false});
 }
-setInterval(function(){if(!document.hidden)refresh()},REFRESH_MS);
+/* A hidden tab normally skips refresh (protects the free-tier request budget). It keeps refreshing only while an enabled leave-now alert exists. */
+setInterval(function(){if(!document.hidden||hasActiveRule())refresh()},REFRESH_MS);
 setInterval(function(){if(state.fetchedAt){renderStatus();updateBoardAge()}},1000);
 document.addEventListener('visibilitychange',function(){if(!document.hidden&&Date.now()-state.fetchedAt>REFRESH_MS)refresh()});
 
@@ -1053,6 +1107,7 @@ function renderStopCard(st,err,retry){
     }catch(e){manual()}
   });
   row.appendChild(cp);row.appendChild(close);box.appendChild(row);box.appendChild(live);
+  box.appendChild(alertRow(st));updateAlertRow();
   var board=el('div','sboard');board.id='stopBoard';box.appendChild(board);
   renderStopBoard();
 }
@@ -1167,10 +1222,161 @@ function stopFromHash(){
 }
 window.addEventListener('hashchange',stopFromHash);
 
+/* ----- Leave-now alerts: rules in localStorage (septa.rules.v1), evaluated in the page on every apply() ----- */
+var MAX_RULES=10,RULES_KEY='septa.rules.v1',ALERT_MINS=[3,5,8,10,15],RULE_ID_RE=/^[A-Za-z0-9_-]{1,40}$/;
+function cleanRules(raw){
+  var out=[],ids={},dups={};
+  var list=(raw&&typeof raw==='object'&&Array.isArray(raw.rules))?raw.rules:[];
+  list.forEach(function(r){
+    if(out.length>=MAX_RULES||!r||typeof r!=='object')return;
+    if(typeof r.id!=='string'||!RULE_ID_RE.test(r.id)||ids[r.id])return;
+    if(typeof r.route!=='string'||!STOP_RT_RE.test(r.route))return;
+    if(typeof r.stopId!=='string'||!STOP_ID_RE.test(r.stopId))return;
+    if(typeof r.minutes!=='number'||!Number.isInteger(r.minutes)||r.minutes<2||r.minutes>30)return;
+    if(typeof r.lat!=='number'||typeof r.lng!=='number'||!isFinite(r.lat)||!isFinite(r.lng))return;
+    var dk=r.route+'|'+r.stopId+'|'+r.minutes;if(dups[dk])return;
+    var last=null;
+    if(r.last&&typeof r.last==='object'&&typeof r.last.key==='string'&&r.last.key.length<=64&&typeof r.last.t==='number'&&isFinite(r.last.t))last={key:r.last.key,t:r.last.t};
+    ids[r.id]=dups[dk]=1;
+    out.push({id:r.id,route:r.route,stopId:r.stopId,stopName:shortText(typeof r.stopName==='string'&&r.stopName?r.stopName:'Stop '+r.stopId,80),
+      lat:r.lat,lng:r.lng,minutes:r.minutes,enabled:r.enabled!==false,last:last});
+  });
+  return {rules:out};
+}
+var rulesState=cleanRules(store.get(RULES_KEY,null));
+function saveRules(){store.set(RULES_KEY,rulesState)}
+function hasActiveRule(){return !!rulesState&&rulesState.rules.some(function(r){return r.enabled})}
+function newRuleId(){return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
+function findRule(route,stopId,minutes){
+  for(var i=0;i<rulesState.rules.length;i++){
+    var r=rulesState.rules[i];
+    if(r.route===route&&r.stopId===stopId&&r.minutes===minutes)return r;
+  }
+  return null;
+}
+function leaveMsg(r,min){return 'Leave now — the '+r.route+' is about '+min+' min from '+r.stopName}
+
+/* Toasts: role="alert" on each one, so it is announced once when inserted. Never auto-dismissed; max 3 shown. */
+function notify(msg){
+  try{
+    var box=$('#toasts'),t=el('div','toast'),m=el('span','tmsg',msg),b=el('button','btn small','Dismiss');
+    t.setAttribute('role','alert');b.type='button';
+    function close(){t.remove()}
+    b.addEventListener('click',close);
+    t.addEventListener('keydown',function(e){if(e.key==='Escape')close()});
+    t.appendChild(m);t.appendChild(b);box.appendChild(t);
+    while(box.children.length>3)box.firstChild.remove();
+  }catch(e){}
+  try{
+    if(window.Notification&&Notification.permission==='granted'&&document.hidden)new Notification(msg);
+  }catch(e){}
+}
+
+function ruleStatusText(res){
+  switch(res.state){
+    case 'paused':return 'Paused';
+    case 'unavailable':return 'Live data unavailable';
+    case 'measuring':return 'Measuring speed…';
+    case 'still':return 'Watching — a bus is heading here but not moving';
+    case 'watching':return 'Watching — nearest bus about '+res.min+' min';
+    default:return 'Watching — no bus heading here yet';
+  }
+}
+function evalRules(){
+  if(!rulesState)return;
+  var all=collect(),now=Date.now(),changed=false,src=state.src.bus;
+  rulesState.rules.forEach(function(r){
+    var res=evalRule(r,all,now,src);
+    if(res.fire){r.last={key:res.fireKey,t:now};changed=true;notify(leaveMsg(r,res.fireMin))}
+    var li=document.querySelector('#rules li[data-id="'+r.id+'"] .rstatus');
+    if(li)li.textContent=ruleStatusText(res);
+  });
+  if(changed)saveRules();
+}
+function renderRules(focusAfter){
+  var ul=$('#rules');
+  ul.replaceChildren();
+  $('#rulesEmpty').hidden=rulesState.rules.length>0;
+  rulesState.rules.forEach(function(r){
+    var li=el('li','rule');li.dataset.id=r.id;
+    li.appendChild(el('div','rt1','Route '+r.route+' · '+r.stopName+' · under '+r.minutes+' min'));
+    li.appendChild(el('p','rstatus',''));
+    var ctl=el('div','rctl'),lab=el('label','rtog'),cb=el('input','rtoggle');
+    cb.type='checkbox';cb.checked=r.enabled;
+    cb.setAttribute('aria-label','Alert on for route '+r.route+' at '+r.stopName);
+    cb.addEventListener('change',function(){r.enabled=cb.checked;saveRules();evalRules()});
+    lab.appendChild(cb);lab.appendChild(el('span',null,'On'));ctl.appendChild(lab);
+    var rm=el('button','btn small rrm','Remove');rm.type='button';
+    rm.setAttribute('aria-label','Remove alert for route '+r.route+' at '+r.stopName);
+    rm.addEventListener('click',function(){
+      var i=rulesState.rules.indexOf(r);if(i<0)return;
+      rulesState.rules.splice(i,1);saveRules();renderRules();updateAlertRow();
+      var next=document.querySelectorAll('#rules .rrm')[Math.min(i,rulesState.rules.length-1)];
+      if(next)next.focus();else $('#h-leave').focus();
+    });
+    ctl.appendChild(rm);li.appendChild(ctl);ul.appendChild(li);
+  });
+  evalRules();
+}
+function alertRow(st){
+  var row=el('div','alertrow');
+  row.appendChild(el('span',null,'Alert me when route '+st.route+' is under'));
+  var sel=el('select');sel.id='alertMin';sel.setAttribute('aria-label','Minutes away to alert at');
+  ALERT_MINS.forEach(function(m){var o=el('option',null,String(m));o.value=String(m);if(m===8)o.selected=true;sel.appendChild(o)});
+  row.appendChild(sel);row.appendChild(el('span',null,'min away'));
+  var b=el('button','btn small primary','Add alert');b.type='button';b.id='addAlert';
+  row.appendChild(b);
+  var live=el('div','live');live.id='alertLive';live.setAttribute('role','status');live.setAttribute('aria-live','polite');
+  sel.addEventListener('change',function(){live.textContent='';updateAlertRow()});
+  b.addEventListener('click',function(){
+    var s=state.stop;if(!s)return;
+    var m=parseInt(sel.value,10);
+    if(findRule(s.route,s.id,m))return;
+    if(rulesState.rules.length>=MAX_RULES){live.textContent='You can keep up to '+MAX_RULES+' alerts.';return}
+    rulesState.rules.push({id:newRuleId(),route:s.route,stopId:s.id,stopName:shortText(s.name,80),lat:s.lat,lng:s.lng,minutes:m,enabled:true,last:null});
+    saveRules();renderRules();updateAlertRow();
+    live.textContent='Alert set for route '+s.route+', under '+m+' min.';
+    sel.focus();
+  });
+  var wrap=el('div');wrap.style.display='contents';
+  wrap.appendChild(row);wrap.appendChild(live);
+  return wrap;
+}
+function updateAlertRow(){
+  var b=$('#addAlert'),sel=$('#alertMin'),s=state.stop;
+  if(!b||!sel||!s)return;
+  var dup=!!findRule(s.route,s.id,parseInt(sel.value,10));
+  b.disabled=dup;b.textContent=dup?'Alert set':'Add alert';
+}
+
+/* ----- Browser notifications: asked for only on a click, never automatically ----- */
+function renderNotify(){
+  var box=$('#notifyBox');box.replaceChildren();
+  if(!window.Notification)return;
+  var p=Notification.permission;
+  if(p==='default'){
+    var b=el('button','btn small','Turn on browser notifications');b.type='button';b.id='enableNotify';
+    b.addEventListener('click',function(){
+      var done=function(){renderNotify()};
+      try{
+        var r=Notification.requestPermission(done);
+        if(r&&typeof r.then==='function')r.then(done,done);
+      }catch(e){done()}
+    });
+    box.appendChild(b);
+    box.appendChild(el('p',null,'Shows a notification when this page is open but in the background. It cannot reach you when the page is closed.'));
+  }else if(p==='granted'){
+    box.appendChild(el('p',null,'Notifications on'));
+  }else{
+    box.appendChild(el('p',null,'Notifications blocked in your browser settings'));
+  }
+}
+
 /* ----- Boot ----- */
 $('#radius').value=state.radius;$('#radiusOut').textContent=state.radius+' mi';
 syncModeChips();drawCenter();drawHome();renderPlaces();updateSaveForm();renderAlerts();
 map.fitBounds(radiusCircle.getBounds(),{padding:[24,24],animate:false});
+renderRules();renderNotify();
 refresh();loadAlerts();
 stopFromHash();
 })();

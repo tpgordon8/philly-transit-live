@@ -108,10 +108,14 @@ non-zero. The train detail card says positions have no timestamp. Headings may b
 | `septa.prefs.v1` | `{ center: {lat, lng, label}, radius: 0.25–5, filters: {bus, trolley, train} }` |
 | `septa.places.v1` | `{ home: {name, lat, lng} \| null, list: [{id, name, lat, lng}] }` |
 | `septa.routes.v1` | `{ stars: [string], onlyMine: boolean }` — default `{stars: [], onlyMine: true}` |
+| `septa.rules.v1` | `{ rules: [{id, route, stopId, stopName, lat, lng, minutes, enabled, last: {key, t} \| null}] }` — leave-now alerts, at most 10; `id` is random, `last` is the vehicle key and time of the last firing |
 
 **My routes.** Star keys: the route id string for buses and trolleys, `train:` + line name for Regional Rail (`starKey(v)`). When `onlyMine` is true and `stars` is non-empty, `apply()` drops vehicles whose key is not starred before counting, so the mode-chip counts match the map. Empty `stars` means no filtering. Corrupt or unexpected stored values are read as the default.
 
-No home address or other personal data is stored in the repo. New keys must be versioned (`.v1`) and listed here.
+**Leave-now rules.** Read defensively: junk, a non-object, or any rule failing validation (route `^[A-Za-z0-9]{1,6}$`, stop id `^[0-9]{1,8}$`, integer `minutes` 2–30, finite lat/lng, unique id, no duplicate route/stop/minutes) is dropped; the first 10 valid rules are kept. Nothing about a rule leaves the browser.
+
+**Rule evaluator (`evalRule`, exposed on `__SEPTA_TEST__`).** On every `apply()` each enabled rule is evaluated against `collect()` (radius, mode filters and My routes ignored). It returns a status and may fire only when the bus source is neither stale nor dropped and a bus on the rule's route has `nextId` equal to the rule's stop and `etaFor` returns a numeric, non-rough `min` (so an unknown or zero speed never fires). The smallest `min` is the "nearest bus"; the rule fires when that is at or below its threshold, unless the same vehicle key already fired within 15 minutes (`rule.last`, persisted). Firing calls `notify()`: a `role="alert"` toast in `#toasts` (max 3, never auto-dismissed), plus a system `Notification` only if permission was granted and the tab is hidden. Permission is requested only from the "Turn on browser notifications" click. While at least one enabled rule exists the 15 s refresh also runs in a hidden tab; with none it keeps skipping, to protect the Worker request budget.
+ New keys must be versioned (`.v1`) and listed here.
 
 ## 7. Deployment
 
