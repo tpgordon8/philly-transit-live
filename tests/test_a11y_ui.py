@@ -281,6 +281,9 @@ def test_phone_banner_above_cards_text_unchanged(root):
             const e = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return !!e.closest('#banner'); }""")
         assert top
         assert s.page.evaluate("(() => { const b = document.querySelector('#banner'); return b.scrollHeight <= b.clientHeight + 1 })()")
+        z = s.page.evaluate("['#banner', '#detail', '#stopCard'].map(s => Number(getComputedStyle(document.querySelector(s)).zIndex))")
+        assert z[0] > z[1] and z[0] > z[2], z
+        assert not overlap(b, rect(s, "#detail")), "the card leaves room for the banner"
         close = rect(s, "#detailClose")
         assert not overlap(b, close), (b, close)
         hit = s.page.evaluate("""() => { const r = document.querySelector('#detailClose').getBoundingClientRect();
@@ -299,6 +302,9 @@ def test_phone_banner_over_stop_card_when_feed_down(root):
         assert txt.startswith("Live data unavailable. Couldn't reach SEPTA"), txt
         assert "Retrying every 15 seconds." in txt
         b = rect(s, "#banner")
+        z = s.page.evaluate("['#banner', '#detail', '#stopCard'].map(s => Number(getComputedStyle(document.querySelector(s)).zIndex))")
+        assert z[0] > z[1] and z[0] > z[2], z
+        assert not overlap(b, rect(s, "#stopCard")), "the stop card sits below the banner"
         assert s.page.evaluate("(() => { const b = document.querySelector('#banner'); return b.scrollHeight <= b.clientHeight + 1 })()")
         assert s.page.evaluate("""() => { const b = document.querySelector('#banner').getBoundingClientRect();
             return !!document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2).closest('#banner'); }""")
