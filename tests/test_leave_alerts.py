@@ -410,9 +410,9 @@ def test_hidden_tab_refreshes_only_with_enabled_rule(root):
         add_alert(s, 5)
         s.page.evaluate("window.__hidden = true; document.dispatchEvent(new Event('visibilitychange'))")
         n1 = tv_hits(s)
-        for _ in range(3):
+        for _ in range(4):  # a hidden tab with a rule refreshes once a minute (task 6b), not every 15 s
             s.tick(15000)
-        assert tv_hits(s) - n1 >= 3, (n1, tv_hits(s))
+        assert 1 <= tv_hits(s) - n1 <= 2, (n1, tv_hits(s))
         # a paused rule counts as no rule
         s.page.locator("#rules .rtoggle").uncheck()
         n2 = tv_hits(s)
