@@ -217,3 +217,15 @@ def test_stop_list_cached_per_route(root):
         s.page.evaluate(f"location.hash = '#stop={other}&route={SROUTE}'")
         s.page.wait_for_function(f"document.querySelector('#stopCard').textContent.includes('Stop {other}')")
         assert sum(1 for h in s.worker.hits if h.startswith("Stops")) == 1
+
+
+def test_mobile_vehicle_card_is_never_covered_by_stop_card(root):
+    with Session(root, viewport=(390, 844)) as s:
+        s.open(hash_="#stop=14880&route=21")
+        s.wait_live()
+        s.page.wait_for_timeout(800)
+        assert s.page.evaluate("getComputedStyle(document.querySelector('#stopCard')).display") != "none"
+        s.page.evaluate("document.querySelector('.veh-wrap').click()")
+        assert s.page.evaluate("getComputedStyle(document.querySelector('#stopCard')).display") == "none", "stop card covers the vehicle card"
+        s.page.click("#detail button[aria-label='Close vehicle details']")
+        assert s.page.evaluate("getComputedStyle(document.querySelector('#stopCard')).display") != "none", "stop card should return"

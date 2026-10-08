@@ -163,6 +163,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 #stopCard .row{display:flex;gap:8px;flex-wrap:wrap}
 #stopCard input{width:100%;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font:12px var(--f-mono)}
 #stopCard .live{color:var(--mute);font-size:12.5px;min-height:1em}
+#stopCard .live:empty{display:none}
 .pin .stp{display:block;box-sizing:border-box;width:24px;height:24px;border-radius:50%;background:var(--accent);border:5px solid var(--panel);box-shadow:0 0 0 2px var(--ink),var(--shadow)}
 #detail{position:absolute;z-index:1100;left:12px;bottom:12px;width:min(372px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow)}
 #detail .dh{display:flex;gap:10px;align-items:center;padding:12px 12px 10px;border-bottom:1px solid var(--line)}
@@ -207,6 +208,8 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
   #panel{order:2;border-right:0;border-top:1px solid var(--line)}
   #stage{order:1}
   #stopCard{left:8px;right:8px;width:auto;top:60px}
+  /* On a phone the map is too short for both cards; the stop pin stays, the card returns when the vehicle card closes. */
+  #detail:not([hidden]) ~ #stopCard{display:none}
   #detail{left:8px;right:8px;width:auto;bottom:8px;max-height:calc(100% - 16px)}
   .brand h1{font-size:22px}
 }
