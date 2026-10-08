@@ -29,6 +29,15 @@ PNG = base64.b64decode(
 )
 
 
+# Pre-seeds the pre-v2 defaults (all modes on, 1.5 mi) so tests written against them keep their world. Keys that a
+# test (or an earlier init script) already set win: each is written only if absent at load.
+LEGACY_DEFAULTS_JS = """(() => { try {
+  if (localStorage.getItem('septa.defaults.v2') === null) localStorage.setItem('septa.defaults.v2', '1');
+  if (localStorage.getItem('septa.prefs.v1') === null)
+    localStorage.setItem('septa.prefs.v1', JSON.stringify({radius: 1.5, filters: {bus: true, trolley: true, subway: true, train: true}}));
+} catch (e) {} })();"""
+
+
 def load_fixtures():
     """Parse every tests/fixtures/*.json; a file that does not parse fails loudly with its name."""
     out, bad = {}, []
@@ -58,12 +67,12 @@ class _Quiet(http.server.SimpleHTTPRequestHandler):
 
 
 class Session:
-    def __init__(self, root=None, viewport=(1280, 800), geolocation=None, extra_routes=None, init_scripts=()):
+    def __init__(self, root=None, viewport=(1280, 800), geolocation=None, extra_routes=None, init_scripts=(), legacy_defaults=True):
         self.root = pathlib.Path(root or HERE.parent)
         self.viewport = {"width": viewport[0], "height": viewport[1]}
         self.geolocation = geolocation
         self.extra_routes = extra_routes or {}  # substring -> (status, content_type, body)
-        self.init_scripts = list(init_scripts)
+        self.init_scripts = ([LEGACY_DEFAULTS_JS] if legacy_defaults else []) + list(init_scripts)
         self.worker = Worker()
         self.console_errors = []
         self.unexpected = []

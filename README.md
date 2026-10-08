@@ -8,7 +8,7 @@ https://tpgordon8.github.io/philly-transit-live/
 
 The page is a single static `index.html` served by GitHub Pages. It asks a small Cloudflare Worker (`worker/worker.js`)
 for SEPTA's public feeds, because SEPTA's API sends no CORS headers; the Worker allowlists a handful of endpoints and
-caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md).
+caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md). By default the page shows only buses within 0.5 mi, which also skips the Regional Rail request and roughly halves Worker traffic.
 
 ## Run the tests
 

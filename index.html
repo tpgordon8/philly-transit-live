@@ -287,14 +287,14 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
       <p class="note" id="note" aria-live="polite"></p>
       <div class="radius">
         <label for="radius">Radius</label>
-        <input type="range" id="radius" min="0.25" max="5" step="0.25" value="1.5">
-        <output id="radiusOut" for="radius">1.5 mi</output>
+        <input type="range" id="radius" min="0.25" max="5" step="0.25" value="0.5">
+        <output id="radiusOut" for="radius">0.5 mi</output>
       </div>
       <div class="modes" id="modes">
         <label class="chip k-bus on"><input type="checkbox" data-mode="bus" checked><span class="sw"></span>Bus <span class="n" data-n="bus"></span></label>
-        <label class="chip k-trolley on"><input type="checkbox" data-mode="trolley" checked><span class="sw"></span>Trolley <span class="n" data-n="trolley"></span></label>
-        <label class="chip k-subway on"><input type="checkbox" data-mode="subway" checked><span class="sw"></span>Subway <span class="n" data-n="subway"></span></label>
-        <label class="chip k-train on"><input type="checkbox" data-mode="train" checked><span class="sw"></span>Regional Rail <span class="n" data-n="train"></span></label>
+        <label class="chip k-trolley"><input type="checkbox" data-mode="trolley"><span class="sw"></span>Trolley <span class="n" data-n="trolley"></span></label>
+        <label class="chip k-subway"><input type="checkbox" data-mode="subway"><span class="sw"></span>Subway <span class="n" data-n="subway"></span></label>
+        <label class="chip k-train"><input type="checkbox" data-mode="train"><span class="sw"></span>Regional Rail <span class="n" data-n="train"></span></label>
       </div>
       <div id="myRoutes"></div>
     </section>
@@ -553,13 +553,13 @@ if(typeof L==='undefined'){
 var PHILLY={lat:39.9526,lng:-75.1652,label:'Center City (default view)'};
 /* Stored values are untrusted: anything malformed is ignored silently (and never rewritten on load). */
 function isNum(x){return typeof x==='number'&&isFinite(x)}
-var DEFAULT_FILTERS={bus:true,trolley:true,subway:true,train:true};
+var DEFAULT_FILTERS={bus:true,trolley:false,subway:false,train:false},DEFAULT_RADIUS=0.5;
 function cleanPrefs(p){
   var o=(p&&typeof p==='object'&&!Array.isArray(p))?p:{},c=o.center,f=o.filters,filters={},k;
   for(k in DEFAULT_FILTERS)filters[k]=(f&&typeof f==='object'&&typeof f[k]==='boolean')?f[k]:DEFAULT_FILTERS[k];
   return {
     center:(c&&typeof c==='object'&&isNum(c.lat)&&isNum(c.lng)&&Math.abs(c.lat)<=90&&Math.abs(c.lng)<=180)?{lat:c.lat,lng:c.lng,label:typeof c.label==='string'?c.label:''}:PHILLY,
-    radius:(isNum(o.radius)&&o.radius>=0.25&&o.radius<=5)?o.radius:1.5,
+    radius:(isNum(o.radius)&&o.radius>=0.25&&o.radius<=5)?o.radius:DEFAULT_RADIUS,
     filters:filters
   };
 }
@@ -579,6 +579,19 @@ function cleanPlaces(r){
   return {home:cleanPlace(o.home,false),list:list};
 }
 var prefs=cleanPrefs(store.get('septa.prefs.v1',null));
+/* One-time migration (key septa.defaults.v2): browsers that saved the old defaults (all modes, 1.5 mi) get the new ones
+   (buses only, 0.5 mi) once; center and any other saved fields are kept. Once the key exists saved choices are never touched. */
+(function(){
+  var present=true;
+  try{present=localStorage.getItem('septa.defaults.v2')!==null}catch(e){return}
+  if(present)return;
+  var raw=store.get('septa.prefs.v1',null),o=(raw&&typeof raw==='object'&&!Array.isArray(raw))?raw:{},k;
+  prefs.radius=DEFAULT_RADIUS;prefs.filters={};
+  for(k in DEFAULT_FILTERS)prefs.filters[k]=DEFAULT_FILTERS[k];
+  o.center=prefs.center;o.radius=prefs.radius;o.filters=prefs.filters;
+  store.set('septa.prefs.v1',o);
+  store.set('septa.defaults.v2','1');
+})();
 var placesStore=cleanPlaces(store.get('septa.places.v1',null));
 
 function cleanRoutes(r){

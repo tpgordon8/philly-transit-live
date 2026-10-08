@@ -483,7 +483,7 @@ def test_labels_and_remove_button(root):
         assert s.page.locator("#h-leave").text_content() == "Leave-now alerts"
         assert "Alerts only work while this page is open. Phones may pause background tabs." in s.page.inner_text("section[aria-labelledby=h-leave]")
         keys = s.page.evaluate("Object.keys(localStorage).sort()")
-        assert set(keys) <= {KEY, "septa.prefs.v1"}, keys
+        assert set(keys) <= {KEY, "septa.prefs.v1", "septa.defaults.v2"}, keys
         assert not s.page.evaluate("!!document.querySelector('#rules [aria-live]')")
         # stop names are text, never markup
         rm.click()

@@ -77,6 +77,14 @@ SEPTA public hackathon API (no key, no CORS headers)
   resets it. During a sustained outage a source costs at most 720 cycles x 2 requests = 1,440/day instead of 11,520
   per feed pair. The 120 s drop rule is unchanged.
 
+  **Defaults.** A browser with no saved choices starts with only the Bus chip on and a 0.5 mi radius. A default page
+  (buses only, so no TrainView) makes about 5,760 TransitView + 288 Alerts requests a day, about 6,050, versus about
+  11,800 with Regional Rail on. The radius does not affect requests (both feeds are fetched whole and filtered in the
+  page); it only reduces the markers drawn. Trolleys and subway come through the same TransitView request as buses,
+  so turning them on costs nothing extra; only the Regional Rail chip adds the TrainView request. About 16 such
+  default pages left open around the clock reach the 100,000 limit. Browsers that saved the old defaults are moved
+  to the new ones once (`septa.defaults.v2`, section 6).
+
 ## 3. Ghost-bus filter (`normBuses` in `index.html`)
 
 A bus is kept only if all of these hold:
@@ -129,11 +137,12 @@ non-zero. The train detail card says positions have no timestamp. Headings may b
 | Key | Shape |
 |---|---|
 | `septa.prefs.v1` | `{ center: {lat, lng, label}, radius: 0.25–5, filters: {bus, trolley, subway, train} }` |
+| `septa.defaults.v2` | `"1"` once the one-time defaults migration has run. If absent at boot, `filters` and `radius` in `septa.prefs.v1` are reset to the defaults (buses only, 0.5 mi), the rest of prefs (center) is kept, and the key is set; if present, saved choices are never touched again. Works when prefs are missing or corrupt |
 | `septa.places.v1` | `{ home: {name, lat, lng} \| null, list: [{id, name, lat, lng}] }` — validated on load: finite lat/lng, string names (cut to 40 chars), string ids, at most 50 list items; anything else is dropped |
 | `septa.routes.v1` | `{ stars: [string], onlyMine: boolean }` — default `{stars: [], onlyMine: true}` |
 | `septa.rules.v1` | `{ rules: [{id, route, stopId, stopName, lat, lng, minutes, enabled, last: {key, t} \| null}] }` — leave-now alerts, at most 10; `id` is random, `last` is the vehicle key and time of the last firing |
 
-**Corrupt storage.** `septa.prefs.v1` and `septa.places.v1` are validated on load (`cleanPrefs`, `cleanPlaces`): a bad center falls back to Center City, radius outside 0.25-5 to 1.5, filters are merged over the defaults as booleans (so old prefs without `subway` still load), bad places are dropped. Bad values are ignored silently and the stored string is not rewritten on load.
+**Corrupt storage.** `septa.prefs.v1` and `septa.places.v1` are validated on load (`cleanPrefs`, `cleanPlaces`): a bad center falls back to Center City, radius outside 0.25-5 to 0.5, filters are merged over the defaults (bus only on) as booleans (so old prefs without `subway` still load), bad places are dropped. Bad values are ignored silently and the stored string is not rewritten on load (the one-time `septa.defaults.v2` migration is the only boot-time write).
 
 **My routes.** Star keys: the route id string for buses and trolleys, `subway:` + route id for subway lines, `train:` + line name for Regional Rail (`starKey(v)`). When `onlyMine` is true and `stars` is non-empty, `apply()` drops vehicles whose key is not starred before counting, so the mode-chip counts match the map. Empty `stars` means no filtering. Corrupt or unexpected stored values are read as the default.
 
