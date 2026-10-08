@@ -77,6 +77,16 @@ SEPTA public hackathon API (no key, no CORS headers)
   resets it. During a sustained outage a source costs at most 720 cycles x 2 requests = 1,440/day instead of 11,520
   per feed pair. The 120 s drop rule is unchanged.
 
+  **Idle pause.** `lastUse` is set at boot and refreshed only by real user input (pointerdown, keydown, touchstart,
+  wheel, window focus, the tab becoming visible again); timers, fetch results and scripted events do not count. Once
+  `Date.now() - lastUse` reaches 60 minutes, `refresh()`, the Alerts fetch and every retry (the guard sits in
+  `fetchOnce`) make no request at all, so the worst case for an untouched page is about one hour of requests (about
+  250 TransitView calls with buses only) and then zero. A notice with a Resume button (`#idleBar`, deliberately not
+  a live region) appears, the status line reads "Paused", leave-now alerts do not fire while paused, and the
+  existing 120 s rule empties the map. Resuming is any interaction (including the click on Resume or returning to
+  the tab): the notice goes away and buses (and rail if on) plus alerts refetch at once. Nothing is persisted, so a
+  reload is a fresh use.
+
   **Defaults.** A browser with no saved choices starts with only the Bus chip on and a 0.5 mi radius. A default page
   (buses only, so no TrainView) makes about 5,760 TransitView + 288 Alerts requests a day, about 6,050, versus about
   11,800 with Regional Rail on. The radius does not affect requests (both feeds are fetched whole and filtered in the

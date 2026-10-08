@@ -151,6 +151,8 @@ select{min-height:40px}
 .foot{margin-top:auto;padding:12px 18px;color:var(--mute);font-size:12px}
 
 #banner{position:absolute;z-index:1200;left:50%;top:12px;transform:translateX(-50%);width:min(560px,calc(100% - 24px));padding:10px 14px;border-radius:8px;box-shadow:var(--shadow);font-weight:500;background:var(--bad-bg);color:var(--bad);border:1px solid color-mix(in srgb,var(--bad) 40%,transparent)}
+#idleBar{position:absolute;z-index:1200;left:50%;top:12px;transform:translateX(-50%);width:min(560px,calc(100% - 24px));padding:10px 14px;border-radius:8px;box-shadow:var(--shadow);font-weight:500;background:var(--panel);color:var(--ink);border:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#idleBar .btn{min-height:36px;padding:5px 12px}
 #banner.warn{background:var(--warn-bg);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
 #banner b{font-weight:700}
 #myRoutes{margin-top:12px}
@@ -254,9 +256,9 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
   #detail .dh{padding:8px 10px 8px;gap:8px}
   #detail dl{padding:6px 10px 8px;gap:3px 12px}
   /* The banner sits above both cards; while it shows, the vehicle card leaves room for it. */
-  #banner{top:8px;left:8px;transform:none;width:auto;max-height:88px;overflow:auto;padding:6px 10px;font-size:12.5px;line-height:1.35}
-  #stage:has(#banner:not([hidden])) #detail{max-height:calc(100% - 104px)}
-  #stage:has(#banner:not([hidden])) #stopCard{top:100px;max-height:calc(100% - 112px)}
+  #banner,#idleBar{top:8px;left:8px;transform:none;width:auto;max-height:88px;overflow:auto;padding:6px 10px;font-size:12.5px;line-height:1.35}
+  #stage:has(#banner:not([hidden])) #detail,#stage:has(#idleBar:not([hidden])) #detail{max-height:calc(100% - 104px)}
+  #stage:has(#banner:not([hidden])) #stopCard,#stage:has(#idleBar:not([hidden])) #stopCard{top:100px;max-height:calc(100% - 112px)}
   /* The zoom buttons live bottom-right; keep the empty-state card clear of them. */
   #empty{left:8px;right:60px;width:auto;transform:translateY(-50%)}
   /* One toast at a time, at the bottom above the safe area; the rest wait (newest shows first). */
@@ -337,6 +339,7 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
   <main id="stage">
     <div id="map" aria-label="Live map of nearby SEPTA vehicles"></div>
     <div id="banner" hidden role="alert"></div>
+    <div id="idleBar" hidden><span id="idleMsg"></span> <button class="btn" id="resumeBtn" type="button">Resume</button></div>
     <div id="empty" hidden></div>
     <div id="detail" hidden role="region" aria-label="Vehicle details"></div>
     <div id="detailLive" class="sr-only" role="status" aria-live="polite"></div>
@@ -610,7 +613,7 @@ var state={
   radius:prefs.radius,
   filters:prefs.filters,
   src:{bus:{list:[],ok:0,stale:false,err:false},train:{list:[],ok:0,stale:false,err:false}},
-  visible:[],selected:null,places:placesStore,
+  paused:false,visible:[],selected:null,places:placesStore,
   alerts:{items:[],ok:0,err:false,scope:'near'},fetchedAt:0
 };
 /* The center written to localStorage. A stop link moves state.center for this session only, so savePrefs
@@ -621,7 +624,35 @@ function savePrefs(){store.set('septa.prefs.v1',{center:savedCenter,radius:state
 /* ----- Network: SEPTA's API sends no CORS headers, so every call goes through our own Cloudflare Worker.
    The Worker forwards three fixed endpoints (TransitView, TrainView, Alerts) and adds CORS. Retry once on failure. ----- */
 var WORKER='https://septa-proxy.tpgordon8.workers.dev';
+/* ----- Idle pause (ARCHITECTURE.md section 2): after an hour without a real user interaction the page makes no
+   requests at all. Only pointerdown, keydown, touchstart, wheel, focus and becoming visible count; timers and fetches do not. ----- */
+var IDLE_MS=60*60*1000,lastUse=Date.now();
+function idleNow(){return Date.now()-lastUse>=IDLE_MS}
+function pauseNow(){
+  if(state.paused)return;
+  state.paused=true;
+  $('#idleMsg').textContent='Paused to save requests after an hour without use. Tap anywhere or press Resume to continue.'+(hasActiveRule()?' Leave-now alerts are paused as well.':'');
+  $('#idleBar').hidden=false;
+  renderStatus();
+  /* Data older than 120 s is dropped by collect(); redraw once it has aged out so the map empties honestly. */
+  setTimeout(function(){if(state.paused)apply()},DROP_AFTER_MS+1000);
+}
+function markUse(){
+  lastUse=Date.now();
+  if(!state.paused)return;
+  state.paused=false;
+  $('#idleBar').hidden=true;
+  nextTry.bus=0;nextTry.train=0;
+  renderStatus();
+  refresh(true);loadAlerts();
+}
+['pointerdown','keydown','touchstart','wheel'].forEach(function(t){document.addEventListener(t,function(e){if(e.isTrusted)markUse()},{capture:true,passive:true})});
+window.addEventListener('focus',markUse);
+document.addEventListener('visibilitychange',function(){if(!document.hidden)markUse()});
+$('#resumeBtn').addEventListener('click',markUse);
+
 function fetchOnce(name){
+  if(idleNow())return Promise.reject(new Error('idle'));
   var ctl=new AbortController(),t=setTimeout(function(){ctl.abort()},15000);
   return fetch(WORKER+'/'+name,{signal:ctl.signal,cache:'no-store'}).then(function(r){
     if(!r.ok)throw new Error('HTTP '+r.status);
@@ -767,6 +798,7 @@ function apply(){
 }
 function renderEmpty(totalLoaded,visCount,counts,routeHides){
   var box=$('#empty'),anyOk=state.src.bus.ok||state.src.train.ok;
+  if(state.paused){box.hidden=true;return}
   var totalNear=counts.bus+counts.trolley+counts.subway+counts.train;
   if(!anyOk||visCount>0){box.hidden=true;return}
   box.hidden=false;
@@ -837,7 +869,8 @@ function srcState(sr,now){
    "updated Ns ago" text in #statusText is aria-hidden and never announced. */
 function syncStatusLive(){
   var d=$('#dot').className,n=state.visible.length,t;
-  if(d.indexOf('live')>=0)t='Live, '+n+' vehicle'+(n===1?'':'s')+' shown';
+  if(state.paused)t='Paused';
+  else if(d.indexOf('live')>=0)t='Live, '+n+' vehicle'+(n===1?'':'s')+' shown';
   else if(d.indexOf('stale')>=0)t='Stale, showing last known positions';
   else if(d.indexOf('err')>=0)t='Live data unavailable';
   else t='Connecting to SEPTA';
@@ -846,6 +879,7 @@ function syncStatusLive(){
 function renderStatus(){renderStatusView();syncStatusLive()}
 function renderStatusView(){
   var dot=$('#dot'),txt=$('#statusText'),b=state.src.bus,t=state.src.train,now=Date.now();
+  if(state.paused){dot.className='dot';txt.innerHTML='<b>Paused</b>';hideBanner();return}
   var w=wantedSources(),act=['bus','train'].filter(function(k){return w[k]});
   var st={},stale=[],down=[];
   act.forEach(function(k){st[k]=srcState(state.src[k],now);if(st[k]==='stale')stale.push(k);else if(st[k]==='down')down.push(k)});
@@ -896,6 +930,7 @@ function wantedSources(){
   return {bus:!!(f.bus||f.trolley||f.subway||hasActiveRule()||state.stop),train:!!f.train};
 }
 function refresh(force){
+  if(idleNow()){pauseNow();return Promise.resolve()}
   if(inflight)return Promise.resolve();
   inflight=true;
   var now=Date.now(),w=wantedSources(),was={bus:skipped.bus,train:skipped.train};
@@ -918,6 +953,7 @@ function refresh(force){
 /* A hidden tab normally skips refresh (protects the free-tier request budget). With an enabled leave-now alert it
    keeps refreshing, but only once a minute (HIDDEN_MS) instead of every 15 s. */
 setInterval(function(){
+  if(idleNow()){pauseNow();return}
   if(!document.hidden){refresh();return}
   if(hasActiveRule()&&Date.now()-lastStart>=HIDDEN_MS-REFRESH_MS/2)refresh();
 },REFRESH_MS);
@@ -1256,7 +1292,7 @@ function setScope(s){
 }
 $('#scopeNear').addEventListener('click',function(){setScope('near')});
 $('#scopeAll').addEventListener('click',function(){setScope('all')});
-setInterval(function(){if(!document.hidden)loadAlerts()},300000);
+setInterval(function(){if(idleNow()){pauseNow();return}if(!document.hidden)loadAlerts()},300000);
 
 /* ----- Shareable stop links (#stop=<id>&route=<route>) -----
    Stop lists come from the Worker (Stops?route=), are cached per route in memory, and never include anything personal. */
@@ -1496,7 +1532,7 @@ function ruleStatusText(res){
   }
 }
 function evalRules(){
-  if(!rulesState)return;
+  if(!rulesState||state.paused)return;
   var all=collect(),now=Date.now(),changed=false,src=state.src.bus;
   rulesState.rules.forEach(function(r){
     var res=evalRule(r,all,now,src);
