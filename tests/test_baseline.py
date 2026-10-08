@@ -85,7 +85,7 @@ def test_refresh_moves_markers_in_place_without_touching_view(root):
         s.open()
         s.wait_live()
         s.page.mouse.move(900, 400); s.page.mouse.down(); s.page.mouse.move(780, 340, steps=6); s.page.mouse.up()
-        s.page.wait_for_timeout(1500)  # let Leaflet's pan inertia finish before measuring the view
+        s.settle()  # pan inertia finished: pane transform stable for 3 samples
         s.page.evaluate("document.querySelectorAll('.veh-wrap').forEach((e,i)=>{e.dataset.mark=i})")
         view = """() => ({pane: document.querySelector('.leaflet-map-pane').style.transform,
             zoom: [...new Set([...document.querySelectorAll('.leaflet-tile')].map(t => (t.src.match(/openstreetmap\\.org\\/(\\d+)\\//) || [])[1]))].join()})"""

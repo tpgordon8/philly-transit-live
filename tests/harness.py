@@ -29,12 +29,26 @@ PNG = base64.b64decode(
 )
 
 
+def load_fixtures():
+    """Parse every tests/fixtures/*.json; a file that does not parse fails loudly with its name."""
+    out, bad = {}, []
+    for f in sorted(FIX.glob("*.json")):
+        try:
+            out[f.stem] = json.loads(f.read_text())
+        except ValueError as e:
+            bad.append(f"{f.name}: {e}")
+    if bad:
+        raise AssertionError("fixture files do not parse: " + "; ".join(bad))
+    return out
+
+
 class Worker:
     """Mock of the Cloudflare Worker. mode: ok | http502 | abort. data: endpoint name -> python object."""
 
     def __init__(self):
         self.mode = "ok"
-        self.data = {n: json.loads((FIX / f"{n}.json").read_text()) for n in ("TransitView", "TrainView", "Alerts", "Stops")}
+        fixtures = load_fixtures()
+        self.data = {n: fixtures[n] for n in ("TransitView", "TrainView", "Alerts", "Stops")}
         self.hits = []
 
 
@@ -131,10 +145,35 @@ class Session:
             timeout=timeout,
         )
 
-    def tick(self, ms):
-        """Advance the page's fake clock, then give mocked network responses real time to land."""
+    def tick(self, ms, quiet_ms=150, cap_ms=600):
+        """Advance the page's fake clock, then let mocked network responses land: wait until the Worker mock has
+        stopped receiving requests for quiet_ms, but never longer than cap_ms in total."""
         self.page.clock.run_for(ms)
-        self.page.wait_for_timeout(400)
+        waited, quiet, seen = 0, 0, len(self.worker.hits)
+        while waited < cap_ms and quiet < quiet_ms:
+            self.page.wait_for_timeout(50)
+            waited += 50
+            if len(self.worker.hits) != seen:
+                seen, quiet = len(self.worker.hits), 0
+            else:
+                quiet += 50
+        self.settle(samples=2)
+
+    def settle(self, samples=3, interval=100, timeout=5000):
+        """Condition wait: the map pane transform (pan inertia, recentering) and the marker count are unchanged for
+        `samples` consecutive `interval` ms samples."""
+        probe = """() => { const p = document.querySelector('.leaflet-map-pane');
+            return (p ? p.style.transform : '') + '|' + document.querySelectorAll('.veh-wrap').length; }"""
+        last, same, waited = None, 0, 0
+        while waited < timeout:
+            cur = self.page.evaluate(probe)
+            same = same + 1 if cur == last else 0
+            if same >= samples:
+                return
+            last = cur
+            self.page.wait_for_timeout(interval)
+            waited += interval
+        raise AssertionError("map did not settle within %d ms" % timeout)
 
     def markers(self):
         return self.page.evaluate("document.querySelectorAll('.veh-wrap').length")

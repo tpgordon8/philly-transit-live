@@ -14,7 +14,7 @@ LAT, LNG = float(STOP["lat"]), float(STOP["lng"])
 def boot(s, hash_=""):
     s.open(hash_=hash_)
     s.wait_live()
-    s.page.wait_for_timeout(300)
+    s.settle()
 
 
 def stop_pin_offset(s):
@@ -64,7 +64,7 @@ def test_view_stop_from_vehicle(root):
         before = s.markers()
         s.page.click("#viewStop")
         s.page.wait_for_selector("#stopCard:not([hidden]) #copyStop")
-        s.page.wait_for_timeout(300)
+        s.settle()
         assert stop["stopname"] in card_text(s) and f"Stop {sid} · Route {SROUTE}" in card_text(s)
         assert s.page.evaluate("location.hash") == f"#stop={sid}&route={SROUTE}"
         assert stop_pins(s) == 1
@@ -94,7 +94,7 @@ def test_deep_link_opens_and_does_not_persist_center(root):
     with Session(root) as s:
         boot(s, f"#stop={SID}&route={SROUTE}")
         s.page.wait_for_selector("#copyStop")
-        s.page.wait_for_timeout(300)
+        s.settle()
         assert STOP["stopname"] in card_text(s)
         assert stop_pin_offset(s) < 3
         assert stored(s) is None or "center" not in json.loads(stored(s)) or abs(json.loads(stored(s))["center"]["lat"] - LAT) > 0.0005
@@ -117,8 +117,8 @@ def test_bad_hashes_ignored_and_missing_stop(root):
         boot(s)
         before = s.page.evaluate("document.querySelector('.leaflet-map-pane').style.transform")
         s.page.evaluate(f"location.hash = '#stop=999999&route={SROUTE}'")
-        s.page.wait_for_selector("#stopClose")
-        s.page.wait_for_timeout(300)
+        s.page.wait_for_function("document.querySelector('#stopCard').textContent.includes(\"couldn't be found\")")
+        s.settle()
         assert "That stop couldn't be found on route 21." in card_text(s)
         assert s.page.locator("#stopRetry").count() == 0
         assert s.page.evaluate("document.querySelector('.leaflet-map-pane').style.transform") == before
@@ -132,7 +132,7 @@ def test_copy_link(root):
         boot(s, f"#stop={SID}&route={SROUTE}")
         s.page.wait_for_selector("#copyStop")
         s.page.click("#copyStop")
-        s.page.wait_for_timeout(200)
+        s.page.wait_for_function("document.querySelector('#stopLive').textContent.includes('Link copied')")
         url = s.page.evaluate("navigator.clipboard.readText()")
         assert url == f"{s.base}/index.html#stop={SID}&route={SROUTE}", url
         assert str(STOP["lat"])[:6] not in url and str(STOP["lng"])[:7] not in url
@@ -169,7 +169,7 @@ def test_refresh_keeps_stop_and_view(root):
     with Session(root) as s:
         boot(s, f"#stop={SID}&route={SROUTE}")
         s.page.wait_for_selector("#copyStop")
-        s.page.wait_for_timeout(300)
+        s.settle()
         pane = lambda: s.page.evaluate("document.querySelector('.leaflet-map-pane').style.transform")
         before, off = pane(), stop_pin_offset(s)
         s.tick(15500)
@@ -223,7 +223,8 @@ def test_mobile_vehicle_card_is_never_covered_by_stop_card(root):
     with Session(root, viewport=(390, 844)) as s:
         s.open(hash_="#stop=14880&route=21")
         s.wait_live()
-        s.page.wait_for_timeout(800)
+        s.page.wait_for_function("getComputedStyle(document.querySelector('#stopCard')).display !== 'none'")
+        s.settle()
         assert s.page.evaluate("getComputedStyle(document.querySelector('#stopCard')).display") != "none"
         s.page.evaluate("document.querySelector('.veh-wrap').click()")
         assert s.page.evaluate("getComputedStyle(document.querySelector('#stopCard')).display") == "none", "stop card covers the vehicle card"

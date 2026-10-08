@@ -9,6 +9,8 @@ Prints PASS/FAIL per test, writes tests/out/report.txt as evidence, exits 1 if a
 import argparse
 import importlib.util
 import pathlib
+import shutil
+import subprocess
 import sys
 import time
 import traceback
@@ -40,9 +42,21 @@ def main():
                 lines.append(f"FAIL  {path.stem}::{name}  {msg}")
                 if not isinstance(e, AssertionError):
                     lines.append("      " + traceback.format_exc().strip().splitlines()[-1][:300])
+    if not args.only or args.only in "test_worker":
+        node, t0 = shutil.which("node"), time.time()
+        if not node:
+            lines.append("SKIP  test_worker.mjs  node is not installed; the Worker unit test was not run")
+        else:
+            r = subprocess.run([node, str(HERE / "test_worker.mjs")], capture_output=True, text=True, timeout=120)
+            if r.returncode == 0:
+                lines.append(f"PASS  test_worker::node test_worker.mjs  ({time.time() - t0:.1f}s)")
+            else:
+                failed += 1
+                detail = (r.stderr.strip() or r.stdout.strip() or "no output").splitlines()
+                lines.append(f"FAIL  test_worker::node test_worker.mjs  exit {r.returncode}: {detail[0][:300] if detail else ''}")
     out = HERE / "out"
     out.mkdir(exist_ok=True)
-    report = "\n".join(lines) + f"\n\n{len(lines) - failed} passed, {failed} failed  (root: {args.root})\n"
+    report = "\n".join(lines) + f"\n\n{sum(l.startswith("PASS") for l in lines)} passed, {failed} failed, {sum(l.startswith("SKIP") for l in lines)} skipped  (root: {args.root})\n"
     (out / "report.txt").write_text(report)
     print(report)
     sys.exit(1 if failed else 0)

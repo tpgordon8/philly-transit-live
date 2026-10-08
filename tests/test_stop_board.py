@@ -81,7 +81,7 @@ def open_board(s, hash_=HASH):
     s.open(hash_=hash_)
     s.wait_live()
     s.page.wait_for_selector("#stopBoard")
-    s.page.wait_for_timeout(300)
+    s.settle()
 
 
 def test_unit_speed_and_eta(root):
@@ -201,7 +201,6 @@ def test_heading_toward_and_away_and_other_route(root):
         r = s.page.locator('#stopBoard button[data-key="b3689"]')
         assert "—" in r.inner_text() and "measuring speed" in r.inner_text()
         assert re.search(r"0\.\d mi", r.inner_text()), r.inner_text()
-        s.page.wait_for_timeout(50)
         assert s.page.locator(f'#stopBoard .rbadge:text-is("12")').count() == 0
 
 

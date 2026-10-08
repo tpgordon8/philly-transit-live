@@ -1,3 +1,8 @@
 tests/out/
 .claude/
 __pycache__/
+node_modules/
+*.pyc
+.DS_Store
+*.log
+.wrangler/

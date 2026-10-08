@@ -132,6 +132,21 @@ the gatekeeper checklist; each feature adds its own `tests/test_<slug>.py`. Evid
 (gitignored). The baseline was mutation-checked: re-introducing the hidden-badge bug or the empty-vehicle-ID bug
 makes it fail.
 
+Suite details. `tests/test_schema.py` is an offline schema-drift guard: it checks that every fixture record has the keys
+and types that `normBuses`, `normTrains`, `buildAlerts`/`renderAlerts` and the stop lookup read, and names the missing
+keys in its failure. The harness also fails if any `tests/fixtures/*.json` does not parse. `run.py` additionally runs
+`node tests/test_worker.mjs` and reports it as one PASS/FAIL line (a SKIP line if node is not installed). Tests wait on
+conditions, not fixed sleeps: `Session.settle()` polls until the map pane transform and marker count are unchanged for
+three 100 ms samples, and `Session.tick()` waits until the Worker mock stops receiving requests (150 ms quiet, 600 ms cap).
+Leaflet is loaded with Subresource Integrity (sha384 of the 1.9.4 file, identical to `tests/vendor/leaflet.min.js`);
+the Leaflet CSS is inline, so there is no second tag to pin. If Leaflet is ever upgraded, recompute the hash:
+`openssl dgst -sha384 -binary leaflet.min.js | openssl base64 -A`.
+
+`python3 tests/live_smoke.py` is a separate, network-dependent check of the deployed Worker (stdlib only, not part of
+`run.py`). It sends `Origin: https://tpgordon8.github.io` and prints one PASS/FAIL line each for: TransitView, TrainView,
+Alerts, Stops and Arrivals shapes, the CORS header, 403 for a foreign Origin, 400 for bad parameters, 404 for an unknown
+path. It exits 1 on any failure. Run it after every Worker deploy.
+
 ## 9. Findings that change the plan
 
 1. **Task 1.2 is not client-only.** Stops come from `Stops/index.php?req1=<route>` (a per-route list of

@@ -81,7 +81,7 @@ def boot(s, hash_=HASH):
     s.open(hash_=hash_)
     s.wait_live()
     s.page.wait_for_selector("#addAlert")
-    s.page.wait_for_timeout(200)
+    s.settle()
 
 
 def add_alert(s, minutes):
