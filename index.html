@@ -533,7 +533,7 @@ function evalRule(rule,vehicles,now,src){
    invokes them, so a user action works even when the page is idle-paused: they deliberately do not go through fetchOnce().
    Third parties receive only leg endpoints (routing service) or nothing (Indego, own static file). */
 var TP={WALK_MPS:1.25,BIKE_MPS:3.6,CIRC:1.3,WALK_MAX_M:0.6*1609.344,BIKE_MAX_M:2.0*1609.344,STN_NEAR_M:0.15*1609.344,
-  STN_START_M:1200,UNLOCK_S:90,DOCK_S:60,BOARD_S:60,MAX_CALLS:14,MAX_FINALISTS:6,PER_STRUCT_FINAL:3,PER_STRUCT_OUT:2,MAX_OUT:5,
+  STN_START_M:1200,UNLOCK_S:90,DOCK_S:60,BOARD_S:60,MAX_CALLS:14,MAX_FINALISTS:6,PER_STRUCT_FINAL:3,PER_STRUCT_OUT:2,MAX_OUT:5,MAX_DOMINATED:3,
   MAX_INFLIGHT:3,TIMEOUT_MS:10000,RETRY_MS:1500,GRID:0.005,STATUS_TTL_MS:60000,ROUTE_BASE:'https://routing.openstreetmap.de/routed-',
   INDEGO_BASE:'https://gbfs.bcycle.com/bcycle_indego/',NET_URL:'data/bus-network.json'};
 var tpNet=null,tpInfo=null,tpStatus=null,tpRoute={},tpQueue=[],tpInflight=0;
@@ -877,12 +877,30 @@ function planTrips(origin,dest,opts){
         });
         if(dropped)note('Some bus options could not be completed and were left out.');
         options.sort(function(a,b){return a.minutes-b.minutes});
-        var per={},res=[];
+        /* An option that is not a single-mode baseline and takes at least as long as the best walk-only or bike-only
+           trip is "dominated": shown after the main list, never hidden silently. Car is never a reference. */
+        var ref=null,refKind='';
         options.forEach(function(o){
-          if(res.length>=TP.MAX_OUT||(per[o.structure]||0)>=TP.PER_STRUCT_OUT)return;
+          if(o.structure==='walk'&&(!ref||o.minutes<ref.minutes)){ref=o;refKind='walking'}
+          if(o.structure==='walk-bike-walk'&&(!ref||o.minutes<ref.minutes)){ref=o;refKind='biking'}
+        });
+        var best=null;
+        options.forEach(function(o){if(o.structure!=='car'&&(best==null||o.minutes<best))best=o.minutes});
+        options.forEach(function(o){
+          var base=o.structure==='walk'||o.structure==='walk-bike-walk'||o.structure==='car';
+          o.dominated=!base&&!!ref&&o.minutes>=ref.minutes;
+          if(o.dominated)o.dominatedReason='slower than '+refKind+' the whole way';
+        });
+        var per={},res=[],hid=0;
+        options.forEach(function(o){
+          if(o.dominated||res.length>=TP.MAX_OUT||(per[o.structure]||0)>=TP.PER_STRUCT_OUT)return;
           per[o.structure]=(per[o.structure]||0)+1;res.push(o);
         });
-        return {options:res,notes:notes,
+        options.forEach(function(o){
+          if(!o.dominated||hid>=TP.MAX_DOMINATED||(per[o.structure]||0)>=TP.PER_STRUCT_OUT)return;
+          per[o.structure]=(per[o.structure]||0)+1;hid++;res.push(o);
+        });
+        return {options:res,notes:notes,bestMinutes:best,hiddenCount:hid,
           asOf:{indego:stations?stations.asOf:null,network:nw?{generated:nw.net.generated||null,feed:nw.net.feed||null}:null},
           stats:{routingCalls:ctx.calls,finalists:finals.length}};
       });

@@ -514,11 +514,17 @@ def test_d_walk_bus_bike(root):
 
 # ---------------------------------------------------------------- (e) legs sum, (g) ranking
 def check_options(res):
-    assert 1 <= len(res["options"]) <= 5
-    mins = [o["minutes"] for o in res["options"]]
-    assert mins == sorted(mins), mins
+    opts = res["options"]
+    main = [o for o in opts if not o["dominated"]]
+    dom = [o for o in opts if o["dominated"]]
+    assert 1 <= len(main) <= 5 and len(dom) <= 3 and len(opts) == len(main) + len(dom)
+    assert opts == main + dom, "dominated options come after the main list"
+    for grp in (main, dom):
+        mins = [o["minutes"] for o in grp]
+        assert mins == sorted(mins), mins
+    assert res["hiddenCount"] == len(dom)
     per = {}
-    for o in res["options"]:
+    for o in opts:
         per[o["structure"]] = per.get(o["structure"], 0) + 1
         assert o["minutes"] == sum(l["minutes"] for l in o["legs"]), o
         for l in o["legs"]:
@@ -554,7 +560,7 @@ def test_g_ranking_and_caps(root):
         assert n_wbw >= 3, "the scenario really has more walk-bus-walk candidates than may be shown"
         res = ok(plan(s, O, D, vs))
         check_options(res)
-        assert len(res["options"]) == 5, [(o["structure"], o["minutes"]) for o in res["options"]]
+        assert len([o for o in res["options"] if not o["dominated"]]) == 5, [(o["structure"], o["minutes"], o["dominated"]) for o in res["options"]]
         structs = [o["structure"] for o in res["options"]]
         assert structs.count("walk-bus-walk") <= 2
         # a sparse world has fewer than five
@@ -689,3 +695,64 @@ def test_i_nothing_runs_on_its_own_and_nothing_is_stored(root):
         ok(plan(s, O, D, [veh("a", "X47", "S1")]))
         assert s.page.evaluate("JSON.stringify(Object.entries(localStorage))") == before
         assert not s.unexpected and not s.console_errors, (s.unexpected, s.console_errors)
+
+
+# ---------------------------------------------------------------- dominated options
+def test_j_dominated_flag_bike_is_best(root):
+    with Session(root, init_scripts=[HOOK]) as s:
+        open_session(s)
+        s.mocks.set_all(bikes=5, docks=5)
+        vs = [veh("a", "X47", "S1"), veh("b", "X45", "E1")]
+        # start and finish are on the same street: biking (about 11 min) beats a bus ride that needs 4+ minutes of waiting
+        res = ok(plan(s, O, D, vs))
+        check_options(res)
+        bike = by_structure(res, "walk-bike-walk")[0]
+        walk = by_structure(res, "walk")[0]
+        ref = min(bike["minutes"], walk["minutes"])
+        assert bike["minutes"] < walk["minutes"] and res["bestMinutes"] == min(o["minutes"] for o in res["options"] if o["structure"] != "car")
+        flagged = [o for o in res["options"] if o["dominated"]]
+        assert flagged, [(o["structure"], o["minutes"]) for o in res["options"]]
+        for o in res["options"]:
+            if o["structure"] in ("walk", "walk-bike-walk", "car"):
+                assert o["dominated"] is False and "dominatedReason" not in o
+            else:
+                assert o["dominated"] == (o["minutes"] >= ref), (o["structure"], o["minutes"], ref)
+            if o["dominated"]:
+                assert o["dominatedReason"] == "slower than biking the whole way"
+        # a car that is slower than everything is still not dominated
+        assert by_structure(res, "car")[0]["dominated"] is False
+
+
+def test_j_not_dominated_without_bikes_when_bus_beats_walking(root):
+    with Session(root, init_scripts=[HOOK]) as s:
+        open_session(s)
+        no_bikes(s)
+        res = ok(plan(s, O, D, [veh("a", "X47", "S2"), veh("b", "X45", "E3")]))
+        check_options(res)
+        walk = by_structure(res, "walk")[0]
+        buses = [o for o in res["options"] if "bus" in o["structure"]]
+        assert buses and all(o["minutes"] < walk["minutes"] for o in buses)
+        assert all(o["dominated"] is False for o in res["options"]) and res["hiddenCount"] == 0
+        # a bus that is slower than walking is flagged, with the walking reason
+        short = {"lat": O["lat"], "lng": O["lng"]}, {"lat": O["lat"] + 0.0012, "lng": O["lng"]}
+        res = ok(plan(s, short[0], short[1], [veh("a", "X47", "S1")]))
+        for o in res["options"]:
+            if "bus" in o["structure"]:
+                assert o["dominated"] and o["dominatedReason"] == "slower than walking the whole way"
+
+
+def test_j_ordering_and_caps_with_dominated(root):
+    with Session(root, init_scripts=[HOOK]) as s:
+        open_session(s)
+        s.mocks.set_all(bikes=5, docks=5)
+        vs = [veh("a", "X47", "S1"), veh("b", "X47", "S3"), veh("c", "X45", "E2"), veh("d", "X45", "F10")]
+        for o, d in ((O, D), (OW, DW), (O, DW), ({"lat": 39.9330, "lng": -75.1595}, {"lat": 39.9590, "lng": -75.1565})):
+            res = ok(plan(s, o, d, vs))
+            check_options(res)
+            assert len(res["options"]) <= 8
+            ref = min(x["minutes"] for x in res["options"] if x["structure"] in ("walk", "walk-bike-walk"))
+            assert all(x["dominated"] == (x["structure"] not in ("walk", "walk-bike-walk", "car") and x["minutes"] >= ref) for x in res["options"])
+        # many dominated candidates: only three come back, still two per structure at most
+        res = ok(plan(s, O, {"lat": O["lat"] + 0.0012, "lng": O["lng"]}, vs))
+        check_options(res)
+        assert res["hiddenCount"] <= 3
