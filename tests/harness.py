@@ -34,7 +34,7 @@ class Worker:
 
     def __init__(self):
         self.mode = "ok"
-        self.data = {n: json.loads((FIX / f"{n}.json").read_text()) for n in ("TransitView", "TrainView", "Alerts")}
+        self.data = {n: json.loads((FIX / f"{n}.json").read_text()) for n in ("TransitView", "TrainView", "Alerts", "Stops")}
         self.hits = []
 
 
@@ -88,8 +88,16 @@ class Session:
             self.septa_direct.append(url)
             return route.abort("failed")
         if WORKER_HOST in url:
-            name = url.split(WORKER_HOST + "/", 1)[1].split("?", 1)[0].strip("/")
-            self.worker.hits.append(name)
+            tail = url.split(WORKER_HOST + "/", 1)[1]
+            name = tail.split("?", 1)[0].strip("/")
+            self.worker.hits.append(tail.strip("/") if name == "Stops" else name)
+            if name == "Stops":  # data["Stops"] maps route id -> stop list; unknown routes return [] like SEPTA
+                if self.worker.mode == "abort":
+                    return route.abort("failed")
+                from urllib.parse import parse_qs, urlparse
+                r = (parse_qs(urlparse(url).query).get("route") or [""])[0]
+                return route.fulfill(status=200, headers=CORS, content_type="application/json",
+                                     body=json.dumps(self.worker.data["Stops"].get(r, [])))
             if self.worker.mode == "abort":
                 return route.abort("failed")
             if self.worker.mode == "http502" or name not in self.worker.data:
