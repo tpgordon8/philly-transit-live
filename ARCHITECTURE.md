@@ -20,6 +20,18 @@ SEPTA public hackathon API (no key, no CORS headers)
   so a retry works). The request carries only the route id. The URL hash `#stop=<id>&route=<route>` is the only state in
   a shared link (no coordinates, no center, no places); it is parsed on load and on `hashchange`, and a stop link moves
   the radius center for the session without writing it to `septa.prefs.v1`.
+
+- Stop board ETA method: the stop card lists buses and trolleys on the stop's route. SEPTA gives no bus predictions, so a
+  number appears only when it is computed from measured data. Each successful TransitView refresh appends a
+  `{ts,lat,lng}` sample per vehicle (only when the GPS timestamp is new; last 120 s of feed time, at most 6 samples;
+  vehicles that leave the feed are deleted, so memory is bounded). Speed is the distance between the oldest and newest
+  sample divided by their time apart, and needs at least 20 s of span. Under 0.9 m/s counts as not moving; above 20 m/s
+  (or a single step that implies it) is treated as a GPS jump and discarded. Only the bus whose `next_stop_id` is the
+  stop gets an ETA: straight-line distance **plus 15 %** (roads are not straight) divided by speed, rounded up to whole
+  minutes, never below 1 min. Unknown speed shows "—" with "measuring speed"; a stopped bus shows "not moving". Buses
+  within 1.5 mi and heading within 60° of the stop are listed as "Heading toward this stop" with distance only. The card
+  always says these are estimates, not SEPTA predictions. No new network calls and no new localStorage keys: the board
+  is rebuilt from in-memory data on every refresh, and nothing about the viewer is stored or sent.
 - The page never calls SEPTA directly. `api.septa.org` and `www3.septa.org` send no CORS headers, and the free
   public CORS proxies are dead (corsproxy.io wants a key; allorigins and codetabs time out).
 - Third-party calls that remain: OpenStreetMap tiles, Google Fonts, cdnjs (Leaflet 1.9.4), and Nominatim for
