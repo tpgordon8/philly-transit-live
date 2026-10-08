@@ -144,6 +144,14 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 #banner{position:absolute;z-index:1100;left:50%;top:12px;transform:translateX(-50%);width:min(560px,calc(100% - 24px));padding:10px 14px;border-radius:8px;box-shadow:var(--shadow);font-weight:500;background:var(--bad-bg);color:var(--bad);border:1px solid color-mix(in srgb,var(--bad) 40%,transparent)}
 #banner.warn{background:var(--warn-bg);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
 #banner b{font-weight:700}
+#myRoutes{margin-top:12px}
+#myRoutes .hint{margin:0;color:var(--mute);font-size:13px}
+#myRoutes .mylist{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+#myRoutes .btn.small{white-space:normal}
+#myToggle[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--panel))}
+#myRoutes .chip{padding:3px 4px 3px 10px;gap:4px}
+#myRoutes .chip .btn{padding:2px 7px;line-height:1.2}
+#detail .dh #starBtn[aria-pressed="true"]{border-color:var(--accent);color:var(--ink)}
 #empty{position:absolute;z-index:1050;left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,calc(100% - 32px));text-align:center;padding:18px 18px 16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow)}
 #empty h3{margin:0 0 4px;font:700 22px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.04em}
 #empty p{margin:0 0 12px;color:var(--mute)}
@@ -224,6 +232,7 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
         <label class="chip k-trolley on"><input type="checkbox" data-mode="trolley" checked><span class="sw"></span>Trolley <span class="n" data-n="trolley"></span></label>
         <label class="chip k-train on"><input type="checkbox" data-mode="train" checked><span class="sw"></span>Regional Rail <span class="n" data-n="train"></span></label>
       </div>
+      <div id="myRoutes"></div>
     </section>
 
     <section class="sec" aria-labelledby="h-places">
@@ -377,6 +386,17 @@ var prefs=store.get('septa.prefs.v1',{});
 var placesStore=store.get('septa.places.v1',{home:null,list:[]});
 if(!placesStore||!Array.isArray(placesStore.list))placesStore={home:null,list:[]};
 
+function cleanRoutes(r){
+  var stars=[],seen={};
+  if(r&&typeof r==='object'&&Array.isArray(r.stars))r.stars.forEach(function(k){if(typeof k==='string'&&k&&k.length<=64&&!seen[k]){seen[k]=1;stars.push(k)}});
+  return {stars:stars,onlyMine:!(r&&typeof r==='object')||r.onlyMine!==false};
+}
+var routesStore=cleanRoutes(store.get('septa.routes.v1',null));
+function saveRoutes(){store.set('septa.routes.v1',routesStore)}
+function starKey(v){return v.kind==='train'?'train:'+v.route:String(v.route)}
+function isStarred(k){return routesStore.stars.indexOf(k)>=0}
+function routeFilterOn(){return routesStore.onlyMine&&routesStore.stars.length>0}
+
 var state={
   center:prefs.center&&isFinite(prefs.center.lat)?prefs.center:PHILLY,
   radius:prefs.radius>=0.25&&prefs.radius<=5?prefs.radius:1.5,
@@ -495,25 +515,32 @@ function collect(){
   return all;
 }
 function apply(){
-  var all=collect(),counts={bus:0,trolley:0,train:0},vis=[];
+  var all=collect(),counts={bus:0,trolley:0,train:0},vis=[],inRadius=0,rf=routeFilterOn();
   all.forEach(function(v){
     if(distMi(state.center,v)>state.radius)return;
+    inRadius++;
+    if(rf&&!isStarred(starKey(v)))return;
     counts[v.kind]++;
     if(state.filters[v.kind])vis.push(v);
   });
   state.visible=vis;
   syncMarkers(vis);
   document.querySelectorAll('[data-n]').forEach(function(n){n.textContent=counts[n.dataset.n]});
-  renderEmpty(all.length,vis.length,counts);
+  renderEmpty(all.length,vis.length,counts,rf&&inRadius>0);
+  renderMyRoutes();
   renderDetail();
   renderAlerts();
   renderStatus();
 }
-function renderEmpty(totalLoaded,visCount,counts){
+function renderEmpty(totalLoaded,visCount,counts,routeHides){
   var box=$('#empty'),anyOk=state.src.bus.ok||state.src.train.ok;
   var totalNear=counts.bus+counts.trolley+counts.train;
   if(!anyOk||visCount>0){box.hidden=true;return}
   box.hidden=false;
+  if(routeHides&&totalNear===0){
+    box.innerHTML='<h3>Quiet around here</h3><p>None of your starred routes are running nearby right now.</p><button class="btn primary" type="button" id="emptyAct" data-act="routes">Show all routes</button>';
+    return;
+  }
   var r=state.radius,canWiden=r<5;
   var msg=totalNear>0?'Everything nearby is hidden by your mode filters.':'No SEPTA vehicles have a fresh GPS report within '+r+' mi of here right now.';
   box.innerHTML='<h3>Quiet around here</h3><p>'+esc(msg)+'</p>'+
@@ -523,7 +550,43 @@ function renderEmpty(totalLoaded,visCount,counts){
 $('#empty').addEventListener('click',function(e){
   var b=e.target.closest('#emptyAct');if(!b)return;
   if(b.dataset.act==='widen'){setRadius(Math.min(5,state.radius+1.5),true)}
+  else if(b.dataset.act==='routes'){routesStore.onlyMine=false;saveRoutes();clearSelection();apply()}
   else{state.filters={bus:true,trolley:true,train:true};syncModeChips();savePrefs();apply()}
+});
+
+/* ----- My routes ----- */
+function clearSelection(){
+  state.selected=null;
+  markers.forEach(function(m){var e=m.getElement();if(e)e.classList.remove('sel')});
+}
+function toggleStar(k){
+  var i=routesStore.stars.indexOf(k);
+  if(i>=0)routesStore.stars.splice(i,1);else routesStore.stars.push(k);
+  saveRoutes();apply();
+}
+function starName(k){return k.indexOf('train:')===0?k.slice(6):k}
+function renderMyRoutes(){
+  var box=$('#myRoutes'),st=routesStore.stars;
+  box.replaceChildren();
+  if(!st.length){box.appendChild(el('p','hint','Tap a vehicle, then star its route to build your own view.'));return}
+  var t=el('button','btn small','');t.type='button';t.id='myToggle';
+  t.setAttribute('aria-pressed',routesStore.onlyMine?'true':'false');
+  t.textContent=routesStore.onlyMine?'Showing my routes ('+st.length+')':'Showing all routes';
+  box.appendChild(t);
+  var list=el('div','mylist');
+  st.forEach(function(k){
+    var c=el('span','chip on'),n=starName(k);
+    c.appendChild(el('span',null,k.indexOf('train:')===0?n+' line':n));
+    var rm=el('button','btn small ghost','\u00d7');rm.type='button';rm.dataset.remove=k;
+    rm.setAttribute('aria-label','Remove route '+n+' from my routes');
+    c.appendChild(rm);list.appendChild(c);
+  });
+  box.appendChild(list);
+}
+$('#myRoutes').addEventListener('click',function(e){
+  if(e.target.closest('#myToggle')){routesStore.onlyMine=!routesStore.onlyMine;saveRoutes();clearSelection();apply();return}
+  var rm=e.target.closest('[data-remove]');
+  if(rm){toggleStar(rm.dataset.remove)}
 });
 
 /* ----- Status line + banner ----- */
@@ -604,7 +667,12 @@ function renderDetail(){
   var dt=el('div','dt');
   dt.appendChild(el('b',null,v.kind==='train'?(v.route||'Regional Rail'):'Route '+v.route));
   dt.appendChild(el('span',null,v.kind==='train'?'Regional Rail · Train '+v.badge:MODE_NAME[v.kind]+(v.vid?' · Vehicle '+v.vid:'')));
-  head.appendChild(badge);head.appendChild(dt);head.appendChild(close);box.appendChild(head);
+  var sk=starKey(v),starred=isStarred(sk),rn=starName(sk);
+  var star=el('button','btn small',starred?'Starred':'Star route');star.type='button';star.id='starBtn';
+  star.setAttribute('aria-pressed',starred?'true':'false');
+  star.setAttribute('aria-label',(starred?'Unstar route ':'Star route ')+rn);
+  star.addEventListener('click',function(){toggleStar(sk);var b=$('#starBtn');if(b)b.focus()});
+  head.appendChild(badge);head.appendChild(dt);head.appendChild(star);head.appendChild(close);box.appendChild(head);
   var dl=el('dl'),c=cardinal(v.heading);
   var dirTxt=(v.direction?v.direction:'Direction not reported')+(c?' · heading '+c+' ('+Math.round(v.heading)+'°)':' · heading unavailable');
   addRow(dl,'Direction',dirTxt);

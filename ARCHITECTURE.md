@@ -83,6 +83,9 @@ non-zero. The train detail card says positions have no timestamp. Headings may b
 |---|---|
 | `septa.prefs.v1` | `{ center: {lat, lng, label}, radius: 0.25–5, filters: {bus, trolley, train} }` |
 | `septa.places.v1` | `{ home: {name, lat, lng} \| null, list: [{id, name, lat, lng}] }` |
+| `septa.routes.v1` | `{ stars: [string], onlyMine: boolean }` — default `{stars: [], onlyMine: true}` |
+
+**My routes.** Star keys: the route id string for buses and trolleys, `train:` + line name for Regional Rail (`starKey(v)`). When `onlyMine` is true and `stars` is non-empty, `apply()` drops vehicles whose key is not starred before counting, so the mode-chip counts match the map. Empty `stars` means no filtering. Corrupt or unexpected stored values are read as the default.
 
 No home address or other personal data is stored in the repo. New keys must be versioned (`.v1`) and listed here.
 
