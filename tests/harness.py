@@ -14,7 +14,9 @@ import base64
 import functools
 import http.server
 import json
+import math
 import pathlib
+import re
 import threading
 
 from playwright.sync_api import sync_playwright
@@ -61,6 +63,112 @@ class Worker:
         self.hits = []
 
 
+DEFAULT_NETWORK = {"v": 1, "generated": "2000-01-01", "feed": {"start": "20000101", "end": "20001231"}, "stops": {}, "patterns": []}
+ROUTE_RE = re.compile(r"/routed-(foot|bike|car)/route/v1/driving/(-?[\d.]+),(-?[\d.]+);(-?[\d.]+),(-?[\d.]+)")
+SPEED_MPS = {"foot": 1.25, "bike": 3.6, "car": 8.0}
+
+
+def haversine_m(lat1, lng1, lat2, lng2):
+    r = 6371008.8
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lng2 - lng1) / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+class Mocks:
+    """Hermetic third parties for the trip planner: Indego GBFS, the OSM routing service and data/bus-network.json.
+
+    indego_mode / routing_mode / network_mode: 'ok' | 'http500' | 'abort'.
+    network: a dict served as data/bus-network.json for this session (None = the checkout's real file if it exists,
+    else a tiny empty network). Tests may edit indego_status in place (see set_station / set_all) before or between plans.
+    """
+
+    def __init__(self, root):
+        fx = load_fixtures()
+        self.root = pathlib.Path(root)
+        self.indego_info = fx["IndegoInfo"]
+        self.indego_status = fx["IndegoStatus"]
+        self.indego_mode = "ok"
+        self.routing_mode = "ok"
+        self.network_mode = "ok"
+        self.network = None
+        self.indego_hits = []     # 'station_information' | 'station_status'
+        self.routing_hits = []    # {'profile', 'from': (lat, lng), 'to': (lat, lng)}
+        self.network_hits = 0
+
+    # ---- Indego helpers ----
+    def stations(self):
+        return self.indego_info["data"]["stations"]
+
+    def _status(self, station_id):
+        return next(s for s in self.indego_status["data"]["stations"] if s["station_id"] == station_id)
+
+    def set_station(self, station_id, bikes=None, docks=None, renting=None, returning=None, installed=None):
+        st = self._status(station_id)
+        if bikes is not None:
+            st["num_bikes_available"] = bikes
+            st["num_bikes_available_types"] = {"electric": bikes // 2, "smart": 0, "classic": bikes - bikes // 2}
+        if docks is not None:
+            st["num_docks_available"] = docks
+        if renting is not None:
+            st["is_renting"] = int(renting)
+        if returning is not None:
+            st["is_returning"] = int(returning)
+        if installed is not None:
+            st["is_installed"] = int(installed)
+
+    def set_all(self, bikes=None, docks=None):
+        for st in self.indego_status["data"]["stations"]:
+            self.set_station(st["station_id"], bikes=bikes, docks=docks)
+
+    # ---- request handlers (called by Session._route) ----
+    def _fail(self, route, mode):
+        if mode == "abort":
+            route.abort("failed")
+        else:
+            route.fulfill(status=500, headers=CORS, content_type="application/json", body='{"error":"mock"}')
+        return True
+
+    def handle_indego(self, route, url):
+        tail = url.split("/bcycle_indego/", 1)[-1].split("?", 1)[0]
+        if tail not in ("station_information.json", "station_status.json"):
+            return None
+        self.indego_hits.append(tail[:-5])
+        if self.indego_mode != "ok":
+            return self._fail(route, self.indego_mode)
+        body = self.indego_info if tail == "station_information.json" else self.indego_status
+        route.fulfill(status=200, headers=CORS, content_type="application/json", body=json.dumps(body))
+        return True
+
+    def handle_routing(self, route, url):
+        m = ROUTE_RE.search(url)
+        if not m:
+            return None
+        profile = m.group(1)
+        lng1, lat1, lng2, lat2 = (float(m.group(i)) for i in (2, 3, 4, 5))
+        self.routing_hits.append({"profile": profile, "from": (lat1, lng1), "to": (lat2, lng2)})
+        if self.routing_mode != "ok":
+            return self._fail(route, self.routing_mode)
+        meters = haversine_m(lat1, lng1, lat2, lng2) * 1.25
+        body = {"code": "Ok", "routes": [{"distance": meters, "duration": meters / SPEED_MPS[profile],
+                                          "geometry": {"type": "LineString",
+                                                       "coordinates": [[lng1, lat1], [(lng1 + lng2) / 2, (lat1 + lat2) / 2], [lng2, lat2]]}}]}
+        route.fulfill(status=200, headers=CORS, content_type="application/json", body=json.dumps(body))
+        return True
+
+    def handle_network(self, route):
+        self.network_hits += 1
+        if self.network_mode != "ok":
+            return self._fail(route, self.network_mode)
+        if self.network is not None:
+            body = json.dumps(self.network)
+        else:
+            real = self.root / "data" / "bus-network.json"
+            body = real.read_bytes() if real.exists() else json.dumps(DEFAULT_NETWORK).encode()
+        route.fulfill(status=200, headers=CORS, content_type="application/json", body=body)
+        return True
+
+
 class _Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -74,6 +182,7 @@ class Session:
         self.extra_routes = extra_routes or {}  # substring -> (status, content_type, body)
         self.init_scripts = ([LEGACY_DEFAULTS_JS] if legacy_defaults else []) + list(init_scripts)
         self.worker = Worker()
+        self.mocks = Mocks(self.root)
         self.console_errors = []
         self.unexpected = []
         self.septa_direct = []
@@ -127,6 +236,15 @@ class Session:
                 return route.fulfill(status=502, headers=CORS, content_type="application/json", body='{"error":"mock"}')
             return route.fulfill(status=200, headers=CORS, content_type="application/json",
                                  body=json.dumps(self.worker.data[name]))
+        if "gbfs.bcycle.com/bcycle_indego/" in url:
+            if self.mocks.handle_indego(route, url) is not None:
+                return
+        if "routing.openstreetmap.de/" in url:
+            if self.mocks.handle_routing(route, url) is not None:
+                return
+        if url.split("?", 1)[0].endswith("/data/bus-network.json") and url.startswith(self.base):
+            self.mocks.handle_network(route)
+            return
         for needle, (status, ctype, body) in self.extra_routes.items():
             if needle in url:
                 return route.fulfill(status=status, headers=CORS, content_type=ctype, body=body)
