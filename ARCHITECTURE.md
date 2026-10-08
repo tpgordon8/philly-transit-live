@@ -277,6 +277,13 @@ Selection rules: per (route, direction) keep the patterns with distinct stop seq
 route-direction's weekday trips, at most 3, plus always the most common one. "Weekday" = service ids active on a typical
 Wednesday inside the feed validity window. Shapes are not used: the bus leg is drawn as straight segments along the stop
 sequence. Budget: under 2.5 MB raw (gzipped by Pages in transit). `tests/test_network_data.py` checks integrity.
+`feed` also carries `sampleDate` (YYYYMMDD), the typical Wednesday used to pick the weekday service ids.
+
+How to regenerate: `python3 -I tools/build_network.py --zip-url https://www3.septa.org/developer/gtfs_public.zip`
+(or `--zip FILE` for a downloaded copy of gtfs_public.zip or google_bus.zip, or `--gtfs-dir DIR` for an already
+extracted bus feed). Standard library only, about 5 s; stop_times.txt is streamed. Only the needed text files are
+extracted to a temp directory; nothing downloaded is executed. Then run `python3 tests/run.py --only network_data`
+and commit `data/bus-network.json`.
 
 ### 12.3 Planner algorithm (pure functions in `index.html`, exposed on `window.__SEPTA_TEST__`)
 Inputs: origin O, destination D, `now`, the network JSON, Indego info and status, live buses (`collect()`).
