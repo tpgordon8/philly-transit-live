@@ -313,12 +313,15 @@ function normBuses(json){
     b=list[i];ts=Number(b.timestamp);
     var lat=num(b.lat),lng=num(b.lng);
     if(!(ts>0)||lat==null||lng==null||lat===0||lng===0)continue;
-    if(String(b.VehicleID)==='None'||b.VehicleID==null)continue; /* schedule-only record, no real vehicle */
+    /* Schedule-only trips have no vehicle: VehicleID is "None" or empty, and SEPTA stamps the empty ones with the
+       feed's own timestamp, so a freshness test alone lets them through. A real bus always has an ID and label. */
+    var vid=String(b.VehicleID==null?'':b.VehicleID).trim(),lbl=String(b.label==null?'':b.label).trim();
+    if(!vid||vid==='None'||!lbl||lbl==='None')continue;
     var age=newest-ts; if(age>GHOST_MAX_S)continue;
     var route=String(b.route_id);
-    out.push({key:'b'+(b.VehicleID||b.label),kind:TROLLEY.has(route)?'trolley':'bus',route:route,badge:route,
+    out.push({key:'b'+vid,kind:TROLLEY.has(route)?'trolley':'bus',route:route,badge:route,
       lat:lat,lng:lng,heading:headingVal(b.heading),direction:b.Direction||'',dest:b.destination||'',next:b.next_stop_name||'',
-      late:lateVal(b.late),seats:b.estimated_seat_availability||'',vid:String(b.VehicleID||b.label||''),age:age});
+      late:lateVal(b.late),seats:b.estimated_seat_availability||'',vid:vid,age:age});
   }
   return out;
 }
