@@ -156,6 +156,14 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 #empty h3{margin:0 0 4px;font:700 22px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.04em}
 #empty p{margin:0 0 12px;color:var(--mute)}
 
+#stopCard{position:absolute;z-index:1100;right:12px;top:64px;width:min(320px,calc(100% - 24px));background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:12px;display:grid;gap:8px}
+#stopCard b{font:700 18px/1.15 var(--f-display);overflow-wrap:anywhere}
+#stopCard .sub{color:var(--mute);font-size:12.5px;overflow-wrap:anywhere}
+#stopCard .err{color:var(--warn);font-weight:600}
+#stopCard .row{display:flex;gap:8px;flex-wrap:wrap}
+#stopCard input{width:100%;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);font:12px var(--f-mono)}
+#stopCard .live{color:var(--mute);font-size:12.5px;min-height:1em}
+.pin .stp{display:block;box-sizing:border-box;width:24px;height:24px;border-radius:50%;background:var(--accent);border:5px solid var(--panel);box-shadow:0 0 0 2px var(--ink),var(--shadow)}
 #detail{position:absolute;z-index:1100;left:12px;bottom:12px;width:min(372px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow)}
 #detail .dh{display:flex;gap:10px;align-items:center;padding:12px 12px 10px;border-bottom:1px solid var(--line)}
 #detail .rbadge{grid-row:auto;font-size:20px;min-width:46px;padding:5px 8px}
@@ -198,6 +206,7 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
   #app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,46%) minmax(0,54%)}
   #panel{order:2;border-right:0;border-top:1px solid var(--line)}
   #stage{order:1}
+  #stopCard{left:8px;right:8px;width:auto;top:60px}
   #detail{left:8px;right:8px;width:auto;bottom:8px;max-height:calc(100% - 16px)}
   .brand h1{font-size:22px}
 }
@@ -267,6 +276,7 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
     <div id="banner" hidden role="alert"></div>
     <div id="empty" hidden></div>
     <div id="detail" hidden aria-live="polite"></div>
+    <div id="stopCard" hidden></div>
   </main>
 </div>
 
@@ -332,6 +342,7 @@ function normBuses(json){
     var route=String(b.route_id);
     out.push({key:'b'+vid,kind:TROLLEY.has(route)?'trolley':'bus',route:route,badge:route,
       lat:lat,lng:lng,heading:headingVal(b.heading),direction:b.Direction||'',dest:b.destination||'',next:b.next_stop_name||'',
+      nextId:b.next_stop_id==null?'':String(b.next_stop_id),
       late:lateVal(b.late),seats:b.estimated_seat_availability||'',vid:vid,age:age});
   }
   return out;
@@ -405,7 +416,10 @@ var state={
   visible:[],selected:null,places:placesStore,
   alerts:{items:[],ok:0,err:false,scope:'near'},fetchedAt:0
 };
-function savePrefs(){store.set('septa.prefs.v1',{center:state.center,radius:state.radius,filters:state.filters})}
+/* The center written to localStorage. A stop link moves state.center for this session only, so savePrefs
+   writes savedCenter, which only setCenter() without noSave updates. */
+var savedCenter=state.center;
+function savePrefs(){store.set('septa.prefs.v1',{center:savedCenter,radius:state.radius,filters:state.filters})}
 
 /* ----- Network: SEPTA's API sends no CORS headers, so every call goes through our own Cloudflare Worker.
    The Worker forwards three fixed endpoints (TransitView, TrainView, Alerts) and adds CORS. Retry once on failure. ----- */
@@ -418,7 +432,8 @@ function fetchOnce(name){
   }).finally(function(){clearTimeout(t)});
 }
 function septa(path){
-  var name=path.split('/')[0];
+  /* 'TransitView/index.php' -> 'TransitView'; a path with a query ('Stops?route=21') is passed through whole. */
+  var name=path.indexOf('?')>=0?path:path.split('/')[0];
   return fetchOnce(name).catch(function(){
     return new Promise(function(res){setTimeout(res,1500)}).then(function(){return fetchOnce(name)});
   });
@@ -681,7 +696,14 @@ function renderDetail(){
   addRow(dl,'Direction',dirTxt);
   addRow(dl,'Destination',v.dest||'Not reported');
   if(v.kind==='train'&&v.cur)addRow(dl,'Last station',v.cur);
-  addRow(dl,'Next stop',v.next||'Not reported');
+  var nextNode=v.next||'Not reported';
+  if(v.kind!=='train'&&v.nextId&&/^[0-9]{1,8}$/.test(v.nextId)){
+    nextNode=el('span');nextNode.appendChild(document.createTextNode((v.next||'Not reported')+' '));
+    var vs=el('button','btn small','View stop');vs.type='button';vs.id='viewStop';
+    vs.addEventListener('click',function(){openStop(v.route,v.nextId)});
+    nextNode.appendChild(vs);
+  }
+  addRow(dl,'Next stop',nextNode);
   var li=lateInfo(v.late),pill=el('span','pill '+li.cls,li.txt);
   addRow(dl,'Schedule',pill);
   if(v.kind==='train'){
@@ -703,9 +725,10 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&state.selec
 
 /* ----- Search, location, radius, modes ----- */
 function setNote(msg,bad){var n=$('#note');n.textContent=msg||'';n.className='note'+(bad?' bad':'')}
-function setCenter(c,fit){
+function setCenter(c,fit,noSave){
   state.center={lat:c.lat,lng:c.lng,label:c.label||''};
-  savePrefs();drawCenter();
+  if(!noSave){savedCenter=state.center;savePrefs()}
+  drawCenter();
   if(fit)fitRadius();
   updateSaveForm();apply();
 }
@@ -805,7 +828,7 @@ function getMeHome(){
   var origin=null,usedGps=false;
   getPosition().then(function(p){origin={lat:p.coords.latitude,lng:p.coords.longitude,label:'Your location'};usedGps=true}).catch(function(){origin={lat:state.center.lat,lng:state.center.lng,label:state.center.label||'the current search point'}})
   .then(function(){
-    state.center={lat:origin.lat,lng:origin.lng,label:origin.label};savePrefs();drawCenter();updateSaveForm();
+    state.center={lat:origin.lat,lng:origin.lng,label:origin.label};savedCenter=state.center;savePrefs();drawCenter();updateSaveForm();
     return refresh();
   }).then(function(){
     var dHome=distMi(origin,home);
@@ -914,11 +937,100 @@ $('#scopeNear').addEventListener('click',function(){setScope('near')});
 $('#scopeAll').addEventListener('click',function(){setScope('all')});
 setInterval(function(){if(!document.hidden)loadAlerts()},300000);
 
+/* ----- Shareable stop links (#stop=<id>&route=<route>) -----
+   Stop lists come from the Worker (Stops?route=), are cached per route in memory, and never include anything personal. */
+var stopCache={},stopLayer=null,stopSeq=0;
+var STOP_ID_RE=/^[0-9]{1,8}$/,STOP_RT_RE=/^[A-Za-z0-9]{1,6}$/;
+function loadStops(route){
+  if(!stopCache[route]){
+    stopCache[route]=septa('Stops?route='+route).then(function(j){
+      if(!Array.isArray(j))throw new Error('bad stops');
+      return j;
+    }).catch(function(e){delete stopCache[route];throw e});
+  }
+  return stopCache[route];
+}
+function setHash(h){try{history.replaceState(null,'',location.pathname+h)}catch(e){}}
+function stopLink(st){return location.origin+location.pathname+'#stop='+st.id+'&route='+st.route}
+function clearStop(){
+  stopSeq++;state.stop=null;
+  if(stopLayer){stopLayer.remove();stopLayer=null}
+  $('#stopCard').hidden=true;$('#stopCard').replaceChildren();
+  try{history.replaceState(null,'',location.pathname)}catch(e){}
+}
+function renderStopCard(st,err,retry){
+  var box=$('#stopCard');box.hidden=false;box.replaceChildren();
+  var close=el('button','btn small ghost','Close');close.type='button';close.id='stopClose';close.setAttribute('aria-label','Close stop');
+  close.addEventListener('click',clearStop);
+  if(err){
+    box.appendChild(el('div','err',err));
+    var r=el('div','row');
+    if(retry){var rb=el('button','btn small','Retry');rb.type='button';rb.id='stopRetry';rb.addEventListener('click',retry);r.appendChild(rb)}
+    r.appendChild(close);box.appendChild(r);return;
+  }
+  box.appendChild(el('b',null,st.name));
+  box.appendChild(el('div','sub','Stop '+st.id+' · Route '+st.route));
+  var row=el('div','row');
+  var cp=el('button','btn small primary','Copy link');cp.type='button';cp.id='copyStop';
+  var live=el('div','live');live.id='stopLive';live.setAttribute('aria-live','polite');live.setAttribute('role','status');
+  cp.addEventListener('click',function(){
+    var url=stopLink(st);
+    function manual(){
+      var old=box.querySelector('#stopUrl');if(old)old.remove();
+      var inp=el('input');inp.id='stopUrl';inp.readOnly=true;inp.value=url;inp.setAttribute('aria-label','Stop link');
+      box.insertBefore(inp,live);inp.focus();inp.select();live.textContent='Copy this link';
+    }
+    try{
+      navigator.clipboard.writeText(url).then(function(){live.textContent='Link copied'},manual);
+    }catch(e){manual()}
+  });
+  row.appendChild(cp);row.appendChild(close);box.appendChild(row);box.appendChild(live);
+}
+function drawStopMarker(st){
+  if(stopLayer){stopLayer.remove()}
+  stopLayer=L.marker([st.lat,st.lng],{icon:L.divIcon({className:'pin stop-pin',html:'<span class="stp"></span>',iconSize:[24,24],iconAnchor:[12,12]}),
+    title:'Stop: '+st.name,keyboard:false,interactive:false,zIndexOffset:900}).addTo(map);
+}
+function openStop(route,id){
+  route=String(route==null?'':route);id=String(id==null?'':id);
+  if(!STOP_ID_RE.test(id)||!STOP_RT_RE.test(route))return;
+  var seq=++stopSeq;
+  loadStops(route).then(function(list){
+    if(seq!==stopSeq)return;
+    var f=null;
+    for(var i=0;i<list.length;i++)if(String(list[i].stopid)===id){f=list[i];break}
+    var lat=f&&num(f.lat),lng=f&&num(f.lng);
+    if(!f||lat==null||lng==null){
+      state.stop=null;if(stopLayer){stopLayer.remove();stopLayer=null}
+      renderStopCard(null,"That stop couldn't be found on route "+route+'.');return;
+    }
+    var st={id:id,name:String(f.stopname||'Stop '+id),lat:lat,lng:lng,route:route};
+    state.stop=st;drawStopMarker(st);renderStopCard(st);
+    map.setView([lat,lng],Math.max(map.getZoom(),16));
+    setCenter({lat:lat,lng:lng,label:st.name},false,true);
+    setHash('#stop='+id+'&route='+route);
+  },function(){
+    if(seq!==stopSeq)return;
+    state.stop=null;if(stopLayer){stopLayer.remove();stopLayer=null}
+    renderStopCard(null,"Couldn't load stops right now.",function(){openStop(route,id)});
+  });
+}
+function stopFromHash(){
+  var p;
+  try{p=new URLSearchParams(location.hash.slice(1))}catch(e){return}
+  var id=p.get('stop'),route=p.get('route');
+  if(id==null||route==null||!STOP_ID_RE.test(id)||!STOP_RT_RE.test(route))return;
+  if(state.stop&&state.stop.id===id&&state.stop.route===route)return;
+  openStop(route,id);
+}
+window.addEventListener('hashchange',stopFromHash);
+
 /* ----- Boot ----- */
 $('#radius').value=state.radius;$('#radiusOut').textContent=state.radius+' mi';
 syncModeChips();drawCenter();drawHome();renderPlaces();updateSaveForm();renderAlerts();
 map.fitBounds(radiusCircle.getBounds(),{padding:[24,24],animate:false});
 refresh();loadAlerts();
+stopFromHash();
 })();
 </script>
 

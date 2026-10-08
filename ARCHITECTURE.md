@@ -15,6 +15,11 @@ Cloudflare Worker "septa-proxy"  (worker/worker.js)
 SEPTA public hackathon API (no key, no CORS headers)
 ```
 
+- Stop links: when a rider opens a bus's next stop, the page fetches `<WORKER>/Stops?route=<id>` (same 15 s timeout and
+  single retry as the other calls; the list is cached per route in memory, and a failed fetch is dropped from the cache
+  so a retry works). The request carries only the route id. The URL hash `#stop=<id>&route=<route>` is the only state in
+  a shared link (no coordinates, no center, no places); it is parsed on load and on `hashchange`, and a stop link moves
+  the radius center for the session without writing it to `septa.prefs.v1`.
 - The page never calls SEPTA directly. `api.septa.org` and `www3.septa.org` send no CORS headers, and the free
   public CORS proxies are dead (corsproxy.io wants a key; allorigins and codetabs time out).
 - Third-party calls that remain: OpenStreetMap tiles, Google Fonts, cdnjs (Leaflet 1.9.4), and Nominatim for
