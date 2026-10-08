@@ -244,6 +244,56 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
 .toast{pointer-events:auto;display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:8px;box-shadow:var(--shadow);background:var(--good-bg);color:var(--ink);border:1px solid color-mix(in srgb,var(--good) 55%,transparent);font-weight:600;min-width:0}
 .toast .tmsg{flex:1;min-width:0;overflow-wrap:anywhere}
 
+
+/* ----- Trip planner ----- */
+:root{--tp-walk:#5b6b7c;--tp-bike:#3f9a0b;--tp-car:#1b2735}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--tp-walk:#b4c2d0;--tp-bike:#8fe04a;--tp-car:#e7eef6}}
+:root[data-theme="dark"]{--tp-walk:#b4c2d0;--tp-bike:#8fe04a;--tp-car:#e7eef6}
+.tp-lab{display:block;margin:10px 0 4px;font-size:12.5px;font-weight:600;color:var(--mute)}
+#tripForm .tp-lab:first-child{margin-top:0}
+.tp-err{margin-top:4px;min-height:0}
+.tp-mid{margin-top:8px}
+.tp-mid .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.tp-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.tp-chips .btn{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.tp-go{width:100%;margin-top:12px}
+#tripResults{margin-top:14px;min-width:0}
+#tripResults h3{margin:0 0 4px;font:700 20px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.04em}
+#tripResults h3:focus{outline:none}
+#tripResults h3:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tp-mute{color:var(--mute);font-size:12.5px;margin:4px 0 0;overflow-wrap:anywhere}
+.tp-top{margin:2px 0 0;font-weight:600;overflow-wrap:anywhere}
+.tp-acts{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+.tp-acts .btn{flex:1 1 auto}
+.tp-msg{margin:6px 0 0;padding:9px 11px;border-radius:7px;background:var(--bad-bg);color:var(--bad);font-weight:600;overflow-wrap:anywhere}
+.tp-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.tp-opt{min-width:0}
+.tp-card{display:block;width:100%;min-width:0;min-height:56px;text-align:left;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
+.tp-card:hover{border-color:var(--accent)}
+.tp-card[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--panel))}
+.tp-card .tp-l1{display:flex;align-items:center;gap:8px;min-width:0}
+.tp-card .tp-min{font:700 22px/1.1 var(--f-display);letter-spacing:.02em}
+.tp-card .tp-l2{display:block;margin-top:2px;font-size:13px;overflow-wrap:anywhere}
+.tp-card .tp-l3{display:block;margin-top:2px;font-size:12px;color:var(--mute);overflow-wrap:anywhere}
+.tp-badge{padding:2px 7px;border-radius:999px;background:var(--good-bg);color:var(--good);font-size:11.5px;font-weight:700;letter-spacing:.03em}
+.tp-badge.drive{background:var(--unk-bg);color:var(--unk)}
+.tp-steps{margin:8px 0 2px;padding:0 0 0 22px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;min-width:0}
+.tp-steps li{overflow-wrap:anywhere;padding-left:2px}
+.tp-steps .tp-sub{display:block;color:var(--mute);font-size:12.5px;margin-top:1px}
+.tp-more{margin-top:10px;width:100%}
+.tp-priv{margin-top:14px}
+.leaflet-container path.tp-line{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.leaflet-container path.tp-walk{stroke:var(--tp-walk);stroke-width:3.5;stroke-dasharray:.1 7}
+.leaflet-container path.tp-bike{stroke:var(--tp-bike);stroke-width:4}
+.leaflet-container path.tp-bus{stroke:var(--bus);stroke-width:6;opacity:.9}
+.leaflet-container path.tp-car{stroke:var(--tp-car);stroke-width:4;stroke-dasharray:9 7;stroke-linecap:butt}
+.tp-pin{background:none;border:0;overflow:visible}
+.tp-mk{position:absolute;left:0;top:0;display:flex;flex-direction:column;align-items:center;transform:translate(-50%,calc(-100% + 6px));pointer-events:none;width:max-content}
+.tp-mk .tp-txt{display:block;max-width:150px;padding:1px 6px;border:2px solid var(--c,var(--ink));border-radius:6px;background:var(--panel);color:var(--ink);font:700 11.5px/1.25 var(--f-body);text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.tp-mk .tp-nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.tp-mk .tp-dot{width:12px;height:12px;margin-top:2px;border-radius:50%;background:var(--c,var(--ink));border:2px solid var(--panel);box-shadow:0 0 0 1px var(--c,var(--ink))}
+.tp-mk.tp-start{--c:var(--good)} .tp-mk.tp-end{--c:var(--bad)} .tp-mk.tp-stn{--c:var(--tp-bike)} .tp-mk.tp-stop{--c:var(--bus)}
+
 @media (max-width:820px){
   #app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,46%) minmax(0,54%)}
   #panel{order:2;border-right:0;border-top:1px solid var(--line)}
@@ -299,6 +349,24 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
         <label class="chip k-train"><input type="checkbox" data-mode="train"><span class="sw"></span>Regional Rail <span class="n" data-n="train"></span></label>
       </div>
       <div id="myRoutes"></div>
+    </section>
+
+    <section class="sec" aria-labelledby="h-trip" id="tripSec">
+      <h2 id="h-trip">Plan a trip</h2>
+      <form id="tripForm" autocomplete="off" novalidate>
+        <label class="tp-lab" for="tripFrom">From</label>
+        <div class="row"><input type="text" id="tripFrom" placeholder="Start: address or intersection"><button class="btn small" type="button" id="tripFromHome" hidden>Home</button></div>
+        <p class="note bad tp-err" id="tripFromErr" role="alert" hidden></p>
+        <div class="row tp-mid"><button class="btn small" type="button" id="tripLocate" style="flex:1">Use my location</button><button class="btn small" type="button" id="tripSwap" aria-label="Swap From and To"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12V2M1.5 4.5 4 2l2.5 2.5M10 2v10M7.5 9.5 10 12l2.5-2.5"/></svg> Swap</button></div>
+        <label class="tp-lab" for="tripTo">To</label>
+        <div class="row"><input type="text" id="tripTo" placeholder="Destination: address or intersection"><button class="btn small" type="button" id="tripToHome" hidden>Home</button></div>
+        <p class="note bad tp-err" id="tripToErr" role="alert" hidden></p>
+        <div class="tp-chips" id="tripChips" role="group" aria-label="Saved places for the destination" hidden></div>
+        <button class="btn primary tp-go" type="submit" id="tripGo">Plan trip</button>
+      </form>
+      <div id="tripResults" aria-busy="false" hidden></div>
+      <div id="tripLive" class="sr-only" role="status" aria-live="polite"></div>
+      <p class="empty-line tp-priv">Planning sends the start and end points of each leg to an OpenStreetMap-based routing service and reads Indego's public station feed. Nothing is stored.</p>
     </section>
 
     <section class="sec" aria-labelledby="h-places">
@@ -1490,17 +1558,26 @@ $('#modes').addEventListener('change',function(e){
 });
 
 function shortLabel(s){return String(s||'').split(',').slice(0,2).join(',').trim()}
+/* Shared Nominatim lookup (Philadelphia viewbox). Resolves the first match {lat,lng,label} or null; rejects when the
+   request fails. opts.philly appends ', Philadelphia, PA' to text without a comma (used by the trip planner only). */
+var GEO_URL='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&viewbox=-75.80,40.30,-74.60,39.70&q=';
+function geocode(q,opts){
+  if(opts&&opts.philly&&q.indexOf(',')<0)q+=', Philadelphia, PA';
+  return fetch(GEO_URL+encodeURIComponent(q),{headers:{'Accept':'application/json'}}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(function(res){
+    if(!res.length)return null;
+    var r=res[0];
+    return {lat:Number(r.lat),lng:Number(r.lon),label:shortLabel(r.display_name)};
+  });
+}
 $('#searchForm').addEventListener('submit',function(e){
   e.preventDefault();
   var q=$('#addr').value.trim();
   if(!q){setNote('Type a street address or intersection first.',true);return}
   var btn=$('#btnSearch');btn.disabled=true;setNote('Looking up that address…');
-  var url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&viewbox=-75.80,40.30,-74.60,39.70&q='+encodeURIComponent(q);
-  fetch(url,{headers:{'Accept':'application/json'}}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(function(res){
-    if(!res.length){setNote('No match for that address. Try adding a cross street or a ZIP code.',true);return}
-    var r=res[0];
-    setNote('Showing vehicles near '+shortLabel(r.display_name)+'.');
-    setCenter({lat:Number(r.lat),lng:Number(r.lon),label:shortLabel(r.display_name)},true);
+  geocode(q).then(function(r){
+    if(!r){setNote('No match for that address. Try adding a cross street or a ZIP code.',true);return}
+    setNote('Showing vehicles near '+r.label+'.');
+    setCenter({lat:r.lat,lng:r.lng,label:r.label},true);
   }).catch(function(){setNote('Address lookup failed. Check your connection and try again.',true)}).finally(function(){btn.disabled=false});
 });
 function getPosition(){
@@ -1558,6 +1635,7 @@ function renderPlaces(){
   $('#placesEmpty').hidden=!!(h||state.places.list.length);
   var hb=$('#btnHome');hb.hidden=!h;
   if(h)$('#homeName').textContent=h.name;
+  tripRenderPlaces();
 }
 $('#btnHome').addEventListener('click',function(){getMeHome()});
 
@@ -2002,6 +2080,265 @@ function renderNotify(){
   }else{
     box.appendChild(el('p',null,'Notifications blocked in your browser settings'));
   }
+}
+
+/* ----- Trip planner UI (ARCHITECTURE.md section 12) -----
+   Everything lives in memory: no localStorage key, nothing is written to prefs, and nothing here touches the Worker, the 15 s
+   refresh or the vehicle markers. The map drawing is one Leaflet layer group, separate from `markers`. */
+var tripLayer=L.layerGroup().addTo(map);
+var trip={seq:0,busy:false,res:null,sel:0,last:null,autoShown:false};
+var fieldPt={from:null,to:null};            /* {kind:'center'} | {pt:{lat,lng,name}}; cleared when the user edits the text */
+var TRIP_REDUCED=function(){return window.matchMedia('(prefers-reduced-motion: reduce)').matches};
+function tripFieldEl(w){return $(w==='from'?'#tripFrom':'#tripTo')}
+function tripErr(w,msg){
+  var p=$(w==='from'?'#tripFromErr':'#tripToErr'),inp=tripFieldEl(w);
+  p.textContent=msg||'';p.hidden=!msg;
+  if(msg){inp.setAttribute('aria-describedby',p.id);inp.setAttribute('aria-invalid','true')}
+  else{inp.removeAttribute('aria-describedby');inp.removeAttribute('aria-invalid')}
+}
+function tripSetField(w,text,fp){tripFieldEl(w).value=text;fieldPt[w]=fp||null;tripErr(w,'')}
+['from','to'].forEach(function(w){tripFieldEl(w).addEventListener('input',function(){fieldPt[w]=null;tripErr(w,'')})});
+function tripRenderPlaces(){
+  var h=state.places.home,chips=$('#tripChips');
+  $('#tripFromHome').hidden=!h;$('#tripToHome').hidden=!h;
+  chips.replaceChildren();
+  var all=[];
+  if(h)all.push({label:'Home',p:h,title:'Home: '+h.name});
+  state.places.list.forEach(function(p){all.push({label:p.name,p:p,title:p.name})});
+  all.slice(0,6).forEach(function(x){
+    var b=el('button','btn small',x.label);b.type='button';b.title=x.title;
+    b.addEventListener('click',function(){tripSetField('to',x.p.name,{pt:{lat:x.p.lat,lng:x.p.lng,name:x.p.name}})});
+    chips.appendChild(b);
+  });
+  chips.hidden=!all.length;
+}
+$('#tripFromHome').addEventListener('click',function(){var h=state.places.home;if(h)tripSetField('from',h.name,{pt:{lat:h.lat,lng:h.lng,name:h.name}})});
+$('#tripToHome').addEventListener('click',function(){var h=state.places.home;if(h)tripSetField('to',h.name,{pt:{lat:h.lat,lng:h.lng,name:h.name}})});
+$('#tripSwap').addEventListener('click',function(){
+  var a=$('#tripFrom').value,b=$('#tripTo').value,fa=fieldPt.from,fb=fieldPt.to;
+  tripSetField('from',b,fb);tripSetField('to',a,fa);
+});
+$('#tripLocate').addEventListener('click',function(){
+  var btn=$('#tripLocate');btn.disabled=true;tripErr('from','');
+  getPosition().then(function(p){
+    tripSetField('from','Your location',{pt:{lat:p.coords.latitude,lng:p.coords.longitude,name:'Your location'}});
+  }).catch(function(){
+    tripErr('from','Location isn\'t available here. Type an address instead.');
+  }).finally(function(){btn.disabled=false});
+});
+/* Resolves {pt} or {err}. Typed text is geocoded like the search box (plus ", Philadelphia, PA" when it has no comma). */
+function tripResolve(w,text){
+  var fp=fieldPt[w];
+  if(fp&&fp.kind==='center')return Promise.resolve({pt:{lat:state.center.lat,lng:state.center.lng,name:'Map center'}});
+  if(fp&&fp.pt)return Promise.resolve({pt:fp.pt});
+  if(!text){
+    if(w==='from'){tripSetField('from','Map center',{kind:'center'});return Promise.resolve({pt:{lat:state.center.lat,lng:state.center.lng,name:'Map center'}})}
+    return Promise.resolve({err:'Enter a destination.'});
+  }
+  return geocode(text,{philly:true}).then(function(r){
+    if(!r||!isNum(r.lat)||!isNum(r.lng))return {err:'Couldn\'t find that address.'};
+    return {pt:{lat:r.lat,lng:r.lng,name:text.slice(0,40)}};
+  },function(){return {err:'Address lookup failed. Check your connection and try again.'}});
+}
+function tripBusy(on){
+  trip.busy=on;
+  $('#tripGo').disabled=on;
+  $('#tripResults').setAttribute('aria-busy',on?'true':'false');
+  ['#replan','#tripRetry'].forEach(function(id){var b=$(id);if(b)b.disabled=on});
+}
+$('#tripForm').addEventListener('submit',function(e){
+  e.preventDefault();
+  if(trip.busy)return;
+  startTrip(null);
+});
+/* fixed: {o,d} to repeat a plan with the same points (Re-plan, Retry); null reads the form. */
+function startTrip(fixed){
+  var seq=++trip.seq,box=$('#tripResults');
+  tripErr('from','');tripErr('to','');
+  trip.res=null;tripLayer.clearLayers();
+  tripBusy(true);
+  box.hidden=false;box.replaceChildren(el('p','tp-mute','Planning...'));
+  /* Clearing while a plan is in flight cancels it: the sequence number moves on and the late answer is ignored. */
+  var cb=el('button','btn','Clear trip');cb.type='button';cb.id='tripClear';cb.addEventListener('click',tripClear);box.appendChild(cb);
+  box.setAttribute('aria-busy','true');
+  var pts=fixed?Promise.resolve(fixed):Promise.all([tripResolve('from',$('#tripFrom').value.trim()),tripResolve('to',$('#tripTo').value.trim())]).then(function(r){
+    if(r[0].err||r[1].err){
+      if(seq!==trip.seq)return null;
+      if(r[0].err)tripErr('from',r[0].err);
+      if(r[1].err)tripErr('to',r[1].err);
+      return null;
+    }
+    return {o:r[0].pt,d:r[1].pt};
+  });
+  pts.then(function(p){
+    if(seq!==trip.seq)return;
+    if(!p){tripBusy(false);box.replaceChildren();box.hidden=true;box.setAttribute('aria-busy','false');return}
+    trip.last=p;
+    return planTrips(p.o,p.d).then(function(res){
+      if(seq!==trip.seq)return;
+      tripBusy(false);
+      if(!res.options.length){tripFail('No trip found. Try different points.',false);return}
+      trip.res=res;
+      var first=0;
+      for(var i=0;i<res.options.length;i++)if(res.options[i].structure!=='car'){first=i;break}
+      trip.sel=first;trip.at=Date.now();
+      tripRender();tripDraw();
+    },function(err){
+      if(seq!==trip.seq)return;
+      tripBusy(false);
+      if(err&&err.code==='routing_unavailable')tripFail('Couldn\'t reach the routing service. Try again.',true);
+      else tripFail('Couldn\'t plan that trip. Try again.',true);
+    });
+  });
+}
+function tripFail(msg,retry){
+  var box=$('#tripResults');
+  box.hidden=false;box.setAttribute('aria-busy','false');box.replaceChildren();
+  trip.res=null;tripLayer.clearLayers();
+  var m=el('p','tp-msg',msg);m.setAttribute('role','alert');box.appendChild(m);
+  if(retry){
+    var b=el('button','btn','Retry');b.type='button';b.id='tripRetry';b.style.marginTop='8px';
+    b.addEventListener('click',function(){if(!trip.busy&&trip.last)startTrip(trip.last)});
+    box.appendChild(b);
+  }
+}
+function tripClear(){
+  trip.seq++;trip.res=null;trip.last=null;
+  tripBusy(false);
+  tripLayer.clearLayers();
+  var box=$('#tripResults');box.replaceChildren();box.hidden=true;box.setAttribute('aria-busy','false');
+  $('#tripLive').textContent='';
+  $('#tripGo').focus();
+}
+/* ----- Rendering ----- */
+function tripModeWord(o){
+  var m={};o.legs.forEach(function(l){m[l.mode]=1});
+  if(m.bus)return m.bike?'bike and bus':'bus';
+  return m.bike?'bike':'walk';
+}
+function tripLegWord(l){
+  if(l.mode==='bus')return (l.kind==='trolley'?'Trolley ':'Bus ')+l.route;
+  return (l.mode==='car'?'Drive':l.mode==='bike'?'Bike':'Walk')+' '+l.minutes;
+}
+function tripFastest(res){
+  var best=null,bi=-1;
+  res.options.forEach(function(o,i){if(o.structure!=='car'&&!o.dominated&&(best==null||o.minutes<best)){best=o.minutes;bi=i}});
+  return bi;
+}
+function tripAgo(ms){
+  var n=Math.max(0,Math.round((Date.now()-ms)/60000));
+  return n>=120?Math.round(n/60)+' h ago':(n<1?'under 1 min ago':n+' min ago');
+}
+function tripStep(l,asOf){
+  var li=el('li'),mi=fmtMi(l.meters/1609.344),a=l.from.name||'start',b=l.to.name||'end';
+  function sub(t){li.appendChild(el('span','tp-sub',t))}
+  if(l.mode==='bus'){
+    var wait=Math.round(l.waitMin),ws=wait<1?'under 1 min':'about '+wait+' min';
+    li.appendChild(document.createTextNode((l.kind==='trolley'?'Trolley ':'Bus ')+l.route+(l.head?' toward '+l.head:'')+', '+l.stops+' stop'+(l.stops===1?'':'s')+', '+l.minutes+' min, from '+a+' to '+b));
+    sub(l.waitBasis==='live'?'Wait: next bus tracked live, '+ws+'.':'Wait: waits '+ws+' on average (schedule frequency, no bus tracked).');
+    sub('Ride: '+Math.round(l.rideMin)+' min, '+(l.rideBasis||'scheduled')+'.');
+    return li;
+  }
+  li.appendChild(document.createTextNode((l.mode==='car'?'Drive':l.mode==='bike'?'Bike':'Walk')+' '+l.minutes+' min, '+mi+' from '+a+' to '+b));
+  (l.notes||[]).forEach(function(n){
+    if(l.mode==='bike'&&asOf)n=n.replace(/(counts as of )\d{1,2}:\d{2}\s?[AP]M/i,'$1'+tripAgo(asOf));
+    sub(n);
+  });
+  return li;
+}
+function tripRender(){
+  var box=$('#tripResults'),res=trip.res,fast=tripFastest(res);
+  box.hidden=false;box.setAttribute('aria-busy','false');box.replaceChildren();
+  var h=el('h3',null,'Trip options');h.id='tripHeading';h.tabIndex=-1;box.appendChild(h);
+  if(res.bestMinutes!=null&&fast>=0){
+    var fo=res.options[fast];
+    box.appendChild(el('p','tp-top','Fastest without a car: '+tripModeWord(fo)+', '+fo.minutes+' min'));
+  }
+  res.notes.forEach(function(n){box.appendChild(el('p','tp-mute',n))});
+  var acts=el('div','tp-acts'),rp=el('button','btn','Re-plan');rp.type='button';rp.id='replan';
+  rp.addEventListener('click',function(){if(!trip.busy&&trip.last)startTrip(trip.last)});
+  var sm=el('button','btn','Show on map');sm.type='button';sm.id='showMap';sm.addEventListener('click',tripShowMap);
+  var cl=el('button','btn','Clear trip');cl.type='button';cl.id='tripClear';cl.addEventListener('click',tripClear);
+  acts.appendChild(rp);acts.appendChild(sm);acts.appendChild(cl);box.appendChild(acts);
+  box.appendChild(el('p','tp-mute','Planned at '+clockText(trip.at)+'. Bike counts and bus waits change quickly; re-plan before you leave.'));
+  var list=el('div','tp-list');list.id='tripList';list.setAttribute('role','group');list.setAttribute('aria-label','Trip options');
+  var more=el('div','tp-list');more.id='tripMoreList';more.hidden=true;
+  var asOf=res.asOf&&res.asOf.indego,nMore=0;
+  res.options.forEach(function(o,i){
+    var wrap=el('div','tp-opt'),b=el('button','tp-card');b.type='button';b.dataset.i=i;
+    b.setAttribute('aria-pressed',i===trip.sel?'true':'false');
+    var l1=el('span','tp-l1');l1.appendChild(el('span','tp-min',o.minutes+' min'));
+    if(i===fast)l1.appendChild(el('span','tp-badge','Fastest'));
+    if(o.structure==='car')l1.appendChild(el('span','tp-badge drive','Drive'));
+    b.appendChild(l1);
+    b.appendChild(el('span','tp-l2',o.legs.map(tripLegWord).join(' · ')));
+    if(o.structure==='car')b.appendChild(el('span','tp-l3','no traffic or parking data'));
+    if(o.dominated&&o.dominatedReason)b.appendChild(el('span','tp-l3',o.dominatedReason));
+    var ol=el('ol','tp-steps');ol.id='tripSteps'+i;ol.hidden=i!==trip.sel;
+    o.legs.forEach(function(l){ol.appendChild(tripStep(l,asOf))});
+    b.setAttribute('aria-controls',ol.id);
+    b.addEventListener('click',function(){tripSelect(i)});
+    wrap.appendChild(b);wrap.appendChild(ol);
+    if(o.dominated){more.appendChild(wrap);nMore++}else list.appendChild(wrap);
+  });
+  box.appendChild(list);
+  if(res.hiddenCount>0&&nMore){
+    var mb=el('button','btn tp-more','More options ('+res.hiddenCount+' slower)');mb.type='button';mb.id='tripMore';
+    mb.setAttribute('aria-expanded','false');mb.setAttribute('aria-controls','tripMoreList');
+    mb.addEventListener('click',function(){var open=mb.getAttribute('aria-expanded')!=='true';mb.setAttribute('aria-expanded',open?'true':'false');more.hidden=!open});
+    box.appendChild(mb);box.appendChild(more);
+  }
+  h.focus();
+  var n=res.options.length;
+  $('#tripLive').textContent=n+' trip option'+(n===1?'':'s')+(res.bestMinutes!=null?', fastest '+res.bestMinutes+' minutes':'');
+  if(NARROW.matches&&!trip.autoShown){trip.autoShown=true;tripShowMap()}
+}
+function tripSelect(i){
+  if(!trip.res||i===trip.sel)return;
+  trip.sel=i;
+  document.querySelectorAll('#tripResults .tp-card').forEach(function(b){
+    var on=Number(b.dataset.i)===i;
+    b.setAttribute('aria-pressed',on?'true':'false');
+    $('#'+b.getAttribute('aria-controls')).hidden=!on;
+  });
+  tripDraw();
+}
+function tripShowMap(){
+  try{mapEl.scrollIntoView({block:'nearest',behavior:TRIP_REDUCED()?'auto':'smooth'})}catch(e){}
+}
+/* ----- Map drawing ----- */
+function tripMarker(ll,cls,title,sub){
+  var box=el('div','tp-mk '+cls),t=el('span','tp-txt');
+  t.appendChild(el('span','tp-nm',title));
+  if(sub)t.appendChild(el('span','tp-ct',sub));
+  box.appendChild(t);box.appendChild(el('span','tp-dot'));
+  return L.marker(ll,{icon:L.divIcon({className:'tp-pin',html:box,iconSize:[0,0],iconAnchor:[0,0]}),interactive:false,keyboard:false,zIndexOffset:-300}).addTo(tripLayer);
+}
+function tripDraw(){
+  tripLayer.clearLayers();
+  var o=trip.res&&trip.res.options[trip.sel];
+  if(!o)return;
+  var all=[];
+  o.legs.forEach(function(l){
+    if(l.path&&l.path.length>1){
+      L.polyline(l.path,{className:'tp-line tp-'+l.mode,interactive:false}).addTo(tripLayer);
+      l.path.forEach(function(p){all.push(p)});
+    }
+  });
+  var first=o.legs[0],last=o.legs[o.legs.length-1];
+  tripMarker([first.from.lat,first.from.lng],'tp-start','Start');
+  tripMarker([last.to.lat,last.to.lng],'tp-end','End');
+  o.legs.forEach(function(l){
+    if(l.mode==='bike'){
+      var note=(l.notes||[]).join(' '),bk=/(\d+) bikes? \(/.exec(note),dk=/(\d+) free docks? at /.exec(note);
+      tripMarker([l.from.lat,l.from.lng],'tp-stn',l.from.name||'Indego',bk?bk[1]+' bike'+(bk[1]==='1'?'':'s'):'');
+      tripMarker([l.to.lat,l.to.lng],'tp-stn',l.to.name||'Indego',dk?dk[1]+' dock'+(dk[1]==='1'?'':'s'):'');
+    }else if(l.mode==='bus'){
+      tripMarker([l.from.lat,l.from.lng],'tp-stop','Board '+l.route,'');
+      tripMarker([l.to.lat,l.to.lng],'tp-stop','Exit '+l.route,'');
+    }
+  });
+  if(all.length)map.fitBounds(L.latLngBounds(all),{padding:[34,34],animate:!TRIP_REDUCED()});
 }
 
 /* ----- Boot ----- */
