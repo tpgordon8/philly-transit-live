@@ -103,6 +103,12 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .chip:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .chip .n{font:500 12px var(--f-mono);color:var(--mute)}
 .k-bus{--c:var(--bus)} .k-trolley{--c:var(--trolley)} .k-train{--c:var(--train)}
+/* === BEGIN subway kind (robustness pass, task 5) === */
+:root{--subway:#7b3fb3}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--subway:#c28cf5}}
+:root[data-theme="dark"]{--subway:#c28cf5}
+.k-subway{--c:var(--subway)}
+/* === END subway kind === */
 
 .home{width:100%;padding:12px 14px;border-radius:8px;border:0;background:var(--accent);color:var(--accent-ink);font:700 19px/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .home small{font:500 12px var(--f-body);letter-spacing:0;text-transform:none;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
@@ -273,6 +279,7 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
       <div class="modes" id="modes">
         <label class="chip k-bus on"><input type="checkbox" data-mode="bus" checked><span class="sw"></span>Bus <span class="n" data-n="bus"></span></label>
         <label class="chip k-trolley on"><input type="checkbox" data-mode="trolley" checked><span class="sw"></span>Trolley <span class="n" data-n="trolley"></span></label>
+        <label class="chip k-subway on"><input type="checkbox" data-mode="subway" checked><span class="sw"></span>Subway <span class="n" data-n="subway"></span></label>
         <label class="chip k-train on"><input type="checkbox" data-mode="train" checked><span class="sw"></span>Regional Rail <span class="n" data-n="train"></span></label>
       </div>
       <div id="myRoutes"></div>
@@ -329,13 +336,14 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
 'use strict';
 
 /* ---------- Pure logic (no DOM) ---------- */
-var API='https://api.septa.org/hackathon/';
 var REFRESH_MS=15000, GHOST_MAX_S=150, STALE_AFTER_MS=22000, DROP_AFTER_MS=120000;
-var TROLLEY=new Set(['10','101','102','11','13','15','34','36']);
+var TROLLEY=new Set(['10','101','102','11','13','15','34','36','T1','T2','T3','T4','T5','G1','D1','D2']);
+var SUBWAY=new Set(['B1','B2','B3','L1','M1']);
+function kindOf(route){return SUBWAY.has(route)?'subway':(TROLLEY.has(route)?'trolley':'bus')}
 var CARD=['N','NE','E','SE','S','SW','W','NW'];
 var CARD_LONG={N:'north',NE:'northeast',E:'east',SE:'southeast',S:'south',SW:'southwest',W:'west',NW:'northwest'};
 var SEATS={EMPTY:'Plenty of room',MANY_SEATS_AVAILABLE:'Many seats open',FEW_SEATS_AVAILABLE:'Few seats open',STANDING_ROOM_ONLY:'Standing room only',CRUSHED_STANDING_ROOM_ONLY:'Very crowded',FULL:'Full',NOT_ACCEPTING_PASSENGERS:'Not accepting passengers'};
-var MODE_NAME={bus:'Bus',trolley:'Trolley',train:'Regional Rail'};
+var MODE_NAME={bus:'Bus',trolley:'Trolley',subway:'Subway',train:'Regional Rail'};
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function cardinal(h){return (h==null||!isFinite(h))?null:CARD[Math.round((((h%360)+360)%360)/45)%8]}
@@ -368,11 +376,13 @@ function headingVal(h){if(h==null||h==='')return null;var n=Number(h);return isF
    even when the viewer's device clock is off. */
 function normBuses(json){
   var list=(json&&Array.isArray(json.bus))?json.bus:[];
-  var newest=0,i,b,ts;
-  for(i=0;i<list.length;i++){ts=Number(list[i].timestamp);if(ts>newest)newest=ts}
-  var out=[];
+  var cand=[],newest=0,i,b,ts;
+  /* First pass: every record that passes the non-freshness rules. `newest` is taken only over these, so one bogus
+     record (empty ID, "None", bad coordinates, late 998) with a far-future timestamp cannot empty the map. */
   for(i=0;i<list.length;i++){
-    b=list[i];ts=Number(b.timestamp);
+    b=list[i];
+    if(!b||typeof b!=='object')continue;
+    ts=Number(b.timestamp);
     var lat=num(b.lat),lng=num(b.lng);
     if(!(ts>0)||lat==null||lng==null||lat===0||lng===0)continue;
     /* Schedule-only trips have no vehicle: VehicleID is "None" or empty, and SEPTA stamps the empty ones with the
@@ -381,19 +391,27 @@ function normBuses(json){
     if(!vid||vid==='None'||!lbl||lbl==='None')continue;
     /* late:998 marks a schedule-only trip (no live vehicle behind it); 999 only means no delay data and is kept. */
     if(Number(b.late)===998)continue;
-    var age=newest-ts; if(age>GHOST_MAX_S)continue;
+    if(ts>newest)newest=ts;
+    cand.push({b:b,ts:ts,lat:lat,lng:lng,vid:vid});
+  }
+  var out=[];
+  for(i=0;i<cand.length;i++){
+    var c=cand[i];b=c.b;
+    var age=newest-c.ts; if(age>GHOST_MAX_S)continue;
     var route=String(b.route_id);
-    out.push({key:'b'+vid,kind:TROLLEY.has(route)?'trolley':'bus',route:route,badge:route,
-      lat:lat,lng:lng,ts:ts,heading:headingVal(b.heading),direction:b.Direction||'',dest:b.destination||'',next:b.next_stop_name||'',
+    out.push({key:'b'+c.vid,kind:kindOf(route),route:route,badge:route,
+      lat:c.lat,lng:c.lng,ts:c.ts,heading:headingVal(b.heading),direction:b.Direction||'',dest:b.destination||'',next:b.next_stop_name||'',
       nextId:b.next_stop_id==null?'':String(b.next_stop_id),
-      late:lateVal(b.late),seats:b.estimated_seat_availability||'',vid:vid,age:age});
+      late:lateVal(b.late),seats:b.estimated_seat_availability||'',vid:c.vid,age:age});
   }
   return out;
 }
 function normTrains(json){
   var list=Array.isArray(json)?json:[],out=[];
   for(var i=0;i<list.length;i++){
-    var t=list[i],lat=num(t.lat),lng=num(t.lon);
+    var t=list[i];
+    if(!t||typeof t!=='object')continue;
+    var lat=num(t.lat),lng=num(t.lon);
     if(lat==null||lng==null||lat===0||lng===0)continue;
     out.push({key:'t'+t.trainno,kind:'train',route:String(t.line||''),badge:String(t.trainno),lat:lat,lng:lng,
       heading:headingVal(t.heading),direction:'',dest:t.dest||'',next:t.nextstop||'',cur:t.currentstop||'',
@@ -418,7 +436,7 @@ function shortText(s,n){s=String(s||'').replace(/\s+/g,' ').trim();return s.leng
 
 /* ----- Stop board math. SEPTA publishes no bus predictions here, so an ETA exists only when it can be computed from
    measured data: straight-line distance (padded 15 %) over speed measured from successive GPS reports. ----- */
-var speedHist={},HIST_WINDOW_S=120,HIST_MAX=6,MIN_SPAN_S=20,STILL_MPS=0.9,MAX_MPS=20,ROAD_PAD=1.15,ROUGH_DEG=45;
+var speedHist={},HIST_WINDOW_S=120,HIST_MAX=6,MIN_SPAN_S=20,STILL_MPS=0.9,MAX_MPS=31,ROAD_PAD=1.15,ROUGH_DEG=45;
 function distM(a,b){return distMi(a,b)*1609.344}
 /* Keep a short GPS history per vehicle: only new timestamps, only the last 120 s of feed time, at most 6 samples,
    and nothing for vehicles that left the feed. Called with every vehicle from each successful TransitView refresh. */
@@ -474,7 +492,7 @@ function evalRule(rule,vehicles,now,src){
   if(!src||!src.ok||now-src.ok>DROP_AFTER_MS||src.stale)return {state:'unavailable'};
   var stop={id:rule.stopId,lat:rule.lat,lng:rule.lng},cands=[],any=false,still=false;
   (vehicles||[]).forEach(function(v){
-    if(!v||v.kind==='train'||v.route!==rule.route||v.nextId!==rule.stopId)return;
+    if(!v||v.kind==='train'||v.kind==='subway'||v.route!==rule.route||v.nextId!==rule.stopId)return;
     any=true;
     var e=etaFor(v,stop);
     if(e.min!=null&&!e.rough)cands.push({key:v.key,min:e.min});
@@ -512,9 +530,35 @@ if(typeof L==='undefined'){
 }
 
 var PHILLY={lat:39.9526,lng:-75.1652,label:'Center City (default view)'};
-var prefs=store.get('septa.prefs.v1',{});
-var placesStore=store.get('septa.places.v1',{home:null,list:[]});
-if(!placesStore||!Array.isArray(placesStore.list))placesStore={home:null,list:[]};
+/* Stored values are untrusted: anything malformed is ignored silently (and never rewritten on load). */
+function isNum(x){return typeof x==='number'&&isFinite(x)}
+var DEFAULT_FILTERS={bus:true,trolley:true,subway:true,train:true};
+function cleanPrefs(p){
+  var o=(p&&typeof p==='object'&&!Array.isArray(p))?p:{},c=o.center,f=o.filters,filters={},k;
+  for(k in DEFAULT_FILTERS)filters[k]=(f&&typeof f==='object'&&typeof f[k]==='boolean')?f[k]:DEFAULT_FILTERS[k];
+  return {
+    center:(c&&typeof c==='object'&&isNum(c.lat)&&isNum(c.lng)&&Math.abs(c.lat)<=90&&Math.abs(c.lng)<=180)?{lat:c.lat,lng:c.lng,label:typeof c.label==='string'?c.label:''}:PHILLY,
+    radius:(isNum(o.radius)&&o.radius>=0.25&&o.radius<=5)?o.radius:1.5,
+    filters:filters
+  };
+}
+function cleanPlace(p,withId){
+  if(!p||typeof p!=='object'||typeof p.name!=='string'||!isNum(p.lat)||!isNum(p.lng))return null;
+  if(withId&&typeof p.id!=='string')return null;
+  var o={name:p.name.slice(0,40),lat:p.lat,lng:p.lng};
+  if(withId)o.id=p.id;
+  return o;
+}
+function cleanPlaces(r){
+  var o=(r&&typeof r==='object'&&!Array.isArray(r))?r:{},list=[];
+  if(Array.isArray(o.list))o.list.forEach(function(x){
+    if(list.length>=50)return;
+    var c=cleanPlace(x,true);if(c)list.push({id:c.id,name:c.name,lat:c.lat,lng:c.lng});
+  });
+  return {home:cleanPlace(o.home,false),list:list};
+}
+var prefs=cleanPrefs(store.get('septa.prefs.v1',null));
+var placesStore=cleanPlaces(store.get('septa.places.v1',null));
 
 function cleanRoutes(r){
   var stars=[],seen={};
@@ -523,14 +567,14 @@ function cleanRoutes(r){
 }
 var routesStore=cleanRoutes(store.get('septa.routes.v1',null));
 function saveRoutes(){store.set('septa.routes.v1',routesStore)}
-function starKey(v){return v.kind==='train'?'train:'+v.route:String(v.route)}
+function starKey(v){return v.kind==='train'?'train:'+v.route:(v.kind==='subway'?'subway:'+v.route:String(v.route))}
 function isStarred(k){return routesStore.stars.indexOf(k)>=0}
 function routeFilterOn(){return routesStore.onlyMine&&routesStore.stars.length>0}
 
 var state={
-  center:prefs.center&&isFinite(prefs.center.lat)?prefs.center:PHILLY,
-  radius:prefs.radius>=0.25&&prefs.radius<=5?prefs.radius:1.5,
-  filters:Object.assign({bus:true,trolley:true,train:true},prefs.filters||{}),
+  center:prefs.center,
+  radius:prefs.radius,
+  filters:prefs.filters,
   src:{bus:{list:[],ok:0,stale:false,err:false},train:{list:[],ok:0,stale:false,err:false}},
   visible:[],selected:null,places:placesStore,
   alerts:{items:[],ok:0,err:false,scope:'near'},fetchedAt:0
@@ -587,7 +631,7 @@ function fitRadius(){map.fitBounds(radiusCircle.getBounds(),{padding:[24,24],ani
 /* ----- Markers ----- */
 var markers=new Map();
 function shapeSVG(kind){
-  if(kind==='train'){
+  if(kind==='train'||kind==='subway'){
     return '<svg class="vb" width="64" height="40" viewBox="0 0 64 40" aria-hidden="true">'+
       '<line class="ln" x1="2" y1="37" x2="62" y2="37"/>'+
       '<path class="bd" d="M10 8H44Q56 8 60 22V31H6V12Q6 8 10 8Z"/>'+
@@ -624,7 +668,7 @@ function syncMarkers(list){
       if(ll.lat!==v.lat||ll.lng!==v.lng)m.setLatLng([v.lat,v.lng]);
       var el=m.getElement();
       if(el&&el.dataset.sig!==vehSig(v)){
-        el.className=el.className.replace(/\bk-(bus|trolley|train)\b/g,'')+' k-'+v.kind;
+        el.className=el.className.replace(/\bk-(bus|trolley|subway|train)\b/g,'')+' k-'+v.kind;
         el.innerHTML=vehInner(v);el.dataset.sig=vehSig(v);
       }
     }
@@ -643,13 +687,13 @@ function collect(){
   var now=Date.now(),all=[];
   ['bus','train'].forEach(function(s){
     var src=state.src[s];
-    if(!src.ok||now-src.ok>DROP_AFTER_MS)return;
+    if(!src.ok||now-src.ok>DROP_AFTER_MS||skipped[s])return;
     src.list.forEach(function(v){all.push(Object.assign({},v,{stale:src.stale}))});
   });
   return all;
 }
 function apply(){
-  var all=collect(),counts={bus:0,trolley:0,train:0},vis=[],inRadius=0,rf=routeFilterOn();
+  var all=collect(),counts={bus:0,trolley:0,subway:0,train:0},vis=[],inRadius=0,rf=routeFilterOn();
   all.forEach(function(v){
     if(distMi(state.center,v)>state.radius)return;
     inRadius++;
@@ -659,7 +703,9 @@ function apply(){
   });
   state.visible=vis;
   syncMarkers(vis);
-  document.querySelectorAll('[data-n]').forEach(function(n){n.textContent=counts[n.dataset.n]});
+  /* A source that is not being fetched has no trustworthy count: show nothing rather than a wrong number. */
+  var w=wantedSources();
+  document.querySelectorAll('[data-n]').forEach(function(n){var k=n.dataset.n,sk=k==='train'?'train':'bus';n.textContent=(!w[sk]||skipped[sk])?'':counts[k]});
   renderEmpty(all.length,vis.length,counts,rf&&inRadius>0);
   renderMyRoutes();
   renderDetail();
@@ -667,10 +713,12 @@ function apply(){
   renderStatus();
   renderStopBoard();
   evalRules();
+  var w2=wantedSources();
+  if(!inflight&&((w2.bus&&skipped.bus)||(w2.train&&skipped.train)))refresh(true);
 }
 function renderEmpty(totalLoaded,visCount,counts,routeHides){
   var box=$('#empty'),anyOk=state.src.bus.ok||state.src.train.ok;
-  var totalNear=counts.bus+counts.trolley+counts.train;
+  var totalNear=counts.bus+counts.trolley+counts.subway+counts.train;
   if(!anyOk||visCount>0){box.hidden=true;return}
   box.hidden=false;
   if(routeHides&&totalNear===0){
@@ -687,7 +735,7 @@ $('#empty').addEventListener('click',function(e){
   var b=e.target.closest('#emptyAct');if(!b)return;
   if(b.dataset.act==='widen'){setRadius(Math.min(5,state.radius+1.5),true)}
   else if(b.dataset.act==='routes'){routesStore.onlyMine=false;saveRoutes();clearSelection();apply()}
-  else{state.filters={bus:true,trolley:true,train:true};syncModeChips();savePrefs();apply()}
+  else{state.filters={bus:true,trolley:true,subway:true,train:true};syncModeChips();savePrefs();apply()}
 });
 
 /* ----- My routes ----- */
@@ -703,7 +751,7 @@ function toggleStar(k){
   if(i>=0&&routeFilterOn()&&state.selected)clearSelection();
   apply();
 }
-function starName(k){return k.indexOf('train:')===0?k.slice(6):k}
+function starName(k){return k.indexOf('train:')===0?k.slice(6):(k.indexOf('subway:')===0?k.slice(7):k)}
 function renderMyRoutes(){
   var box=$('#myRoutes'),st=routesStore.stars;
   box.replaceChildren();
@@ -729,46 +777,88 @@ $('#myRoutes').addEventListener('click',function(e){
 });
 
 /* ----- Status line + banner ----- */
+function srcState(sr,now){
+  if(!sr.err)return 'ok';
+  if(sr.ok&&now-sr.ok<=DROP_AFTER_MS)return 'stale';
+  return 'down';
+}
 function renderStatus(){
   var dot=$('#dot'),txt=$('#statusText'),b=state.src.bus,t=state.src.train,now=Date.now();
-  var okAny=b.ok||t.ok,failing=b.stale||t.stale||b.err||t.err;
+  var w=wantedSources(),act=['bus','train'].filter(function(k){return w[k]});
+  var st={},stale=[],down=[];
+  act.forEach(function(k){st[k]=srcState(state.src[k],now);if(st[k]==='stale')stale.push(k);else if(st[k]==='down')down.push(k)});
   var n=state.visible.length;
-  if(!okAny&&!failing&&!state.fetchedAt){dot.className='dot';txt.textContent='Connecting to SEPTA…';return}
-  if(!okAny||(b.err&&t.err)){
+  if(!b.ok&&!t.ok&&!b.err&&!t.err&&!state.fetchedAt){dot.className='dot';txt.textContent='Connecting to SEPTA…';return}
+  if(!act.length){dot.className='dot live';txt.innerHTML='<b>Paused</b> · no vehicle types selected';hideBanner();return}
+  if(down.length===act.length){
     dot.className='dot err';
     txt.innerHTML='<b>Live data unavailable</b>';
-    var dropped=okAny&&false;
-    showBanner('','<b>Live data unavailable.</b> Couldn\'t reach SEPTA\'s API through the proxy. No vehicle positions are shown, and none are guessed. Retrying every '+(REFRESH_MS/1000)+' seconds.');
+    showBanner('','<b>Live data unavailable.</b> Couldn\'t reach SEPTA\'s API through the proxy. No vehicle positions are shown, and none are guessed. Retrying automatically.');
     return;
   }
-  var newest=Math.max(b.ok,t.ok),ago=Math.max(0,Math.round((now-newest)/1000));
-  if(failing){
-    dot.className='dot stale';
-    txt.innerHTML='<b>Stale</b> · last good update '+ago+'s ago';
-    var which=[b.err||b.stale?'buses and trolleys':'',t.err||t.stale?'Regional Rail':''].filter(Boolean).join(' and ');
-    showBanner('warn','<b>Showing last known positions for '+esc(which)+'.</b> The latest refresh failed, so those markers are dimmed and will clear after 2 minutes.');
+  if(stale.length||down.length){
+    var parts=[];
+    if(stale.length){
+      var which=stale.map(function(k){return k==='bus'?'buses, trolleys and subway':'Regional Rail'}).join(' and ');
+      parts.push('<b>Showing last known positions for '+esc(which)+'.</b> The latest refresh failed, so those markers are dimmed and will clear after 2 minutes.');
+    }
+    if(down.length){
+      var gone=down.map(function(k){return k==='bus'?'Bus and trolley':'Regional Rail'}).join(' and ');
+      parts.push('<b>'+esc(gone)+' positions are unavailable.</b> No updates for over 2 minutes, so nothing is drawn for '+(down.length>1?'them':(down[0]==='bus'?'them (subway lines come from the same feed)':'it'))+'.');
+    }
+    if(stale.length){
+      var newest=Math.max.apply(null,stale.map(function(k){return state.src[k].ok})),ago0=Math.max(0,Math.round((now-newest)/1000));
+      dot.className='dot stale';
+      txt.innerHTML='<b>Stale</b> · last good update '+ago0+'s ago';
+    }else{
+      dot.className='dot stale';
+      txt.innerHTML='<b>Partial</b> · '+n+' vehicle'+(n===1?'':'s')+' shown';
+    }
+    showBanner('warn',parts.join(' '));
     return;
   }
+  var ago=Math.max(0,Math.round((now-Math.max(b.ok,t.ok))/1000));
   hideBanner();
   dot.className='dot live';
   txt.innerHTML='<b>Live</b> · updated '+ago+'s ago · '+n+' vehicle'+(n===1?'':'s')+' shown';
 }
 
 /* ----- Refresh loop ----- */
-var inflight=false;
-function refresh(){
+/* Request budget (see ARCHITECTURE.md section 2). A source is fetched only when something on screen needs it:
+   TrainView while the Regional Rail chip is on; TransitView while any of Bus/Trolley/Subway is on, or an enabled
+   leave-now rule exists, or a stop is open. A failing source backs off 15 s x 2^N (cap 120 s) by skipping ticks. */
+var inflight=false,lastStart=0,skipped={bus:false,train:false},fails={bus:0,train:0},nextTry={bus:0,train:0};
+var BACKOFF_BASE_MS=15000,BACKOFF_MAX_MS=120000,HIDDEN_MS=60000;
+function wantedSources(){
+  var f=state.filters;
+  return {bus:!!(f.bus||f.trolley||f.subway||hasActiveRule()||state.stop),train:!!f.train};
+}
+function refresh(force){
   if(inflight)return Promise.resolve();
   inflight=true;
-  var p1=septa('TransitView/index.php').then(function(j){
-    var s=state.src.bus;s.list=normBuses(j);updateSpeedHist(s.list);s.ok=Date.now();s.stale=false;s.err=false;
-  }).catch(function(){var s=state.src.bus;s.stale=true;s.err=true});
-  var p2=septa('TrainView/index.php').then(function(j){
-    var s=state.src.train;s.list=normTrains(j);s.ok=Date.now();s.stale=false;s.err=false;
-  }).catch(function(){var s=state.src.train;s.stale=true;s.err=true});
+  var now=Date.now(),w=wantedSources(),was={bus:skipped.bus,train:skipped.train};
+  lastStart=now;
+  skipped.bus=!w.bus;skipped.train=!w.train;
+  function run(k,path,parse){
+    if(!w[k])return Promise.resolve();
+    if(now<nextTry[k]-500&&!(force&&was[k]))return Promise.resolve();
+    return septa(path).then(function(j){
+      var s=state.src[k];s.list=parse(j);if(k==='bus')updateSpeedHist(s.list);
+      s.ok=Date.now();s.stale=false;s.err=false;fails[k]=0;nextTry[k]=0;
+    }).catch(function(){
+      var s=state.src[k];s.stale=true;s.err=true;fails[k]++;
+      nextTry[k]=now+Math.min(BACKOFF_BASE_MS*Math.pow(2,fails[k]),BACKOFF_MAX_MS);
+    });
+  }
+  var p1=run('bus','TransitView/index.php',normBuses),p2=run('train','TrainView/index.php',normTrains);
   return Promise.all([p1,p2]).then(function(){state.fetchedAt=Date.now();inflight=false;apply()},function(){inflight=false});
 }
-/* A hidden tab normally skips refresh (protects the free-tier request budget). It keeps refreshing only while an enabled leave-now alert exists. */
-setInterval(function(){if(!document.hidden||hasActiveRule())refresh()},REFRESH_MS);
+/* A hidden tab normally skips refresh (protects the free-tier request budget). With an enabled leave-now alert it
+   keeps refreshing, but only once a minute (HIDDEN_MS) instead of every 15 s. */
+setInterval(function(){
+  if(!document.hidden){refresh();return}
+  if(hasActiveRule()&&Date.now()-lastStart>=HIDDEN_MS-REFRESH_MS/2)refresh();
+},REFRESH_MS);
 setInterval(function(){if(state.fetchedAt){renderStatus();updateBoardAge()}},1000);
 document.addEventListener('visibilitychange',function(){if(!document.hidden&&Date.now()-state.fetchedAt>REFRESH_MS)refresh()});
 
@@ -819,7 +909,7 @@ function renderDetail(){
   addRow(dl,'Destination',v.dest||'Not reported');
   if(v.kind==='train'&&v.cur)addRow(dl,'Last station',v.cur);
   var nextNode=v.next||'Not reported';
-  if(v.kind!=='train'&&v.nextId&&/^[0-9]{1,8}$/.test(v.nextId)){
+  if((v.kind==='bus'||v.kind==='trolley')&&v.nextId&&/^[0-9]{1,8}$/.test(v.nextId)){
     nextNode=el('span');nextNode.appendChild(document.createTextNode((v.next||'Not reported')+' '));
     var vs=el('button','btn small','View stop');vs.type='button';vs.id='viewStop';
     vs.addEventListener('click',function(){openStop(v.route,v.nextId)});
@@ -974,7 +1064,8 @@ function renderGMH(origin,home,dHome,cands,usedGps){
   head.appendChild(document.createElement('br'));
   var a=el('a',null,'Open transit directions ↗');
   a.href='https://www.google.com/maps/dir/?api=1&origin='+origin.lat+','+origin.lng+'&destination='+home.lat+','+home.lng+'&travelmode=transit';
-  a.target='_blank';a.rel='noopener';head.appendChild(a);wrap.appendChild(head);
+  a.target='_blank';a.rel='noopener';head.appendChild(a);
+  var pn=el('span','dir-note','Opens Google Maps with your start and Home locations.');pn.style.cssText='display:block;margin-top:2px;font-weight:400;font-size:12px;color:var(--mute)';head.appendChild(pn);wrap.appendChild(head);
   if(cands.length){
     var ol=el('ol');
     cands.forEach(function(v){
@@ -1121,7 +1212,7 @@ var BOARD_MAX=5,HEAD_MI=1.5,HEAD_DEG=60;
 function boardRows(stop,all){
   var a=[],b=[];
   all.forEach(function(v){
-    if(v.kind==='train'||v.route!==stop.route)return;
+    if(v.kind==='train'||v.kind==='subway'||v.route!==stop.route)return;
     var d=distMi(v,stop);
     if(v.nextId===stop.id){a.push({v:v,d:d,eta:etaFor(v,stop)});return}
     if(d<=HEAD_MI&&v.heading!=null&&angDiff(v.heading,bearing(v,stop))<=HEAD_DEG)b.push({v:v,d:d,eta:etaFor(v,stop)});

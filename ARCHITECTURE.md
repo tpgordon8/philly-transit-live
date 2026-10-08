@@ -25,8 +25,8 @@ SEPTA public hackathon API (no key, no CORS headers)
   number appears only when it is computed from measured data. Each successful TransitView refresh appends a
   `{ts,lat,lng}` sample per vehicle (only when the GPS timestamp is new; last 120 s of feed time, at most 6 samples;
   vehicles that leave the feed are deleted, so memory is bounded). Speed is the distance between the oldest and newest
-  sample divided by their time apart, and needs at least 20 s of span. Under 0.9 m/s counts as not moving; above 20 m/s
-  (or a single step that implies it) is treated as a GPS jump and discarded. Only the bus whose `next_stop_id` is the
+  sample divided by their time apart, and needs at least 20 s of span. Under 0.9 m/s counts as not moving; above 31 m/s
+  (about 70 mph, so highway buses such as I-76 still get an ETA; or a single step that implies it) is treated as a GPS jump and discarded. Only the bus whose `next_stop_id` is the
   stop gets an ETA: straight-line distance **plus 15 %** (roads are not straight) divided by speed, rounded up to whole
   minutes, never below 1 min. Unknown speed shows "—" with "measuring speed"; a stopped bus shows "not moving". Buses
   within 1.5 mi and heading within 60° of the stop are listed as "Heading toward this stop" with distance only. The card
@@ -39,7 +39,9 @@ SEPTA public hackathon API (no key, no CORS headers)
 - The page never calls SEPTA directly. `api.septa.org` and `www3.septa.org` send no CORS headers, and the free
   public CORS proxies are dead (corsproxy.io wants a key; allorigins and codetabs time out).
 - Third-party calls that remain: OpenStreetMap tiles, Google Fonts, cdnjs (Leaflet 1.9.4), and Nominatim for
-  address search. Nominatim receives the address the user types. Nothing else leaves the browser.
+  address search. Nominatim receives the address the user types. The one other exception is a user click: the
+  "Open transit directions" link in the Get me home card opens Google Maps with the user's start point and Home
+  coordinates in the URL, and the card says so next to the link. Nothing else leaves the browser.
 - Deviation from the plan text: the page calls `TransitView` with **no `?route=`**, which returns every active
   vehicle in one response (about 290 KB). One Worker request per refresh is cheaper against the daily budget than
   one request per route, so the plan's "batch route requests" goal is met by design.
@@ -56,9 +58,24 @@ SEPTA public hackathon API (no key, no CORS headers)
   max-age=5`; the page fetches with `cache: 'no-store'`. Upstream timeout is 10 s; failures return 502 JSON.
 - Deploy: no CLI or API token is available. Paste `worker/worker.js` into the Cloudflare dashboard editor
   (Workers & Pages, septa-proxy, Edit code) and click Deploy.
-- **Budget (free plan: 100,000 Worker requests/day).** Edge-cache hits still invoke the Worker, so each open page
-  costs 2 requests per 15 s = at most 11,520/day. About eight pages left open for 24 hours would reach the cap.
-  Hidden tabs skip refresh, which lowers real usage. Alerts are fetched every 5 minutes (288/day per page).
+- **Budget (free plan: 100,000 Worker requests/day).** Edge-cache hits still invoke the Worker, so every request
+  counts. A fully active visible page (both feeds) costs 2 requests per 15 s = at most 11,520/day, plus Alerts every
+  5 minutes in a visible tab (288/day). About eight such pages left open for 24 hours would reach the cap. Three
+  rules keep real usage lower:
+  (a) **Only fetch what is shown.** `TrainView` is skipped while the Regional Rail chip is off (5,760/day for the
+  remaining feed). `TransitView` is skipped only when the Bus, Trolley and Subway chips are all off, no enabled
+  leave-now rule exists and no stop is open (an open stop or a rule needs bus data whatever the chips say). A skipped
+  source shows no count and draws nothing; turning a chip back on refetches immediately instead of waiting up to 15 s.
+  (b) **Hidden tabs.** A hidden tab makes no requests unless an enabled leave-now rule exists, in which case it
+  refreshes once a minute instead of every 15 s: 1,440/day for the bus feed alone, 2,880/day with Regional Rail on
+  (down from 11,520). Trade-off: in a background tab the ETA samples are up to 60 s apart, so a leave-now alert can
+  fire up to a minute later than it would in a visible tab (the speed measure needs 20 s of span, which one sample per
+  minute satisfies).
+  (c) **Failure backoff.** After N consecutive failed refresh cycles of a source (a cycle is the call plus its single
+  1.5 s retry), the next attempt waits 15 s x 2^N, capped at 120 s: attempts 30 s, 60 s, then every 120 s. It is
+  implemented by skipping 15 s ticks, per source (a healthy feed is not slowed by a failing one), and any success
+  resets it. During a sustained outage a source costs at most 720 cycles x 2 requests = 1,440/day instead of 11,520
+  per feed pair. The 120 s drop rule is unchanged.
 
 ## 3. Ghost-bus filter (`normBuses` in `index.html`)
 
@@ -69,6 +86,10 @@ A bus is kept only if all of these hold:
 2. `VehicleID` and `label` are non-empty and not `"None"`. Empty-ID records carry the feed's own timestamp, so
    freshness alone lets them through; this rule drops them.
 3. `lat`/`lng` parse and are non-zero.
+
+`newest` is computed only over records that pass every other rule below (non-empty real ID and label, parseable
+non-zero coordinates, not `late: 998`), so one bogus record with a far-future timestamp cannot push the reference
+forward and empty the map. Null or non-object elements in the feed lists (`bus[]`, TrainView) are skipped.
 
 `late` handling: `late: 998` records (schedule-only trips) are **dropped**. Other values of 900 or more (`999` = no delay
 data) are kept and shown as "Delay data unavailable".
@@ -87,15 +108,17 @@ non-zero. The train detail card says positions have no timestamp. Headings may b
 - Glide: CSS `transition: transform 1.6s` on `.veh-wrap`. The map container gets `.noglide` during zoom so
   markers do not drag across the screen when Leaflet repositions them.
 - Gotcha: Leaflet gives map-pane SVGs `z-index: 200`, so the bus drawing sets `z-index: 0` and the badges `1`.
-- Colors: buses blue, trolleys green, rail orange; all tokens are redefined for dark mode.
+- Colors: buses blue, trolleys green, subway purple (`--subway`, in a delimited CSS block), rail orange; all tokens are redefined for dark mode.
+- Vehicle kinds: `bus`, `trolley`, `subway` (all three come from TransitView, classified by route id: trolley = T1-T5, G1, D1, D2 and legacy 10, 11, 13, 15, 34, 36, 101, 102; subway = B1, B2, B3, L1, M1) and `train` (TrainView). Subway uses the train drawing, a `Subway` chip, star key `subway:<route>`, and like trains has no View stop, stop board, ETA or leave-now rule.
 
 ## 5. Refresh loop and failure states
 
-- `setInterval` every 15 s, skipped while `document.hidden`; a visibility change triggers a refresh if the last
-  one is older than 15 s. Each refresh fetches `TransitView` and `TrainView` in parallel; each source keeps
+- `setInterval` every 15 s, skipped while `document.hidden` (every 60 s there when a leave-now rule is enabled); a
+  visibility change triggers a refresh if the last one is older than 15 s. Each refresh fetches the wanted feeds of
+  `TransitView` and `TrainView` in parallel (section 2 lists when one is skipped or backed off); each source keeps
   `{list, ok, stale, err}`.
 - The fetch layer retries once after 1.5 s. If both attempts fail the source is marked stale: its markers dim and
-  a warning banner says so. After 120 s without a good update the source is dropped entirely. If no source has
+  a warning banner says so ("Showing last known positions"). After 120 s without a good update the source is dropped entirely and the banner says that source's positions are unavailable ("Bus and trolley positions are unavailable", "Regional Rail positions are unavailable"), never "last known positions". If no source has
   ever loaded, the banner reads "Live data unavailable" and nothing is drawn. Positions are never invented,
   interpolated as fact, or kept past 120 s.
 - Alerts load at boot and every 5 minutes. Alert HTML is converted to plain text with `DOMParser`
@@ -105,16 +128,18 @@ non-zero. The train detail card says positions have no timestamp. Headings may b
 
 | Key | Shape |
 |---|---|
-| `septa.prefs.v1` | `{ center: {lat, lng, label}, radius: 0.25–5, filters: {bus, trolley, train} }` |
-| `septa.places.v1` | `{ home: {name, lat, lng} \| null, list: [{id, name, lat, lng}] }` |
+| `septa.prefs.v1` | `{ center: {lat, lng, label}, radius: 0.25–5, filters: {bus, trolley, subway, train} }` |
+| `septa.places.v1` | `{ home: {name, lat, lng} \| null, list: [{id, name, lat, lng}] }` — validated on load: finite lat/lng, string names (cut to 40 chars), string ids, at most 50 list items; anything else is dropped |
 | `septa.routes.v1` | `{ stars: [string], onlyMine: boolean }` — default `{stars: [], onlyMine: true}` |
 | `septa.rules.v1` | `{ rules: [{id, route, stopId, stopName, lat, lng, minutes, enabled, last: {key, t} \| null}] }` — leave-now alerts, at most 10; `id` is random, `last` is the vehicle key and time of the last firing |
 
-**My routes.** Star keys: the route id string for buses and trolleys, `train:` + line name for Regional Rail (`starKey(v)`). When `onlyMine` is true and `stars` is non-empty, `apply()` drops vehicles whose key is not starred before counting, so the mode-chip counts match the map. Empty `stars` means no filtering. Corrupt or unexpected stored values are read as the default.
+**Corrupt storage.** `septa.prefs.v1` and `septa.places.v1` are validated on load (`cleanPrefs`, `cleanPlaces`): a bad center falls back to Center City, radius outside 0.25-5 to 1.5, filters are merged over the defaults as booleans (so old prefs without `subway` still load), bad places are dropped. Bad values are ignored silently and the stored string is not rewritten on load.
+
+**My routes.** Star keys: the route id string for buses and trolleys, `subway:` + route id for subway lines, `train:` + line name for Regional Rail (`starKey(v)`). When `onlyMine` is true and `stars` is non-empty, `apply()` drops vehicles whose key is not starred before counting, so the mode-chip counts match the map. Empty `stars` means no filtering. Corrupt or unexpected stored values are read as the default.
 
 **Leave-now rules.** Read defensively: junk, a non-object, or any rule failing validation (route `^[A-Za-z0-9]{1,6}$`, stop id `^[0-9]{1,8}$`, integer `minutes` 2–30, finite lat/lng, unique id, no duplicate route/stop/minutes) is dropped; the first 10 valid rules are kept. Nothing about a rule leaves the browser.
 
-**Rule evaluator (`evalRule`, exposed on `__SEPTA_TEST__`).** On every `apply()` each enabled rule is evaluated against `collect()` (radius, mode filters and My routes ignored). It returns a status and may fire only when the bus source is neither stale nor dropped and a bus on the rule's route has `nextId` equal to the rule's stop and `etaFor` returns a numeric, non-rough `min` (so an unknown or zero speed never fires). The smallest `min` is the "nearest bus"; the rule fires when that is at or below its threshold, unless the same vehicle key already fired within 15 minutes (`rule.last`, persisted). Firing calls `notify()`: a `role="alert"` toast in `#toasts` (max 3, never auto-dismissed), plus a system `Notification` only if permission was granted and the tab is hidden. Permission is requested only from the "Turn on browser notifications" click. While at least one enabled rule exists the 15 s refresh also runs in a hidden tab; with none it keeps skipping, to protect the Worker request budget.
+**Rule evaluator (`evalRule`, exposed on `__SEPTA_TEST__`).** On every `apply()` each enabled rule is evaluated against `collect()` (radius, mode filters and My routes ignored). It returns a status and may fire only when the bus source is neither stale nor dropped and a bus on the rule's route has `nextId` equal to the rule's stop and `etaFor` returns a numeric, non-rough `min` (so an unknown or zero speed never fires). The smallest `min` is the "nearest bus"; the rule fires when that is at or below its threshold, unless the same vehicle key already fired within 15 minutes (`rule.last`, persisted). Firing calls `notify()`: a `role="alert"` toast in `#toasts` (max 3, never auto-dismissed), plus a system `Notification` only if permission was granted and the tab is hidden. Permission is requested only from the "Turn on browser notifications" click. While at least one enabled rule exists a hidden tab keeps refreshing, once a minute rather than every 15 s; with none it makes no requests, to protect the Worker request budget. Background freshness trade-off: a hidden tab has at most one position sample per minute, so an alert there can arrive up to about a minute later than in a visible tab (and phones may pause background tabs altogether).
  New keys must be versioned (`.v1`) and listed here.
 
 ## 7. Deployment
