@@ -25,7 +25,10 @@ SEPTA public hackathon API (no key, no CORS headers)
 
 ## 2. The Worker
 
-- Allowlist: exactly `TransitView`, `TrainView`, `Alerts`. Anything else is a 404. No query string is forwarded.
+- Allowlist: `TransitView`, `TrainView`, `Alerts` (no parameters; the query string is ignored), plus `Stops?route=<id>`
+  (id matches `^[A-Za-z0-9]{1,6}$`, edge-cached a day) and `Arrivals?station=<name>` (name matches
+  `^[A-Za-z0-9 .'&/-]{2,40}$`, upstream `results=10`, cached 15 s). Bad parameters get 400 without reaching SEPTA.
+  Anything else is a 404. Unit test: `node tests/test_worker.mjs`.
 - CORS: allows `https://tpgordon8.github.io` and `null` (a locally opened file). A browser sending any other
   `Origin` gets 403. This is a soft guard, since non-browser clients can spoof `Origin`; the data is public anyway.
 - Caching: Cloudflare edge cache with `cacheTtl` 10 s (Alerts 60 s). Responses carry `Cache-Control: public,
