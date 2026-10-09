@@ -29,12 +29,35 @@
   /* ----- Map ----- */
   var NOGLIDE_MS = 700; /* markers jump instead of gliding while the map zooms or resizes, and this long after */
   var GLIDE_SOON_MS = 160; /* gliding resumes this long after a zoom ends */
+  var DIR_MIN_ZOOM = 16; /* below this zoom the direction letters hide (css/map.css .dir-lo), except on the selected vehicle */
+  var REDUCED_MQ = window.matchMedia('(prefers-reduced-motion: reduce)');
+  /* Animations are off for a rider who asks for reduced motion: the map is created without zoom and fade animation, and every
+     pan, fit and fly call below passes animate: animOK(). */
+  function animOK() {
+    return !REDUCED_MQ.matches;
+  }
   var map = L.map('map', {
     zoomControl: false,
+    zoomAnimation: animOK(),
+    fadeAnimation: animOK(),
     markerZoomAnimation: false,
     attributionControl: true
-  }).setView([state.center.lat, state.center.lng], 14);
-  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  }).setView([state.center.lat, state.center.lng], 14, { animate: false });
+  var zoomCtl = L.control.zoom({ position: 'bottomright' }).addTo(map);
+  /* The first focusable element in the map region: one Tab press skips every vehicle marker and lands on the zoom buttons. */
+  var skip = $('#skipVeh');
+  if (skip)
+    skip.addEventListener('click', function () {
+      var z = zoomCtl.getContainer().querySelector('a');
+      if (z) z.focus();
+    });
+  if (!animOK()) {
+    /* setView and panTo reach panBy with the caller's options; with reduced motion no pan glides. */
+    var panBy0 = map.panBy;
+    map.panBy = function (offset, opts) {
+      return panBy0.call(this, offset, L.extend({}, opts, { animate: false }));
+    };
+  }
   map.attributionControl.setPrefix(false);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
@@ -57,6 +80,11 @@
   }
   map.on('zoomstart viewreset resize', noGlide);
   map.on('zoomend', glideSoon);
+  function syncDirBadges() {
+    mapEl.classList.toggle('dir-lo', map.getZoom() < DIR_MIN_ZOOM);
+  }
+  map.on('zoomend', syncDirBadges);
+  syncDirBadges();
   var radiusCircle = null,
     centerPin = null,
     homePin = null;
@@ -104,7 +132,7 @@
     }
   }
   function fitRadius() {
-    map.fitBounds(radiusCircle.getBounds(), { padding: [24, 24], animate: true });
+    map.fitBounds(radiusCircle.getBounds(), { padding: [24, 24], animate: animOK() });
   }
   /* ----- Markers ----- */
   var markers = new Map();
@@ -205,6 +233,10 @@
       ? 'Train ' + v.badge + ' · ' + v.route
       : 'Route ' + v.badge + ' ' + MODE_NAME[v.kind].toLowerCase();
   }
+  var focusKey = null; /* key of the marker that has keyboard focus */
+  function zOffset(key) {
+    return focusKey === key ? 2000 : state.selected === key ? 1000 : 0;
+  }
   function syncMarkers(list) {
     var keep = new Set();
     list.forEach(function (v) {
@@ -231,6 +263,15 @@
         if (e0) {
           e0.dataset.sig = vehSig(v);
           e0.setAttribute('role', 'button');
+          /* A focused marker is raised above its neighbours so its ring is not hidden; blur puts it back (Leaflet has no focus event). */
+          e0.addEventListener('focus', function () {
+            focusKey = v.key;
+            m.setZIndexOffset(zOffset(v.key));
+          });
+          e0.addEventListener('blur', function () {
+            if (focusKey === v.key) focusKey = null;
+            m.setZIndexOffset(zOffset(v.key));
+          });
           /* Leaflet markers take focus but ignore Enter and Space; selecting is what a click does. */
           e0.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
@@ -258,7 +299,7 @@
         el2.classList.toggle('stale', !!v.stale);
         el2.classList.toggle('sel', state.selected === v.key);
       }
-      m.setZIndexOffset(state.selected === v.key ? 1000 : 0);
+      m.setZIndexOffset(zOffset(v.key));
     });
     markers.forEach(function (m, k) {
       if (!keep.has(k)) {
@@ -283,13 +324,13 @@
     for (var i = 0; i < l.length; i++) if (l[i].key === k) return l[i];
     return null;
   }
-  var NARROW = window.matchMedia('(max-width:820px), (max-height:500px)');
+  var NARROW = window.matchMedia('(max-width:760px), (max-height:500px)');
   function select(k, opts) {
     state.selected = k;
     markers.forEach(function (m, key) {
       var e = m.getElement();
       if (e) e.classList.toggle('sel', key === k);
-      m.setZIndexOffset(key === k ? 1000 : 0);
+      m.setZIndexOffset(zOffset(key));
     });
     renderDetail();
     var v = findVehicle(k);
@@ -322,8 +363,7 @@
     var cx = Math.min(Math.max(p.x, 44), mr.width - 44);
     var dx = Math.round(p.x - cx),
       dy = Math.round(p.y - cy);
-    if (dx || dy)
-      map.panBy([dx, dy], { animate: !window.matchMedia('(prefers-reduced-motion: reduce)').matches });
+    if (dx || dy) map.panBy([dx, dy], { animate: animOK() });
   }
   function addRow(dl, label, node) {
     var dt = el('dt', null, label),
@@ -436,7 +476,7 @@
     if ((v.kind === 'bus' || v.kind === 'trolley') && v.nextId && /^[0-9]{1,8}$/.test(v.nextId)) {
       nextNode = el('span');
       nextNode.appendChild(document.createTextNode((v.next || 'Not reported') + ' '));
-      var vs = el('button', 'btn small', 'View stop');
+      var vs = el('button', 'btn small ghost', 'View stop');
       vs.type = 'button';
       vs.id = 'viewStop';
       vs.addEventListener('click', function () {
@@ -499,6 +539,7 @@
   S.map.map = map;
   S.map.mapEl = mapEl;
   S.map.NARROW = NARROW;
+  S.map.animOK = animOK;
   S.map.drawCenter = drawCenter;
   S.map.drawHome = drawHome;
   S.map.fitRadius = fitRadius;

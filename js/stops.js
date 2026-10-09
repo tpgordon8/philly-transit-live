@@ -193,7 +193,7 @@
     box.appendChild(el('b', null, st.name));
     box.appendChild(el('div', 'sub', 'Stop ' + st.id + ' · Route ' + st.route));
     var row = el('div', 'row');
-    var cp = el('button', 'btn small primary', 'Copy link');
+    var cp = el('button', 'btn small ghost', 'Copy link');
     cp.type = 'button';
     cp.id = 'copyStop';
     var live = el('div', 'live');
@@ -227,11 +227,11 @@
     row.appendChild(close);
     box.appendChild(row);
     box.appendChild(live);
-    box.appendChild(alertRow(st));
-    updateAlertRow();
     var board = el('div', 'sboard');
     board.id = 'stopBoard';
     box.appendChild(board);
+    box.appendChild(alertRow(st));
+    updateAlertRow();
     renderStopBoard();
   }
   function drawStopMarker(st) {
@@ -300,7 +300,7 @@
     eta.appendChild(
       el(
         'b',
-        r.eta.rough ? 'rough' : null,
+        r.eta.rough ? 'rough' : r.eta.min == null ? 'none' : null,
         r.eta.min == null ? '—' : (r.eta.rough ? '~' : '') + r.eta.min + ' min'
       )
     );

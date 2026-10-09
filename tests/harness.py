@@ -299,13 +299,16 @@ class _Quiet(http.server.SimpleHTTPRequestHandler):
 
 
 class Session:
-    def __init__(self, root=None, viewport=(1280, 800), geolocation=None, extra_routes=None, init_scripts=(), legacy_defaults=True, touch=False, mobile=False, scale=1):
+    def __init__(self, root=None, viewport=(1280, 800), geolocation=None, extra_routes=None, init_scripts=(), legacy_defaults=True, touch=False, mobile=False, scale=1, color_scheme=None, reduced_motion=None, tile_png=None):
         self.root = pathlib.Path(root or HERE.parent)
         self.viewport = {"width": viewport[0], "height": viewport[1]}
         self.geolocation = geolocation
         self.touch = touch  # True: a touch screen (page.touchscreen.tap works)
         self.mobile = mobile  # True: Chromium's mobile emulation (meta viewport honoured, coarse pointer, overlay scrollbars)
         self.scale = scale  # device pixel ratio
+        self.color_scheme = color_scheme  # 'light' | 'dark' | None (browser default)
+        self.reduced_motion = reduced_motion  # 'reduce' | 'no-preference' | None
+        self.tile_png = tile_png or PNG  # bytes served for every map tile
         self.extra_routes = extra_routes or {}  # substring -> (status, content_type, body)
         self.init_scripts = ([LEGACY_DEFAULTS_JS] if legacy_defaults else []) + list(init_scripts)
         self.worker = Worker()
@@ -322,7 +325,9 @@ class Session:
         threading.Thread(target=self._srv.serve_forever, daemon=True).start()
         self._pw = sync_playwright().start()
         self.browser = self._pw.chromium.launch()
-        self.ctx = self.browser.new_context(viewport=self.viewport, has_touch=self.touch, is_mobile=self.mobile, device_scale_factor=self.scale)
+        self.ctx = self.browser.new_context(viewport=self.viewport, has_touch=self.touch, is_mobile=self.mobile, device_scale_factor=self.scale,
+                                        **({'color_scheme': self.color_scheme} if self.color_scheme else {}),
+                                        **({'reduced_motion': self.reduced_motion} if self.reduced_motion else {}))
         if self.geolocation:
             self.ctx.grant_permissions(["geolocation"])
             self.ctx.set_geolocation(self.geolocation)
@@ -383,7 +388,7 @@ class Session:
         if "cdnjs.cloudflare.com/ajax/libs/leaflet" in url and url.endswith(".js"):
             return route.fulfill(status=200, content_type="application/javascript", body=LEAFLET.read_bytes())
         if "tile.openstreetmap.org" in url:
-            return route.fulfill(status=200, content_type="image/png", body=PNG)
+            return route.fulfill(status=200, content_type="image/png", body=self.tile_png)
         if "fonts.googleapis.com" in url:
             return route.fulfill(status=200, content_type="text/css", body="")
         if "fonts.gstatic.com" in url:

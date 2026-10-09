@@ -407,8 +407,10 @@
       if (m === DEFAULT_ALERT_MIN) o.selected = true;
       sel.appendChild(o);
     });
-    row.appendChild(sel);
-    row.appendChild(el('span', null, 'min away'));
+    var grp = el('span', 'alertmin');
+    grp.appendChild(sel);
+    grp.appendChild(el('span', null, 'min away'));
+    row.appendChild(grp);
     var b = el('button', 'btn small primary', 'Add alert');
     b.type = 'button';
     b.id = 'addAlert';

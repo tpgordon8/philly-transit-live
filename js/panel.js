@@ -552,7 +552,7 @@
             [origin.lat, origin.lng],
             [home.lat, home.lng]
           ]).pad(0.25),
-          { animate: true }
+          { animate: S.map.animOK() }
         );
         var cands = collect()
           .filter(function (v) {
@@ -618,7 +618,7 @@
           )
         );
         b.addEventListener('click', function () {
-          map.panTo([v.lat, v.lng], { animate: true });
+          map.panTo([v.lat, v.lng], { animate: S.map.animOK() });
           select(v.key);
         });
         li.appendChild(b);

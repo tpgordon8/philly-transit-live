@@ -14,6 +14,7 @@ FAST = {
     "test_layout_1280",
     "test_layout_landscape_844x390",
     "test_sheet_toggle_and_keyboard_reach",
+    "test_peek_wraps_the_status_and_keeps_the_search_field",
 }
 
 # (width, height) as in ARCHITECTURE.md 15.2; phones (up to 414 wide) and landscape phones get Chromium's mobile + touch emulation.
@@ -157,7 +158,7 @@ def check_shell(s, vp):
     iw, ih = vp
     assert m["w"] > 0 and m["h"] >= min(220, ih * 0.3), (vp, "map too small", m)
     assert p["w"] > 0 and p["h"] > 0 and p["l"] >= -0.5 and p["r"] <= iw + 0.5 and p["b"] <= ih + 0.5, (vp, "panel outside the screen", p)
-    stacked = iw <= 820 and not (vp == LANDSCAPE)
+    stacked = iw <= 760 and not (vp == LANDSCAPE)  # tablets in portrait (768 and up) get the side panel
     assert handle_visible(s) == stacked, (vp, "sheet handle", stacked)
     if stacked:
         assert p["t"] >= m["b"] - 1 and abs(p["w"] - iw) < 2, (vp, m, p)
@@ -339,3 +340,35 @@ def test_tap_targets_and_fonts_when_populated(root):
             set_sheet(s, True)
             check_taps(s, vp, "populated")
             check_overflow(s, vp, "populated")
+
+
+def test_peek_wraps_the_status_and_keeps_the_search_field(root):
+    """The compact header lets a long status wrap (no ellipsis); the closed sheet still shows the search field, the map keeps its room."""
+    long_status = "Live · updated 12s ago · 88 vehicles shown within 0.5 mi of the search point"
+    for vp in ((320, 568), (360, 740), (390, 844)):
+        with session(root, vp) as s:
+            boot(s)
+            set_sheet(s, False)
+            s.page.evaluate("t => { document.querySelector('#statusText').textContent = t }", long_status)
+            s.page.wait_for_timeout(100)
+            st = s.page.evaluate("""() => { const e = document.querySelector('#statusText'), c = getComputedStyle(e);
+                return {ws: c.whiteSpace, to: c.textOverflow, sw: e.scrollWidth, cw: e.clientWidth, h: e.getBoundingClientRect().height, lh: parseFloat(c.lineHeight)}; }""")
+            assert st["ws"] == "normal" and st["to"] != "ellipsis" and st["sw"] <= st["cw"] + 1, (vp, st)
+            assert st["h"] >= st["lh"] * 1.5, (vp, "a long status wraps onto a second line", st)
+            addr, btn = rect(s, "#addr"), rect(s, "#btnSearch")
+            assert addr["b"] <= vp[1] and btn["b"] <= vp[1] and addr["t"] >= rect(s, "#map")["b"], (vp, addr, btn)
+            assert rect(s, "#map")["h"] >= vp[1] * 0.55, (vp, rect(s, "#map"))
+            assert s.page.evaluate("document.querySelector('#sheetHandle').getBoundingClientRect().height") >= MIN_TAP - 0.5
+
+
+def test_tablet_portrait_gets_the_side_panel_and_phones_the_sheet(root):
+    """768 and 820 px wide (a tablet held upright) show the 392 px side panel with the map beside it; 600 and 390 show the sheet."""
+    for w, h in ((768, 1024), (820, 1180)):
+        with session(root, (w, h)) as s:
+            boot(s)
+            assert not handle_visible(s) and rect(s, "#panel")["r"] <= rect(s, "#map")["l"] + 1, w
+            check_overflow(s, (w, h), "tablet")
+    for w, h in ((600, 960), (390, 844)):
+        with session(root, (w, h)) as s:
+            boot(s)
+            assert handle_visible(s) and rect(s, "#panel")["t"] >= rect(s, "#map")["b"] - 1, w
