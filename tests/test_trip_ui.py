@@ -134,7 +134,7 @@ def test_a_form_labels_placement_and_geocoding(root):
         assert (info["from"], info["to"]) == ("From", "To") and info["vals"] == ["", ""]
         assert info["ph"] == ["Start: address or intersection", "Destination: address or intersection"]
         assert info["btn"] == "Plan trip" and info["hasLoc"] and info["hasSwap"] and info["homeBtns"] == [True, True]
-        for part in ("typed From or To address goes to Nominatim", "rounds them to 4 decimals", "saved Home and place buttons", "Use my location and the map center",
+        for part in ("go to Photon (photon.komoot.io, OpenStreetMap data)", "rounded to 2 decimals", "A typed From or To address you did not pick from the suggestions", "go to Nominatim (OpenStreetMap) to be looked up", "rounds them to 4 decimals", "saved Home and place buttons", "Use my location and the map center",
                      "exactly the same way as a typed address", "cannot be reached, is an older version", "unrounded, to 5 decimals", "is not a failure and is never re-sent"):
             assert part in info["priv"], part
         assert info["attr"] == "Routing by OSRM / data \u00a9 OpenStreetMap contributors", info["attr"]

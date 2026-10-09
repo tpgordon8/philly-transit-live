@@ -12,12 +12,12 @@ caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md). By defau
 
 ## Code layout
 
-`index.html` holds the markup and a short loader. The styles are eight plain stylesheets in `css/`, linked in this
+`index.html` holds the markup and a short loader. The styles are nine plain stylesheets in `css/`, linked in this
 order: `leaflet` (the Leaflet stylesheet), `base` (tokens, reset, header), `layout` (app shell, responsive rules), `map`
-(markers, pins, vehicle card), `panel` (sidebar sections), `trip` (trip planner), `stops` (stop card and board) and
-`alerts` (service alerts, leave-now rules, toasts, banners). The application code is eleven classic scripts in `js/`,
+(markers, pins, vehicle card), `panel` (sidebar sections), `trip` (trip planner), `suggest` (place and address suggestions), `stops` (stop card and board) and
+`alerts` (service alerts, leave-now rules, toasts, banners). The application code is thirteen classic scripts in `js/`,
 loaded with ordinary `<script src>` tags in dependency order: `util` (helpers, storage, shared state), `feed` (vehicle
-feed, ghost filter, idle pause, refresh), `map` (Leaflet map, markers, vehicle card), `panel` (sidebar: status, search,
+feed, ghost filter, idle pause, refresh), `map` (Leaflet map, markers, vehicle card), `landmarks` (about 40 well-known Philadelphia places), `suggest` (place and address suggestions as you type), `panel` (sidebar: status, search,
 saved places, Home, radius, filters), `stops` (stop links, stop board, ETA), `alerts` (service alerts, leave-now rules),
 `routing` (trip planner data clients), `candidates` (bus candidates), `planner` (trip planner), `trip` (trip planner
 interface) and `main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else
@@ -46,6 +46,7 @@ Needs Python 3 with Playwright (headless Chromium) and, for the Worker unit test
     python3 tests/run.py --only stop      # only tests whose file or name contains "stop"
     python3 tests/run.py --jobs 2         # worker processes (default: CPU count, at most 4)
     python3 tests/live_smoke.py           # optional: checks the deployed Worker (needs network)
+    python3 tests/live_suggest.py         # optional: checks Photon (suggestions); add --landmarks to verify js/landmarks.js (needs network)
 
 The suite mocks the Worker and Leaflet, so it never touches SEPTA or the real Worker.
 
@@ -95,12 +96,18 @@ page itself through GitHub Pages.
 ## Privacy
 
 Personal state (search center, saved places, starred routes, alert rules) lives only in your browser's `localStorage`.
-We never upload or store it. What does leave your browser is the typed search text (to Nominatim for geocoding) and, when
-you plan a trip, the leg coordinates described below.
+We never upload or store it. What does leave your browser is, while you type in the search box or in the From and To fields
+of the trip planner, the typed text and the map center (or your saved Home), rounded to 2 decimals (about 1 km, only used to
+rank nearby places first), sent straight to Photon (photon.komoot.io, OpenStreetMap data) to suggest places and addresses;
+Photon is asked only after 3 characters and a short pause, at most once a second, and about 40 well-known Philadelphia places
+are suggested from a list in the page with no request at all. When you press Search or Plan trip without picking a suggestion,
+and for intersections such as 10th and Race, the typed text goes to Nominatim (OpenStreetMap) for geocoding. A suggestion you
+pick carries its own coordinates and is not looked up again. When you plan a trip, the leg coordinates described below are
+sent too.
 
 Planning a trip sends data only as follows:
 
-- Typed From and To addresses go to Nominatim (OpenStreetMap) to be geocoded, as in search. Lookups are at least a second
+- Typed From and To addresses that were not picked from the suggestions go to Nominatim (OpenStreetMap) to be geocoded, as in search. Lookups are at least a second
   apart and answers are remembered in memory for the page session.
 - The coordinates of each leg's start and end go to this project's Worker, which rounds them to 4 decimals (about 10 m),
   forwards them to the OpenStreetMap-based routing service (routing.openstreetmap.de, with a User-Agent naming this
@@ -145,7 +152,7 @@ deploy. No wrangler, no API token, no secrets. Run `python3 tests/live_smoke.py`
 - SEPTA's API is a free hackathon service with no promises: no bus predictions (arrival times are estimates from measured
   speed), no CORS headers (hence the Worker), and occasional empty or stale feeds.
 - Third-party services with their own fair-use limits: the OpenStreetMap routing service and OSM tiles, Nominatim
-  (address search), Indego's public feed, Google Fonts and cdnjs. Any of them can be slow or down; the planner then
+  (address search), Photon (suggestions as you type), Indego's public feed, Google Fonts and cdnjs. Any of them can be slow or down; the planner then
   says so rather than guessing.
 - Bus schedule data (`data/bus-network.json`) is a snapshot of SEPTA's GTFS feed and expires on the feed's end date; the
   planner warns when it is within 14 days of that date or past it.

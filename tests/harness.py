@@ -19,6 +19,7 @@ import os
 import pathlib
 import re
 import threading
+import time
 
 from playwright.sync_api import sync_playwright
 
@@ -252,20 +253,62 @@ class Mocks:
         return True
 
 
+class Photon:
+    """Mock of Photon (photon.komoot.io), the place and address suggestion service (ARCHITECTURE.md section 15.1).
+
+    mode: ok | http500 | abort | hang (the request is never answered, so it stays in flight until the page aborts it).
+    features: a list of GeoJSON features served for every query, or a callable q -> list. The default is no features, so a test that
+    does not care about suggestions sees none. hits: one dict per request {q, lat, lon, limit, bbox, lang, url, t (time.monotonic)}, in order.
+    """
+
+    def __init__(self):
+        self.mode = "ok"
+        self.features = []
+        self.hits = []
+
+    def handle(self, route, url):
+        from urllib.parse import parse_qs, urlparse
+        q = {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
+        self.hits.append({"q": q.get("q"), "lat": q.get("lat"), "lon": q.get("lon"), "limit": q.get("limit"),
+                          "bbox": q.get("bbox"), "lang": q.get("lang"), "url": url, "t": time.monotonic()})
+        if self.mode == "hang":
+            return None
+        if self.mode == "abort":
+            return route.abort("failed")
+        if self.mode == "http500":
+            return route.fulfill(status=500, headers=CORS, content_type="application/json", body='{"error":"mock"}')
+        feats = self.features(q.get("q")) if callable(self.features) else self.features
+        return route.fulfill(status=200, headers=CORS, content_type="application/json",
+                             body=json.dumps({"type": "FeatureCollection", "features": feats}))
+
+
+def photon_feature(name=None, lng=-75.1630, lat=39.9524, housenumber=None, street=None, city="Philadelphia", state="Pennsylvania", **props):
+    """One Photon feature shaped like the live service's (checked with curl): properties plus Point geometry [lng, lat]."""
+    p = {"osm_type": "N", "osm_id": 1, "osm_key": "amenity", "osm_value": "yes", "type": "house", "city": city, "state": state,
+         "country": "United States", "countrycode": "US"}
+    for k, v in (("name", name), ("housenumber", housenumber), ("street", street)):
+        if v is not None:
+            p[k] = v
+    p.update(props)
+    return {"type": "Feature", "properties": p, "geometry": {"type": "Point", "coordinates": [lng, lat]}}
+
+
 class _Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
 
 class Session:
-    def __init__(self, root=None, viewport=(1280, 800), geolocation=None, extra_routes=None, init_scripts=(), legacy_defaults=True):
+    def __init__(self, root=None, viewport=(1280, 800), geolocation=None, extra_routes=None, init_scripts=(), legacy_defaults=True, touch=False):
         self.root = pathlib.Path(root or HERE.parent)
         self.viewport = {"width": viewport[0], "height": viewport[1]}
         self.geolocation = geolocation
+        self.touch = touch  # True: a touch screen (page.touchscreen.tap works)
         self.extra_routes = extra_routes or {}  # substring -> (status, content_type, body)
         self.init_scripts = ([LEGACY_DEFAULTS_JS] if legacy_defaults else []) + list(init_scripts)
         self.worker = Worker()
         self.mocks = Mocks(self.root)
+        self.photon = Photon()
         self.console_errors = []
         self.unexpected = []
         self.septa_direct = []
@@ -277,7 +320,7 @@ class Session:
         threading.Thread(target=self._srv.serve_forever, daemon=True).start()
         self._pw = sync_playwright().start()
         self.browser = self._pw.chromium.launch()
-        self.ctx = self.browser.new_context(viewport=self.viewport)
+        self.ctx = self.browser.new_context(viewport=self.viewport, has_touch=self.touch)
         if self.geolocation:
             self.ctx.grant_permissions(["geolocation"])
             self.ctx.set_geolocation(self.geolocation)
@@ -321,6 +364,8 @@ class Session:
                 return route.fulfill(status=502, headers=CORS, content_type="application/json", body='{"error":"mock"}')
             return route.fulfill(status=200, headers=CORS, content_type="application/json",
                                  body=json.dumps(self.worker.data[name]))
+        if "photon.komoot.io/" in url:
+            return self.photon.handle(route, url)
         if "gbfs.bcycle.com/bcycle_indego/" in url:
             if self.mocks.handle_indego(route, url) is not None:
                 return

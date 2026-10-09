@@ -338,11 +338,26 @@
         return out && { lat: out.lat, lng: out.lng, label: out.label };
       });
   }
+  /* A picked suggestion carries its coordinates, so submit uses them and does not geocode; editing the text discards the pick. */
+  var addrSug = S.suggest.attach($('#addr'), {
+    onPick: function () {
+      setNote('');
+    },
+    biasProvider: function () {
+      return state.center;
+    }
+  });
   $('#searchForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var q = $('#addr').value.trim();
     if (!q) {
       setNote('Type a street address or intersection first.', true);
+      return;
+    }
+    var pk = addrSug.picked();
+    if (pk) {
+      setNote('Showing vehicles near ' + pk.name + '.');
+      setCenter({ lat: pk.lat, lng: pk.lng, label: pk.name }, true);
       return;
     }
     var btn = $('#btnSearch');
