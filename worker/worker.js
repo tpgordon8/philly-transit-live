@@ -44,7 +44,10 @@ function parsePoint(v) {
   if (lat < BBOX.latMin || lat > BBOX.latMax || lng < BBOX.lngMin || lng > BBOX.lngMax) return null;
   return [lat.toFixed(4), lng.toFixed(4)];
 }
-const single = (p, k) => { const a = p.getAll(k); return a.length === 1 ? a[0] : null; };
+const single = (p, k) => {
+  const a = p.getAll(k);
+  return a.length === 1 ? a[0] : null;
+};
 const isStationFeed = (d) => !!d && typeof d === 'object' && !!d.data && Array.isArray(d.data.stations);
 
 // Endpoints validated here before the answer is served. ttl(data) returns the seconds the answer may live in the
@@ -63,16 +66,37 @@ const SMART = {
     },
     ttl: (d) => (Array.isArray(d) && d.length > 0 ? 86400 : 60),
     fetchTtl: 60,
-    longCache: true,
+    longCache: true
   },
-  'indego/information': { build: () => INDEGO_BASE + 'station_information.json', ttl: (d) => (isStationFeed(d) ? 3600 : 0), fetchTtl: 3600, needOrigin: true },
-  'indego/status': { build: () => INDEGO_BASE + 'station_status.json', ttl: (d) => (isStationFeed(d) ? 30 : 0), fetchTtl: 30, needOrigin: true },
+  'indego/information': {
+    build: () => INDEGO_BASE + 'station_information.json',
+    ttl: (d) => (isStationFeed(d) ? 3600 : 0),
+    fetchTtl: 3600,
+    needOrigin: true
+  },
+  'indego/status': {
+    build: () => INDEGO_BASE + 'station_status.json',
+    ttl: (d) => (isStationFeed(d) ? 30 : 0),
+    fetchTtl: 30,
+    needOrigin: true
+  }
 };
 // A well-formed OSRM error answer ({"code":"NoRoute","message":...}), or null. OSRM sends HTTP 400 for these; a 404 (unknown
 // profile page), 408, 429 and 5xx are the service failing, not answering.
 function osrmError(status, d) {
-  if (status !== 200 && !(status >= 400 && status < 500 && status !== 404 && status !== 408 && status !== 429)) return null;
-  if (!d || typeof d !== 'object' || typeof d.code !== 'string' || d.code === 'Ok' || !/^[A-Za-z]{1,32}$/.test(d.code)) return null;
+  if (
+    status !== 200 &&
+    !(status >= 400 && status < 500 && status !== 404 && status !== 408 && status !== 429)
+  )
+    return null;
+  if (
+    !d ||
+    typeof d !== 'object' ||
+    typeof d.code !== 'string' ||
+    d.code === 'Ok' ||
+    !/^[A-Za-z]{1,32}$/.test(d.code)
+  )
+    return null;
   const out = { code: d.code };
   if (typeof d.message === 'string') out.message = d.message.slice(0, 200);
   return out;
@@ -83,13 +107,25 @@ for (const prof of PROFILES) {
       const a = parsePoint(single(p, 'from'));
       const b = parsePoint(single(p, 'to'));
       if (!a || !b) return null;
-      return ROUTE_BASE + prof + '/route/v1/driving/' + a[1] + ',' + a[0] + ';' + b[1] + ',' + b[0] + '?overview=full&geometries=geojson';
+      return (
+        ROUTE_BASE +
+        prof +
+        '/route/v1/driving/' +
+        a[1] +
+        ',' +
+        a[0] +
+        ';' +
+        b[1] +
+        ',' +
+        b[0] +
+        '?overview=full&geometries=geojson'
+      );
     },
     ttl: (d) => (d && d.code === 'Ok' && Array.isArray(d.routes) && d.routes.length > 0 ? 60 : 0),
     passErr: osrmError,
     fetchTtl: 60,
     needOrigin: true,
-    ua: true,
+    ua: true
   };
 }
 
@@ -101,10 +137,12 @@ const ENDPOINTS = {
   Arrivals: {
     build: (p) => {
       const s = (p.get('station') || '').trim();
-      return STATION_RE.test(s) ? BASE + 'Arrivals/index.php?results=10&station=' + encodeURIComponent(s) : null;
+      return STATION_RE.test(s)
+        ? BASE + 'Arrivals/index.php?results=10&station=' + encodeURIComponent(s)
+        : null;
     },
-    ttl: 15,
-  },
+    ttl: 15
+  }
 };
 
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -118,31 +156,50 @@ function browserCrossSite(request) {
 async function smart(ep, upstream, json) {
   const cache = ep.longCache && typeof caches !== 'undefined' && caches.default ? caches.default : null;
   const key = new Request(upstream, { method: 'GET' });
-  const out = (body) => new Response(body, { status: 200, headers: { ...json, 'Cache-Control': 'public, max-age=5' } });
+  const out = (body) =>
+    new Response(body, { status: 200, headers: { ...json, 'Cache-Control': 'public, max-age=5' } });
   try {
     const hit = cache ? await cache.match(key) : null;
     if (hit) return out(await hit.text());
-  } catch (e) { /* a cache read failure just means a miss */ }
+  } catch (e) {
+    /* a cache read failure just means a miss */
+  }
   try {
     const res = await fetch(upstream, {
       cf: { cacheEverything: true, cacheTtlByStatus: { '200-299': ep.fetchTtl, '300-599': -1 } },
       signal: AbortSignal.timeout(10000),
-      ...(ep.ua ? { headers: { 'User-Agent': UA } } : {}),
+      ...(ep.ua ? { headers: { 'User-Agent': UA } } : {})
     });
     const text = await res.text();
     let data = null;
-    try { data = JSON.parse(text); } catch (e) { /* data stays null */ }
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      /* data stays null */
+    }
     const ttl = res.ok ? ep.ttl(data) : 0;
     if (!ttl) {
       const pe = ep.passErr ? ep.passErr(res.status, data) : null;
-      if (pe) return new Response(JSON.stringify(pe), { status: 422, headers: { ...json, 'Cache-Control': 'no-store' } });
+      if (pe)
+        return new Response(JSON.stringify(pe), {
+          status: 422,
+          headers: { ...json, 'Cache-Control': 'no-store' }
+        });
       const why = res.ok ? 'bad answer' : String(res.status);
       return new Response('{"error":"upstream ' + why + '"}', { status: 502, headers: json });
     }
     if (cache) {
       try {
-        await cache.put(key, new Response(text, { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=' + ttl } }));
-      } catch (e) { /* not cached; still served */ }
+        await cache.put(
+          key,
+          new Response(text, {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=' + ttl }
+          })
+        );
+      } catch (e) {
+        /* not cached; still served */
+      }
     }
     return out(text);
   } catch (e) {
@@ -156,8 +213,8 @@ export default {
     const o = origin === null ? '' : origin;
     const cors = {
       'Access-Control-Allow-Origin': originAllowed(o) ? o : PAGES,
-      'Vary': 'Origin',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      Vary: 'Origin',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS'
     };
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
 
@@ -166,7 +223,13 @@ export default {
     const ep = has(ENDPOINTS, name) ? ENDPOINTS[name] : null;
     const sm = has(SMART, name) ? SMART[name] : null;
     if (!ep && !sm) return new Response('Not found', { status: 404, headers: cors });
-    if (sm && sm.needOrigin ? (origin === null || !originAllowed(origin)) : (origin !== null ? !originAllowed(origin) : browserCrossSite(request))) {
+    if (
+      sm && sm.needOrigin
+        ? origin === null || !originAllowed(origin)
+        : origin !== null
+          ? !originAllowed(origin)
+          : browserCrossSite(request)
+    ) {
       return new Response('Forbidden', { status: 403, headers: cors });
     }
 
@@ -177,12 +240,16 @@ export default {
     try {
       const res = await fetch(upstream, {
         cf: { cacheEverything: true, cacheTtlByStatus: { '200-299': ep.ttl, '300-599': -1 } },
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(10000)
       });
-      if (!res.ok) return new Response('{"error":"upstream ' + res.status + '"}', { status: 502, headers: json });
-      return new Response(res.body, { status: 200, headers: { ...json, 'Cache-Control': 'public, max-age=' + Math.min(ep.ttl, 5) } });
+      if (!res.ok)
+        return new Response('{"error":"upstream ' + res.status + '"}', { status: 502, headers: json });
+      return new Response(res.body, {
+        status: 200,
+        headers: { ...json, 'Cache-Control': 'public, max-age=' + Math.min(ep.ttl, 5) }
+      });
     } catch (e) {
       return new Response('{"error":"upstream unreachable"}', { status: 502, headers: json });
     }
-  },
+  }
 };

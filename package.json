@@ -1,0 +1,18 @@
+{
+  "name": "philly-transit-live",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Dev-only tooling (lint and format). The app itself has no build step.",
+  "scripts": {
+    "format": "prettier --write \"js/*.js\" worker/worker.js eslint.config.js",
+    "format:check": "prettier --check \"js/*.js\" worker/worker.js eslint.config.js",
+    "lint": "eslint .",
+    "check": "npm run format:check && npm run lint"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.12.0",
+    "globals": "17.13.0",
+    "prettier": "3.9.9"
+  }
+}
