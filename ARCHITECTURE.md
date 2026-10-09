@@ -344,7 +344,7 @@ Goal: leave no known debt before the next feature. Every package keeps behaviour
 
 | ID | Debt | Risk | Package | Status |
 |----|------|------|---------|----|
-| D1 | Planner calls the free OSM routing service and Indego directly from the page: no cache, no shared rate limit, no provider switch | Trips fail when the provider throttles; users' coordinates go straight to a third party | WP1 | closed in code (review round 2, WP5); Worker v3 deploy pending |
+| D1 | Planner calls the free OSM routing service and Indego directly from the page: no cache, no shared rate limit, no provider switch | Trips fail when the provider throttles; users' coordinates go straight to a third party | WP1 | closed (review round 2, WP5; Worker v3 deployed and smoke-tested 2026-10-09) |
 | D2 | Cached `Stops` answers of `[]` live for a day | One bad upstream answer hides a route's stops all day | WP1 | closed, `272f1b2`; the one-day cache only works on a custom domain (section 2) |
 | D3 | Worker accepts an `Origin` of `null` | Soft guard | WP1 | closed, `272f1b2` |
 | D4 | Planner reports every failure as "some bus options could not be completed" | User cannot tell a routing limit from "no bus trip exists" | WP2 | closed (review round 2, WP5) |

@@ -125,7 +125,10 @@ def run(base):
 
     def null_origin():
         for o in ("null", ""):
-            req = urllib.request.Request(base + "/Alerts", headers={"User-Agent": "philly-transit-live-smoke/1", "Origin": o})
+            # The Cloudflare edge drops an empty Origin header, so an empty one reaches the Worker as "no Origin". On /Alerts that is
+            # allowed (curl); on /indego it is refused either way, so test the empty value there.
+            path = "/Alerts" if o == "null" else "/indego/status"
+            req = urllib.request.Request(base + path, headers={"User-Agent": "philly-transit-live-smoke/1", "Origin": o})
             try:
                 with urllib.request.urlopen(req, timeout=25) as r:
                     code = r.status
