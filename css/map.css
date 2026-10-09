@@ -69,7 +69,6 @@
 @media (prefers-reduced-motion:reduce){.pin .me::after{animation:none}}
 .pin .hm{display:grid;place-items:center;width:26px;height:26px;border-radius:7px;background:#0f1c2c;color:#fff;border:2px solid #fff;font:700 14px var(--f-display);box-shadow:0 2px 8px rgba(0,0,0,.4)}
 path.rad{stroke:var(--accent);fill:var(--accent);fill-opacity:.06;stroke-width:1.5}
-path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-linecap:round;fill:none}
 @media (prefers-reduced-motion:reduce){.veh-wrap{transition:none!important}}
 /* Narrow or short screens (a map under about 450px wide: a phone, or a tablet with the side panel beside it): the cards leave the right-hand column free for the zoom buttons (44px wide, 10px in) and sit above the
    attribution strip, so no card ever covers a Leaflet control. */

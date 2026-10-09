@@ -1,0 +1,12 @@
+/* Nearby stops (js/nearby.js) and the Get me home button. */
+.near-home{width:100%;margin-top:8px}
+.near-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.near-list li+li{border-top:1px solid var(--line)}
+.near-row{width:100%;min-height:44px;display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;text-align:left;padding:9px 12px;border:0;background:var(--panel)}
+.near-row:hover{background:var(--paper)}
+.near-nm{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.near-d{color:var(--mute);font-size:12.5px;white-space:nowrap}
+.near-rts{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px}
+.rbadge.near-chip{grid-row:auto;min-width:0;padding:1px 6px;font-size:13px}
+.near-more{color:var(--mute);font-size:12.5px;align-self:center}
+.near-list:empty{display:none}

@@ -39,16 +39,6 @@
     return SUBWAY.has(route) ? 'subway' : TROLLEY.has(route) ? 'trolley' : 'bus';
   }
   var CARD = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-  var CARD_LONG = {
-    N: 'north',
-    NE: 'northeast',
-    E: 'east',
-    SE: 'southeast',
-    S: 'south',
-    SW: 'southwest',
-    W: 'west',
-    NW: 'northwest'
-  };
   var SEATS = {
     EMPTY: 'Plenty of room',
     MANY_SEATS_AVAILABLE: 'Many seats open',
@@ -239,8 +229,6 @@
   S.util.M_PER_MI = M_PER_MI;
   S.util.widenedRadius = widenedRadius;
   S.util.kindOf = kindOf;
-  S.util.CARD = CARD;
-  S.util.CARD_LONG = CARD_LONG;
   S.util.SEATS = SEATS;
   S.util.MODE_NAME = MODE_NAME;
   S.util.esc = esc;

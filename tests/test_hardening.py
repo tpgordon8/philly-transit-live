@@ -1,5 +1,5 @@
 """Hardening pass: corrupt storage, ghost filter, honest banner, speed ceiling, subway/trolley kinds, request budget,
-directions-link wording."""
+"""
 import json
 
 from harness import FIX, Session, app_source
@@ -351,19 +351,3 @@ def test_failure_backoff_spacing_and_reset(root):
         for _ in range(3):
             s.tick(15000)
         assert 3 <= hits(s, "TransitView") - h0 <= 4, "cadence did not reset after a successful refresh"
-
-
-# ---------------------------------------------------------------- 7. directions wording
-
-def test_directions_link_has_privacy_note(root):
-    with Session(root, geolocation={"latitude": 39.95, "longitude": -75.17}) as s:
-        s.open()
-        s.wait_live()
-        s.page.evaluate("""() => { localStorage.setItem('septa.places.v1', JSON.stringify({home: {name: 'Home', lat: 39.93, lng: -75.19}, list: []})); }""")
-        s.page.reload()
-        s.wait_live()
-        s.page.click("#btnHome")
-        s.page.wait_for_selector("#gmh a")
-        txt = s.page.inner_text("#gmh header")
-        assert "Open transit directions" in txt and "Opens Google Maps with your start and Home locations." in txt, txt
-        assert s.page.get_attribute("#gmh a", "href").startswith("https://www.google.com/maps/dir/")

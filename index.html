@@ -26,15 +26,16 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="css/leaflet.css?v=5a6c6df26c">
-<link rel="stylesheet" href="css/base.css?v=5a6c6df26c">
-<link rel="stylesheet" href="css/layout.css?v=5a6c6df26c">
-<link rel="stylesheet" href="css/map.css?v=5a6c6df26c">
-<link rel="stylesheet" href="css/panel.css?v=5a6c6df26c">
-<link rel="stylesheet" href="css/trip.css?v=5a6c6df26c">
-<link rel="stylesheet" href="css/suggest.css?v=5a6c6df26c">
-<link rel="stylesheet" href="css/stops.css?v=5a6c6df26c">
-<link rel="stylesheet" href="css/alerts.css?v=5a6c6df26c">
+<link rel="stylesheet" href="css/leaflet.css?v=448c6057d1">
+<link rel="stylesheet" href="css/base.css?v=448c6057d1">
+<link rel="stylesheet" href="css/layout.css?v=448c6057d1">
+<link rel="stylesheet" href="css/map.css?v=448c6057d1">
+<link rel="stylesheet" href="css/panel.css?v=448c6057d1">
+<link rel="stylesheet" href="css/trip.css?v=448c6057d1">
+<link rel="stylesheet" href="css/suggest.css?v=448c6057d1">
+<link rel="stylesheet" href="css/stops.css?v=448c6057d1">
+<link rel="stylesheet" href="css/nearby.css?v=448c6057d1">
+<link rel="stylesheet" href="css/alerts.css?v=448c6057d1">
 </head>
 <body>
 <div id="app" data-sheet="peek">
@@ -55,6 +56,7 @@
       <div class="row" style="margin-top:8px">
         <button class="btn" type="button" id="btnLocate" style="flex:1">Use my location</button>
       </div>
+      <button class="btn near-home" type="button" id="btnHome" hidden>Get me home</button>
       <p class="note" id="note" aria-live="polite"></p>
       <div class="radius">
         <label for="radius">Radius</label>
@@ -68,6 +70,13 @@
         <label class="chip k-train"><input type="checkbox" data-mode="train"><span class="sw"></span>Regional Rail <span class="n" data-n="train"></span></label>
       </div>
       <div id="myRoutes"></div>
+    </section>
+
+    <section class="sec" aria-labelledby="h-near" id="nearSec" hidden>
+      <h2 id="h-near">Nearby stops</h2>
+      <p class="empty-line sr-only" id="nearStatus" role="status" aria-live="polite"></p>
+      <ul class="near-list" id="nearList" aria-labelledby="h-near"></ul>
+      <p class="empty-line" id="nearHint" hidden>Tap a stop for arrivals and alerts</p>
     </section>
 
     <section class="sec" aria-labelledby="h-trip" id="tripSec">
@@ -92,10 +101,9 @@
 
     <section class="sec" aria-labelledby="h-places">
       <h2 id="h-places">Saved places</h2>
-      <button class="home" id="btnHome" type="button" hidden><span>Get me home</span><small id="homeName"></small></button>
-      <div id="gmh"></div>
       <ul class="places" id="places"></ul>
-      <p class="empty-line" id="placesEmpty">Search an address or use your location, then save it here. Setting a place as Home turns on the Get me home button.</p>
+      <p class="empty-line" id="homeHelp">Set a Home to use Get me home</p>
+      <p class="empty-line" id="placesEmpty">Search an address or use your location, then save it here.</p>
       <div class="saveform" id="saveForm" hidden>
         <input type="text" id="placeName" placeholder="Name this place" aria-label="Place name" maxlength="40">
         <div class="row">
@@ -109,7 +117,7 @@
       <h2 id="h-leave" tabindex="-1">Leave-now alerts</h2>
       <p class="empty-line" style="margin-top:0">Alerts only work while this page is open. Phones may pause background tabs.</p>
       <div id="notifyBox"></div>
-      <p class="empty-line" id="rulesEmpty">Tap a stop on the map, then tap Add alert.</p>
+      <p class="empty-line" id="rulesEmpty">Tap a stop on the map or in Nearby stops, then tap Add alert.</p>
       <ul class="rules" id="rules"></ul>
     </section>
 
@@ -150,7 +158,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script>
 /* Module namespace and load-failure banner (ARCHITECTURE.md section 14). Every js/*.js file adds only window.SEPTA.<name>. */
-window.SEPTA={util:{},feed:{},map:{},panel:{},stops:{},alerts:{},routing:{},candidates:{},planner:{},trip:{},landmarks:{},suggest:{},sheet:{},failed:[]};
+window.SEPTA={util:{},feed:{},map:{},panel:{},stops:{},alerts:{},routing:{},candidates:{},planner:{},trip:{},nearby:{},landmarks:{},suggest:{},sheet:{},failed:[]};
 window.SEPTA.loadFailed=function(file){
   var S=window.SEPTA,box=document.getElementById('loadError');
   if(S.failed.indexOf(file)<0)S.failed.push(file);
@@ -168,20 +176,21 @@ window.addEventListener('error',function(e){
   if(t&&t.tagName==='SCRIPT'&&/\/js\/[^\/]+\.js/.test(t.src||''))window.SEPTA.loadFailed(t.src.split('/').pop().split('?')[0]);
 },true);
 </script>
-<script src="js/util.js?v=5a6c6df26c"></script>
-<script src="js/feed.js?v=5a6c6df26c"></script>
-<script src="js/map.js?v=5a6c6df26c"></script>
-<script src="js/landmarks.js?v=5a6c6df26c"></script>
-<script src="js/suggest.js?v=5a6c6df26c"></script>
-<script src="js/panel.js?v=5a6c6df26c"></script>
-<script src="js/stops.js?v=5a6c6df26c"></script>
-<script src="js/alerts.js?v=5a6c6df26c"></script>
-<script src="js/routing.js?v=5a6c6df26c"></script>
-<script src="js/candidates.js?v=5a6c6df26c"></script>
-<script src="js/planner.js?v=5a6c6df26c"></script>
-<script src="js/trip.js?v=5a6c6df26c"></script>
-<script src="js/sheet.js?v=5a6c6df26c"></script>
-<script src="js/main.js?v=5a6c6df26c"></script>
+<script src="js/util.js?v=448c6057d1"></script>
+<script src="js/feed.js?v=448c6057d1"></script>
+<script src="js/map.js?v=448c6057d1"></script>
+<script src="js/landmarks.js?v=448c6057d1"></script>
+<script src="js/suggest.js?v=448c6057d1"></script>
+<script src="js/panel.js?v=448c6057d1"></script>
+<script src="js/stops.js?v=448c6057d1"></script>
+<script src="js/alerts.js?v=448c6057d1"></script>
+<script src="js/routing.js?v=448c6057d1"></script>
+<script src="js/candidates.js?v=448c6057d1"></script>
+<script src="js/planner.js?v=448c6057d1"></script>
+<script src="js/trip.js?v=448c6057d1"></script>
+<script src="js/nearby.js?v=448c6057d1"></script>
+<script src="js/sheet.js?v=448c6057d1"></script>
+<script src="js/main.js?v=448c6057d1"></script>
 <script>if(!window.SEPTA.started&&window.SEPTA.failed.indexOf('main.js')<0)window.SEPTA.loadFailed('main.js (the app did not start)');</script>
 
 </body>

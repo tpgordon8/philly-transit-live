@@ -105,9 +105,16 @@
   function inBox(lat, lng) {
     return isNum(lat) && isNum(lng) && lat >= BOX.s && lat <= BOX.n && lng >= BOX.w && lng <= BOX.e;
   }
-  /* One feature to {label, sub, lat, lng}, or null. A feature whose name is only its address ("1234 Market") is labelled with
-   the full street line; a named place keeps its name and shows the address on the second line. */
-  function toItem(f) {
+  /* The house number a query starts with ("1600 south broad" gives "1600"), lower case, or ''. */
+  function houseNumber(q) {
+    var m = /^\s*(\d+[a-z]?)\b/i.exec(String(q || ''));
+    return m ? m[1].toLowerCase() : '';
+  }
+  /* One feature to {label, sub, lat, lng, addr, hit}, or null. A feature whose name is only its address ("1234 Market") is labelled with
+   the full street line; a named place keeps its name and shows the address on the second line. When the query starts with a house
+   number (hn) and the feature sits at that number, a business there is labelled with the address the rider typed instead of its name
+   (the business moves to the second line). addr: the label is a street address; hit: its number is the typed one. */
+  function toItem(f, hn) {
     var p = f && f.properties,
       c = f && f.geometry && f.geometry.coordinates;
     if (!p || !c || !inBox(Number(c[1]), Number(c[0]))) return null;
@@ -117,19 +124,47 @@
       line = (num && street ? num + ' ' : '') + street,
       st = STATES[p.state] || cap(p.state, 20),
       city = [cap(p.city || p.locality || p.district, 40), st].filter(Boolean).join(', ');
-    var addressOnly = !name || (num && name.indexOf(num) === 0);
-    var label = addressOnly ? line : name,
-      sub = addressOnly || name === street ? city : [line, city].filter(Boolean).join(', ');
+    var addressOnly = !name || (num && name.indexOf(num) === 0),
+      hit = !!(hn && num && street && num.toLowerCase() === hn),
+      asAddr = addressOnly || hit;
+    var label = asAddr ? line : name,
+      sub = addressOnly || name === street ? city : [hit ? name : line, city].filter(Boolean).join(', ');
     if (!label || /^(country|state|county)$/.test(p.type)) return null;
-    return { label: label, sub: cap(sub, MAX_SUB), lat: Number(c[1]), lng: Number(c[0]), src: 'ph' };
+    return {
+      label: label,
+      sub: cap(sub, MAX_SUB),
+      lat: Number(c[1]),
+      lng: Number(c[0]),
+      src: 'ph',
+      addr: !!(asAddr && num),
+      hit: hit
+    };
   }
-  function parsePhoton(j, bias) {
+  /* A query that starts with a house number is an address: street addresses with that number come first, then other numbered
+   addresses, then everything else (businesses), each group keeping its order. */
+  function addressesFirst(out) {
+    function tier(it) {
+      return it.hit ? 0 : it.addr ? 1 : 2;
+    }
+    return out
+      .map(function (it, i) {
+        return { it: it, i: i };
+      })
+      .sort(function (a, b) {
+        return tier(a.it) - tier(b.it) || a.i - b.i;
+      })
+      .map(function (x) {
+        return x.it;
+      });
+  }
+  function parsePhoton(j, bias, q) {
     var out = [],
-      seen = {};
+      seen = {},
+      hn = houseNumber(q);
     ((j && j.features) || []).forEach(function (f) {
-      var it = toItem(f);
+      var it = toItem(f, hn);
       if (!it) return;
-      var k = norm(it.label) + '|' + it.lat.toFixed(3) + ',' + it.lng.toFixed(3);
+      var k = norm(it.label) + (it.hit ? '' : '|' + it.lat.toFixed(3) + ',' + it.lng.toFixed(3));
       if (seen[k] || dupOfPlace(it)) return;
       seen[k] = 1;
       out.push(it);
@@ -144,7 +179,7 @@
         })
       );
     }
-    return out;
+    return hn ? addressesFirst(out) : out;
   }
 
   /* ----- Photon requests: one scheduler for the whole page ----- */
@@ -186,7 +221,7 @@
         })
         .then(function (json) {
           if (inflight === ctl) inflight = null;
-          var items = parsePhoton(json, bias);
+          var items = parsePhoton(json, bias, q);
           if (cacheN >= MAX_CACHE) {
             cache = {};
             cacheN = 0;
