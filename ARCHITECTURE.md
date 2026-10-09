@@ -160,6 +160,14 @@ non-zero. The train detail card says positions have no timestamp. Headings may b
   visibility change triggers a refresh if the last one is older than 15 s. Each refresh fetches the wanted feeds of
   `TransitView` and `TrainView` in parallel (section 2 lists when one is skipped or backed off); each source keeps
   `{list, ok, stale, err}`.
+- **Quiet tabs poll more slowly.** After 10 minutes (`QUIET_MS` in `js/feed.js`) without user input, a visible tab refreshes
+  every 30 s (`SLOW_REFRESH_MS`) instead of every 15 s; the next input puts it back on 15 s (at the next tick, at most 15 s
+  later). It reuses the idle pause's `lastUse` clock (the listeners for pointerdown, keydown, touchstart, wheel, focus and
+  becoming visible, section 2), so there are no extra listeners; the 60 minute pause, the hidden-tab cadence and the backoff
+  are unchanged. An enabled leave-now rule does not exempt a visible tab, so after 10 quiet minutes its bus position is up to 30 s old.
+- **A 200 that is not a feed is a failure.** `normBuses` throws unless the answer is an object with a `bus` array, and
+  `normTrains` unless it is an array; an HTML page, `{}`, `null` or `{"bus":"x"}` therefore takes the stale/backoff path below and
+  the map keeps its last good positions. An empty array (`{"bus":[]}`, `[]`) is valid and means no vehicles.
 - The fetch layer retries once after 1.5 s. If both attempts fail the source is marked stale: its markers dim and
   a warning banner says so ("Showing last known positions"). After 120 s without a good update the source is dropped entirely and the banner says that source's positions are unavailable ("Bus and trolley positions are unavailable", "Regional Rail positions are unavailable"), never "last known positions". If no source has
   ever loaded, the banner reads "Live data unavailable" and nothing is drawn. Positions are never invented,
@@ -176,8 +184,9 @@ non-zero. The train detail card says positions have no timestamp. Headings may b
 | `septa.places.v1` | `{ home: {name, lat, lng} \| null, list: [{id, name, lat, lng}] }` — validated on load: finite lat/lng, string names (cut to 40 chars), string ids, at most 50 list items; anything else is dropped |
 | `septa.routes.v1` | `{ stars: [string], onlyMine: boolean }` — default `{stars: [], onlyMine: true}` |
 | `septa.rules.v1` | `{ rules: [{id, route, stopId, stopName, lat, lng, minutes, enabled, last: {key, t} \| null}] }` — leave-now alerts, at most 10; `id` is random, `last` is the vehicle key and time of the last firing |
+| `septa.prefs.v1.bak`, `septa.places.v1.bak`, `septa.routes.v1.bak`, `septa.rules.v1.bak` | One-slot backups: the raw text of the key of the same name, copied once at load when that text is corrupt (not JSON), not an object of the expected shape, or loses something in validation (a dropped place, star, rule or bad center, more than 50 places). Written by `loadChecked` in `js/util.js` before any save can overwrite the original, replaced only when a later load finds different bad text, never read by the app. A failed backup write is ignored |
 
-**Corrupt storage.** `septa.prefs.v1` and `septa.places.v1` are validated on load (`cleanPrefs`, `cleanPlaces`): a bad center falls back to Center City, radius outside 0.25-5 to 0.5, filters are merged over the defaults (bus only on) as booleans (so old prefs without `subway` still load), bad places are dropped. Bad values are ignored silently and the stored string is not rewritten on load (the one-time `septa.defaults.v2` migration is the only boot-time write).
+**Corrupt storage.** `septa.prefs.v1` and `septa.places.v1` are validated on load (`cleanPrefs`, `cleanPlaces`): a bad center falls back to Center City, radius outside 0.25-5 to 0.5, filters are merged over the defaults (bus only on) as booleans (so old prefs without `subway` still load), bad places are dropped. Bad values are ignored and the stored string is not rewritten on load; a backup copy is kept first (the `.bak` keys above) (the one-time `septa.defaults.v2` migration is the only boot-time write).
 
 **My routes.** Star keys: the route id string for buses and trolleys, `subway:` + route id for subway lines, `train:` + line name for Regional Rail (`starKey(v)`). When `onlyMine` is true and `stars` is non-empty, `apply()` drops vehicles whose key is not starred before counting, so the mode-chip counts match the map. Empty `stars` means no filtering. Corrupt or unexpected stored values are read as the default.
 
@@ -186,11 +195,27 @@ non-zero. The train detail card says positions have no timestamp. Headings may b
 **Rule evaluator (`evalRule`, exposed on `__SEPTA_TEST__`).** On every `apply()` each enabled rule is evaluated against `collect()` (radius, mode filters and My routes ignored). It returns a status and may fire only when the bus source is neither stale nor dropped and a bus on the rule's route has `nextId` equal to the rule's stop and `etaFor` returns a numeric, non-rough `min` (so an unknown or zero speed never fires). The smallest `min` is the "nearest bus"; the rule fires when that is at or below its threshold, unless the same vehicle key already fired within 15 minutes (`rule.last`, persisted). Firing calls `notify()`: a `role="alert"` toast in `#toasts` (max 3, never auto-dismissed), plus a system `Notification` only if permission was granted and the tab is hidden. Permission is requested only from the "Turn on browser notifications" click. While at least one enabled rule exists a hidden tab keeps refreshing, once a minute rather than every 15 s; with none it makes no requests, to protect the Worker request budget. Background freshness trade-off: a hidden tab has at most one position sample per minute, so an alert there can arrive up to about a minute later than in a visible tab (and phones may pause background tabs altogether).
  New keys must be versioned (`.v1`) and listed here.
 
+**Failed saves.** `store.set` returns `false` when `localStorage` throws (SecurityError, QuotaExceededError). The first failure of a session raises one toast, "Can't save on this device, so your settings won't be kept." Messages go through `S.util.toastOnce`, which queues until `js/alerts.js` registers `S.util.toastHook` (its `notify`), so `util.js` never needs `alerts.js` to be loaded. Adding a leave-now alert while saving fails says so in the alert's own confirmation line. A saved-places list found longer than 50 at load is cut to 50 and raises, once per session, "Only your first 50 saved places are kept." (the long list is in `septa.places.v1.bak`).
+
 ## 7. Deployment
 
 `git push origin main` → GitHub Pages builds from `main` at the repo root → live at
 https://septer.tarapaigegordon.com/. **Measured: about 45 seconds** from push until a newly added file
 is served. Verify live changes with a cache-busting query string.
+
+### 7.0 Cache-skew guard (`?v=`)
+
+GitHub Pages serves unversioned `js/` and `css/` with `max-age=600`, so for ten minutes after a deploy a browser can run old files
+next to new ones. Every local script and stylesheet URL in `index.html` therefore ends in `?v=<token>` (the Leaflet CDN tag and
+the Google Fonts link are left alone). The token is the first 10 hex digits of a SHA-256 over every file in `js/` and `css/`,
+so it changes only when one of them changes. Whenever you change a file in `js/` or `css/`, run
+
+    python3 tests/stamp_version.py            # rewrite the tokens in index.html (idempotent)
+    python3 tests/stamp_version.py --check    # exit 1 if they are stale
+
+before you commit. `tests/test_stability.py::test_version_stamp_matches_content` runs the same check in the fast suite, so a forgotten
+stamp fails CI. After a merge that touches `js/` or `css/` on both sides, stamp again (the token is a hash of content, so two
+branches never agree on it). `index.html` itself is the one file that is not versioned; it is the entry point and holds the tokens.
 
 ### 7.1 Custom domain (set up 2026-10-09)
 
@@ -476,7 +501,7 @@ Top-level statements that run at load time (event wiring, `setInterval`, the one
 1. Create `js/<name>.js` with the same shape as an existing small file (`main.js` is the shortest): the IIFE, `var S = window.SEPTA;`, imports, your code, exports.
 2. Add `<name>:{}` to the object in the inline script of `index.html` and a `<script src="js/<name>.js"></script>` tag. Place it after every file whose variables it needs at load time; files it only calls into later can come after it (use a shim).
 3. Add the name to `FILES` in `tests/test_modules.py`. Keep the file at 700 lines or fewer.
-4. Run `npm run lint`, `npm run format`, then `python3 tests/run.py --fast`. Tests that grep source read it through `app_source`/`app_script` in `tests/harness.py`.
+4. Run `npm run lint`, `npm run format`, `python3 tests/stamp_version.py` (section 7.0), then `python3 tests/run.py --fast`. Tests that grep source read it through `app_source`/`app_script` in `tests/harness.py`.
 
 ### 14.4 Failure behaviour and deviations from 13.2
 

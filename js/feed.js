@@ -53,7 +53,9 @@
    Timestamp 0 means schedule-only. Comparing against the feed's own newest timestamp keeps this correct
    even when the viewer's device clock is off. */
   function normBuses(json) {
-    var list = json && Array.isArray(json.bus) ? json.bus : [];
+    /* A 200 without the expected array is a malformed answer, not an empty feed: throw so the caller takes the stale/backoff path. */
+    if (!json || !Array.isArray(json.bus)) throw new Error('bad bus feed');
+    var list = json.bus;
     var cand = [],
       newest = 0,
       i,
@@ -108,7 +110,8 @@
     return out;
   }
   function normTrains(json) {
-    var list = Array.isArray(json) ? json : [],
+    if (!Array.isArray(json)) throw new Error('bad train feed');
+    var list = json,
       out = [];
     for (var i = 0; i < list.length; i++) {
       var t = list[i];
@@ -330,6 +333,9 @@
     skipped = { bus: false, train: false },
     fails = { bus: 0, train: 0 },
     nextTry = { bus: 0, train: 0 };
+  /* No input for QUIET_MS in a visible tab: refresh every SLOW_REFRESH_MS instead of every REFRESH_MS (ARCHITECTURE.md section 5). */
+  var QUIET_MS = 10 * 60 * 1000,
+    SLOW_REFRESH_MS = 30000;
   var BACKOFF_BASE_MS = 15000,
     BACKOFF_MAX_MS = 120000,
     HIDDEN_MS = 60000;
@@ -393,6 +399,8 @@
       return;
     }
     if (!document.hidden) {
+      if (Date.now() - lastUse >= QUIET_MS && Date.now() - lastStart < SLOW_REFRESH_MS - REFRESH_MS / 2)
+        return;
       refresh();
       return;
     }

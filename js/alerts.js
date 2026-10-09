@@ -259,9 +259,11 @@
     });
     return { rules: out };
   }
-  var rulesState = cleanRules(store.get(RULES_KEY, null));
+  var rulesState = S.util.loadChecked(RULES_KEY, cleanRules, function (r, c) {
+    return !S.util.isObj(r) || !Array.isArray(r.rules) || r.rules.length !== c.rules.length;
+  });
   function saveRules() {
-    store.set(RULES_KEY, rulesState);
+    return store.set(RULES_KEY, rulesState);
   }
   function hasActiveRule() {
     return (
@@ -316,6 +318,8 @@
       /* Notification can throw on some browsers; the toast already shows */
     }
   }
+  S.util.toastHook = notify;
+  S.util.flushToasts();
   function ruleStatusText(res) {
     switch (res.state) {
       case 'paused':
@@ -441,10 +445,16 @@
         enabled: true,
         last: null
       });
-      saveRules();
+      var saved = saveRules();
       renderRules();
       updateAlertRow();
-      live.textContent = 'Alert set for route ' + s.route + ', under ' + m + ' min.';
+      live.textContent =
+        'Alert set for route ' +
+        s.route +
+        ', under ' +
+        m +
+        ' min.' +
+        (saved ? '' : " It can't be saved on this device, so it will be gone when you close this page.");
       sel.focus();
     });
     var wrap = el('div');

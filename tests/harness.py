@@ -47,7 +47,7 @@ def app_script(root):
     (Tests that grep the source for a pattern read this instead of index.html, which keeps only markup and a small loader.)"""
     root = pathlib.Path(root)
     html = (root / "index.html").read_text()
-    files = re.findall(r'<script src="(js/[^"]+)"', html)
+    files = re.findall(r'<script src="(js/[^"?]+)(?:\?v=[0-9a-f]+)?"', html)
     return "\n".join((root / f).read_text() for f in files)
 
 

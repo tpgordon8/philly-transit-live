@@ -2,6 +2,7 @@
   "name": "Septer",
   "short_name": "Septer",
   "description": "Live SEPTA buses, trolleys and Regional Rail trains near any Philadelphia address.",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

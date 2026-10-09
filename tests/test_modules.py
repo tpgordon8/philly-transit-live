@@ -55,7 +55,7 @@ def test_page_adds_only_the_septa_namespace(root):
 def test_js_files_are_small_and_listed_in_order(root):
     root = pathlib.Path(root)
     html = (root / "index.html").read_text()
-    listed = re.findall(r'<script src="js/([a-z]+)\.js"></script>', html)
+    listed = re.findall(r'<script src="js/([a-z]+)\.js(?:\?v=[0-9a-f]+)?"></script>', html)
     assert listed == FILES, listed
     for name in FILES:
         n = (root / "js" / f"{name}.js").read_text().count("\n")

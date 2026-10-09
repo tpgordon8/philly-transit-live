@@ -151,10 +151,62 @@
         localStorage.setItem(k, JSON.stringify(v));
         return true;
       } catch (e) {
+        toastOnce('save', "Can't save on this device, so your settings won't be kept.");
         return false;
       }
     }
   };
+  /* One toast per message per session. alerts.js (loaded later) owns the toast box and registers S.util.toastHook;
+   a message raised before that waits in `queued` and is delivered by flushToasts(). */
+  var toasted = {},
+    queued = [];
+  function toastOnce(id, msg) {
+    if (toasted[id]) return;
+    toasted[id] = 1;
+    queued.push(msg);
+    flushToasts();
+  }
+  function flushToasts() {
+    if (typeof S.util.toastHook !== 'function') return;
+    while (queued.length) {
+      try {
+        S.util.toastHook(queued.shift());
+      } catch (e) {
+        /* a toast is best effort */
+      }
+    }
+  }
+  /* Read a saved value for `clean`. When the stored text is corrupt, or `lossy(parsed, cleaned)` says cleaning drops
+   something, the raw text is copied once to <key>.bak (one slot) before any later save overwrites it. */
+  function loadChecked(key, clean, lossy) {
+    var raw,
+      parsed = null,
+      bad = false;
+    try {
+      raw = localStorage.getItem(key);
+    } catch (e) {
+      return clean(null);
+    }
+    if (raw) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch (e) {
+        bad = true;
+      }
+    }
+    var cleaned = clean(parsed);
+    if (raw && (bad || lossy(parsed, cleaned))) {
+      try {
+        if (localStorage.getItem(key + '.bak') !== raw) localStorage.setItem(key + '.bak', raw);
+      } catch (e) {
+        /* no room for a backup: the original stays where it is until the next save */
+      }
+    }
+    return cleaned;
+  }
+  function isObj(x) {
+    return !!x && typeof x === 'object' && !Array.isArray(x);
+  }
   /* The banner is role=alert and renderStatus runs every second, so only touch the DOM when something changed. */
   function showBanner(kind, html) {
     var b = $('#banner');
@@ -199,6 +251,10 @@
   S.util.distM = distM;
   S.util.$ = $;
   S.util.store = store;
+  S.util.loadChecked = loadChecked;
+  S.util.isObj = isObj;
+  S.util.toastOnce = toastOnce;
+  S.util.flushToasts = flushToasts;
   S.util.showBanner = showBanner;
   S.util.hideBanner = hideBanner;
   S.util.isNum = isNum;
@@ -253,7 +309,14 @@
       });
     return { home: cleanPlace(o.home, false), list: list };
   }
-  var prefs = cleanPrefs(store.get('septa.prefs.v1', null));
+  var prefs = loadChecked('septa.prefs.v1', cleanPrefs, function (p, c) {
+    return (
+      !isObj(p) ||
+      (p.center != null && c.center === PHILLY) ||
+      (p.radius != null && p.radius !== c.radius) ||
+      (p.filters != null && !isObj(p.filters))
+    );
+  });
   /* One-time migration (key septa.defaults.v2): browsers that saved the old defaults (all modes, 1.5 mi) get the new ones
    (buses only, 0.5 mi) once; center and any other saved fields are kept. Once the key exists saved choices are never touched. */
   (function () {
@@ -276,7 +339,16 @@
     store.set('septa.prefs.v1', o);
     store.set('septa.defaults.v2', '1');
   })();
-  var placesStore = cleanPlaces(store.get('septa.places.v1', null));
+  var placesStore = loadChecked('septa.places.v1', cleanPlaces, function (p, c) {
+    var n = isObj(p) && Array.isArray(p.list) ? p.list.length : 0;
+    if (n > MAX_PLACES) toastOnce('places', 'Only your first ' + MAX_PLACES + ' saved places are kept.');
+    return (
+      !isObj(p) ||
+      (p.list != null && !Array.isArray(p.list)) ||
+      n !== c.list.length ||
+      (p.home != null && !c.home)
+    );
+  });
   function cleanRoutes(r) {
     var stars = [],
       seen = {};
@@ -289,7 +361,9 @@
       });
     return { stars: stars, onlyMine: !(r && typeof r === 'object') || r.onlyMine !== false };
   }
-  var routesStore = cleanRoutes(store.get('septa.routes.v1', null));
+  var routesStore = loadChecked('septa.routes.v1', cleanRoutes, function (r, c) {
+    return !isObj(r) || !Array.isArray(r.stars) || r.stars.length !== c.stars.length;
+  });
   function saveRoutes() {
     store.set('septa.routes.v1', routesStore);
   }
