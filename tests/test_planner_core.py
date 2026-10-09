@@ -860,7 +860,7 @@ def test_k_routing_failed_when_bus_legs_cannot_be_routed(root):
         assert "routing_failed" not in codes(res)
         # the routing service refuses every leg that starts at stop S12 (a bus exit), answers everything else
         s.page.evaluate("""() => { const f = window.fetch; window.fetch = function (u, o) {
-            if (String(u).includes('route/v1/driving/-75.15800,39.95750;')) return Promise.resolve(new Response('{}', {status: 500}));
+            if (String(u).includes('route/v1/driving/-75.15800,39.95750;') || String(u).includes('/route/') && String(u).includes('from=39.95750,-75.15800&')) return Promise.resolve(new Response('{}', {status: 500}));
             return f.call(window, u, o); }; }""")
         s.page.evaluate("window.__SEPTA_TEST__.resetPlannerCaches()")
         res = ok(plan_o(s, O, D, vs, today="20260601"))
@@ -944,7 +944,7 @@ def test_k_no_route_answer_means_no_trip_found(root):
         open_session(s)
         no_bikes(s)
         s.page.evaluate("""() => { const f = window.fetch; window.fetch = function (u, o) {
-            if (String(u).includes('routed-foot')) return Promise.resolve(new Response('{"code":"NoRoute","routes":[]}', {status: 200, headers: {'content-type': 'application/json'}}));
+            if (String(u).includes('/route/foot') || String(u).includes('routed-foot')) return Promise.resolve(new Response('{"code":"NoRoute","routes":[]}', {status: 200, headers: {'content-type': 'application/json'}}));
             return f.call(window, u, o); }; }""")
         res = ok(plan_o(s, O, D, [veh("a", "X47", "S1")], today="20260601"))
         assert res["options"] == [] and res["bestMinutes"] is None, res

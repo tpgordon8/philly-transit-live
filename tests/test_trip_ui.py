@@ -605,6 +605,11 @@ def test_k_plans_while_idle_paused_without_resuming_refresh(root):
         s.page.clock.fast_forward(61 * 60000)
         s.tick(15000)
         assert s.page.locator("#idleBar").is_visible()
+        # a poll that was already in flight when the page went idle can land just after the fast-forward and leave the feed
+        # fresh; let it land, then age the feed past the drop threshold so "bus feed unavailable" below is deterministic
+        s.settle()
+        s.page.clock.fast_forward(5 * 60000)
+        assert s.page.locator("#idleBar").is_visible()
         hits = len(s.worker.hits)
         s.page.evaluate("""() => { tripFrom.value = 'Origin St'; tripTo.value = 'Dest Ave'; document.querySelector('#tripForm').requestSubmit(); }""")
         wait_cards(s)
@@ -614,7 +619,7 @@ def test_k_plans_while_idle_paused_without_resuming_refresh(root):
         s.tick(15000)
         assert len(s.worker.hits) == hits, "planning itself makes no Worker request"
         text = s.page.inner_text("#tripResults")
-        assert "Live bus data unavailable, bus options hidden." in text
+        assert "Live bus data unavailable, bus options hidden." in text, text
         assert [c for c in cards(s) if c["visible"]], "walk and car options are still there"
         assert s.page.locator("#idleBar").is_visible()
         # a real interaction resumes it as usual
@@ -666,10 +671,10 @@ def test_l_real_network_smoke_center_city(root):
 
 # ------------------------------------------------------------------ (k) WP2: planner notes, schedule line, view restore, phone
 FAIL_S12 = """() => { const f = window.fetch; window.fetch = function (u, o) {
-    if (String(u).includes('route/v1/driving/-75.15800,39.95750;')) return Promise.resolve(new Response('{}', {status: 500}));
+    if (String(u).includes('route/v1/driving/-75.15800,39.95750;') || String(u).includes('/route/') && String(u).includes('from=39.95750,-75.15800&')) return Promise.resolve(new Response('{}', {status: 500}));
     return f.call(window, u, o); }; }"""
 NO_ROUTE_FOOT = """() => { const f = window.fetch; window.fetch = function (u, o) {
-    if (String(u).includes('routed-foot')) return Promise.resolve(new Response('{"code":"NoRoute","routes":[]}', {status: 200, headers: {'content-type': 'application/json'}}));
+    if (String(u).includes('/route/foot') || String(u).includes('routed-foot')) return Promise.resolve(new Response('{"code":"NoRoute","routes":[]}', {status: 200, headers: {'content-type': 'application/json'}}));
     return f.call(window, u, o); }; }"""
 
 
@@ -824,7 +829,7 @@ def test_k_no_trip_found_state(root):
         assert s.page.get_attribute("#tripResults", "aria-busy") == "false"
         assert same_view(view(s), before)
         # an unreachable routing service is the other failure, with Retry
-        s.page.evaluate("() => { const f = window.fetch; window.fetch = function (u, o) { if (String(u).includes('routing.openstreetmap.de')) return Promise.resolve(new Response('{}', {status: 500})); return f.call(window, u, o); }; window.__SEPTA_TEST__.resetPlannerCaches(); }")
+        s.page.evaluate("() => { const f = window.fetch; window.fetch = function (u, o) { if (String(u).includes('routing.openstreetmap.de') || String(u).includes('/route/')) return Promise.resolve(new Response('{}', {status: 500})); return f.call(window, u, o); }; window.__SEPTA_TEST__.resetPlannerCaches(); }")
         s.page.click("#tripGo")
         s.page.wait_for_selector("#tripRetry", timeout=20000)
         assert s.page.locator("#tripNone").count() == 0 and "routing service" in s.page.inner_text("#tripResults")
