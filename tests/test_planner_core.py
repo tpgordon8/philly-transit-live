@@ -205,7 +205,7 @@ def test_a_route_leg_client(root):
         assert len(s.mocks.routing_hits) == 4
         # at most three requests in flight
         s.page.evaluate("""() => { window.__maxIn = 0; window.__in = 0; const f = window.fetch;
-            window.fetch = function (u, o) { if (!String(u).includes('routing.openstreetmap.de')) return f.call(window, u, o);
+            window.fetch = function (u, o) { if (!String(u).includes('routing.openstreetmap.de') && !String(u).includes('/route/')) return f.call(window, u, o);
                 window.__in++; window.__maxIn = Math.max(window.__maxIn, window.__in);
                 return f.call(window, u, o).finally(() => { window.__in--; }); }; }""")
         n = s.page.evaluate("""async () => { const T = window.__SEPTA_TEST__; const ps = [];

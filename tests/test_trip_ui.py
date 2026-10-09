@@ -134,7 +134,7 @@ def test_a_form_labels_placement_and_geocoding(root):
         assert (info["from"], info["to"]) == ("From", "To") and info["vals"] == ["", ""]
         assert info["ph"] == ["Start: address or intersection", "Destination: address or intersection"]
         assert info["btn"] == "Plan trip" and info["hasLoc"] and info["hasSwap"] and info["homeBtns"] == [True, True]
-        assert info["priv"] == "Planning sends the start and end points of each leg to an OpenStreetMap-based routing service and reads Indego's public station feed. Nothing is stored."
+        assert info["priv"] == "Planning sends the start and end points of each leg to this site's Worker, which forwards them to an OpenStreetMap-based routing service, and reads Indego's public station feed through the Worker. The Worker stores nothing beyond a short-lived cache of each answer, and nothing is stored in this page."
         # an intersection gets ", Philadelphia, PA" appended once; text with a comma is sent as typed
         plan_ui(s, "10th & Race", "Dest Ave, Philadelphia")
         from urllib.parse import unquote
@@ -402,11 +402,11 @@ def test_f_late_response_of_superseded_request_is_ignored(root):
         held = []
 
         def gate(route):
-            if "routed-foot" in route.request.url and "39.94000;-75.15824,39.95750" in route.request.url:     # plan 1's walking route; plan 2 goes to D2
+            if "/route/foot" in route.request.url and "from=39.94000,-75.15824&to=39.95750,-75.15824" in route.request.url:     # plan 1's walking route (via the Worker); plan 2 goes to D2
                 held.append(route)
             else:
                 route.fallback()
-        s.page.route("**/routing.openstreetmap.de/**", gate)
+        s.page.route("**/septa-proxy.tpgordon8.workers.dev/route/**", gate)
         fill(s, "Origin St", "Dest Ave")
         s.page.click("#tripGo")
         for _ in range(100):

@@ -95,6 +95,48 @@ def run(base):
             st, _, _ = get(base, p)
             assert st == 400, f"{p} gave HTTP {st}, want 400"
 
+    def route():
+        for prof in ("foot", "bike", "car"):
+            st, h, body = get(base, f"/route/{prof}?from=39.9526,-75.1652&to=39.9496,-75.1503")
+            assert st == 200, f"{prof}: HTTP {st}"
+            d = json.loads(body)
+            assert d.get("code") == "Ok" and d["routes"], f"{prof}: no route"
+            r = d["routes"][0]
+            assert r["distance"] > 0 and r["duration"] > 0, f"{prof}: distance/duration"
+            assert len(r["geometry"]["coordinates"]) >= 2, f"{prof}: geometry"
+
+    def route_bad():
+        for p in ("/route/foot", "/route/foot?from=0,0&to=39.95,-75.16", "/route/foot?from=NaN,-75.16&to=39.95,-75.16",
+                  "/route/foot?from=48.85,2.35&to=39.95,-75.16"):
+            st, _, _ = get(base, p)
+            assert st == 400, f"{p} gave HTTP {st}, want 400"
+        st, _, _ = get(base, "/route/boat?from=39.95,-75.16&to=39.96,-75.15")
+        assert st == 404, f"/route/boat gave HTTP {st}, want 404"
+
+    def indego():
+        st, _, body = get(base, "/indego/information")
+        assert st == 200, f"information: HTTP {st}"
+        info = json.loads(body)["data"]["stations"]
+        assert info and {"station_id", "name", "lat", "lon"} <= set(info[0]), "information keys"
+        st, _, body = get(base, "/indego/status")
+        assert st == 200, f"status: HTTP {st}"
+        stat = json.loads(body)["data"]["stations"]
+        assert stat and {"station_id", "num_bikes_available", "num_docks_available", "is_renting", "is_returning"} <= set(stat[0]), "status keys"
+
+    def null_origin():
+        for o in ("null", ""):
+            req = urllib.request.Request(base + "/Alerts", headers={"User-Agent": "philly-transit-live-smoke/1", "Origin": o})
+            try:
+                with urllib.request.urlopen(req, timeout=25) as r:
+                    code = r.status
+            except urllib.error.HTTPError as e:
+                code = e.code
+            assert code == 403, f"Origin {o!r} gave HTTP {code}, want 403"
+
+    def localhost_origin():
+        st, h, _ = get(base, "/Alerts", origin="http://localhost:8765")
+        assert st == 200 and h.get("Access-Control-Allow-Origin") == "http://localhost:8765", f"HTTP {st}, ACAO {h.get('Access-Control-Allow-Origin')!r}"
+
     def unknown():
         st, _, _ = get(base, "/nope")
         assert st == 404, f"HTTP {st}, want 404"
@@ -108,6 +150,11 @@ def run(base):
     check("Foreign Origin gets 403", foreign)
     check("Bad parameters get 400", bad_params)
     check("Unknown path gets 404", unknown)
+    check("/route/<foot|bike|car>: OSRM route with distance, duration, geometry", route)
+    check("/route: bad input gets 400, unknown profile 404", route_bad)
+    check("/indego/information and /indego/status: GBFS station lists", indego)
+    check("Origin 'null' and empty Origin get 403", null_origin)
+    check("localhost origin on any port is allowed", localhost_origin)
     return results
 
 

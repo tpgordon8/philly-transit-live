@@ -96,6 +96,14 @@ class Mocks:
         self.indego_hits = []     # 'station_information' | 'station_status'
         self.routing_hits = []    # {'profile', 'from': (lat, lng), 'to': (lat, lng)}
         self.network_hits = 0
+        # Worker-first routing (ARCHITECTURE.md 13.2 WP1). indego_hits / routing_hits keep meaning "a request that reached
+        # the provider and was served": direct calls, plus Worker calls while the provider mode is ok. The lists below add
+        # the path taken. worker_mode is the Worker's own state for /route and /indego: ok | http500 | abort | http400.
+        self.worker_mode = "ok"
+        self.worker_route_hits = []   # every /route/<profile> request seen by the mock Worker: {'profile','from','to','raw'}
+        self.worker_indego_hits = []  # every /indego/<name> request: 'information' | 'status'
+        self.direct_routing_hits = []  # the subset of routing_hits that came straight from the page
+        self.direct_indego_hits = []
 
     # ---- Indego helpers ----
     def stations(self):
@@ -134,9 +142,11 @@ class Mocks:
         tail = url.split("/bcycle_indego/", 1)[-1].split("?", 1)[0]
         if tail not in ("station_information.json", "station_status.json"):
             return None
-        self.indego_hits.append(tail[:-5])
+        self.direct_indego_hits.append(tail[:-5])
         if self.indego_mode != "ok":
+            self.indego_hits.append(tail[:-5])
             return self._fail(route, self.indego_mode)
+        self.indego_hits.append(tail[:-5])
         body = self.indego_info if tail == "station_information.json" else self.indego_status
         route.fulfill(status=200, headers=CORS, content_type="application/json", body=json.dumps(body))
         return True
@@ -147,13 +157,56 @@ class Mocks:
             return None
         profile = m.group(1)
         lng1, lat1, lng2, lat2 = (float(m.group(i)) for i in (2, 3, 4, 5))
-        self.routing_hits.append({"profile": profile, "from": (lat1, lng1), "to": (lat2, lng2)})
+        hit = {"profile": profile, "from": (lat1, lng1), "to": (lat2, lng2)}
+        self.routing_hits.append(hit)
+        self.direct_routing_hits.append(hit)
         if self.routing_mode != "ok":
             return self._fail(route, self.routing_mode)
+        return self._route_ok(route, profile, lat1, lng1, lat2, lng2)
+
+    def _route_ok(self, route, profile, lat1, lng1, lat2, lng2):
         meters = haversine_m(lat1, lng1, lat2, lng2) * 1.25
         body = {"code": "Ok", "routes": [{"distance": meters, "duration": meters / SPEED_MPS[profile],
                                           "geometry": {"type": "LineString",
                                                        "coordinates": [[lng1, lat1], [(lng1 + lng2) / 2, (lat1 + lat2) / 2], [lng2, lat2]]}}]}
+        route.fulfill(status=200, headers=CORS, content_type="application/json", body=json.dumps(body))
+        return True
+
+    # ---- the mock Worker's /route and /indego (called by Session._route; never touches worker.hits) ----
+    def handle_worker(self, route, url, name):
+        from urllib.parse import parse_qs, urlparse
+        q = parse_qs(urlparse(url).query)
+        if name.startswith("route/"):
+            profile = name.split("/", 1)[1]
+            hit = {"profile": profile, "raw": url}
+            try:
+                (la1, ln1), (la2, ln2) = ([float(x) for x in q[k][0].split(",")] for k in ("from", "to"))
+                hit.update({"from": (la1, ln1), "to": (la2, ln2)})
+            except (KeyError, ValueError):
+                hit.update({"from": None, "to": None})
+            self.worker_route_hits.append(hit)
+            if self.worker_mode == "abort":
+                return route.abort("failed")
+            if self.worker_mode == "http500":
+                return route.fulfill(status=500, headers=CORS, content_type="application/json", body='{"error":"mock"}')
+            if self.worker_mode == "http400" or hit["from"] is None or profile not in SPEED_MPS:
+                return route.fulfill(status=400, headers=CORS, content_type="application/json", body='{"error":"bad parameter"}')
+            if self.routing_mode != "ok":  # the provider is down behind a healthy Worker: the Worker answers 502
+                return route.fulfill(status=502, headers=CORS, content_type="application/json", body='{"error":"upstream 500"}')
+            self.routing_hits.append({"profile": profile, "from": hit["from"], "to": hit["to"]})
+            return self._route_ok(route, profile, la1, ln1, la2, ln2)
+        kind = name.split("/", 1)[1]
+        self.worker_indego_hits.append(kind)
+        if self.worker_mode == "abort":
+            return route.abort("failed")
+        if self.worker_mode == "http500":
+            return route.fulfill(status=500, headers=CORS, content_type="application/json", body='{"error":"mock"}')
+        if self.worker_mode == "http400" or kind not in ("information", "status"):
+            return route.fulfill(status=400, headers=CORS, content_type="application/json", body='{"error":"bad parameter"}')
+        if self.indego_mode != "ok":
+            return route.fulfill(status=502, headers=CORS, content_type="application/json", body='{"error":"upstream 500"}')
+        self.indego_hits.append("station_" + kind)
+        body = self.indego_info if kind == "information" else self.indego_status
         route.fulfill(status=200, headers=CORS, content_type="application/json", body=json.dumps(body))
         return True
 
@@ -223,6 +276,8 @@ class Session:
         if WORKER_HOST in url:
             tail = url.split(WORKER_HOST + "/", 1)[1]
             name = tail.split("?", 1)[0].strip("/")
+            if name.startswith(("route/", "indego/")):
+                return self.mocks.handle_worker(route, url, name)
             self.worker.hits.append(tail.strip("/") if name == "Stops" else name)
             if name == "Stops":  # data["Stops"] maps route id -> stop list; unknown routes return [] like SEPTA
                 if self.worker.mode == "abort":

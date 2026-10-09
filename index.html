@@ -368,7 +368,7 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
       </form>
       <div id="tripResults" aria-busy="false" hidden></div>
       <div id="tripLive" class="sr-only" role="status" aria-live="polite"></div>
-      <p class="empty-line tp-priv">Planning sends the start and end points of each leg to an OpenStreetMap-based routing service and reads Indego's public station feed. Nothing is stored.</p>
+      <p class="empty-line tp-priv">Planning sends the start and end points of each leg to this site's Worker, which forwards them to an OpenStreetMap-based routing service, and reads Indego's public station feed through the Worker. The Worker stores nothing beyond a short-lived cache of each answer, and nothing is stored in this page.</p>
     </section>
 
     <section class="sec" aria-labelledby="h-places">
@@ -604,8 +604,9 @@ function evalRule(rule,vehicles,now,src){
    Third parties receive only leg endpoints (routing service) or nothing (Indego, own static file). */
 var TP={WALK_MPS:1.25,BIKE_MPS:3.6,CIRC:1.3,WALK_MAX_M:0.6*1609.344,BIKE_MAX_M:2.0*1609.344,STN_NEAR_M:0.15*1609.344,
   STN_START_M:1200,UNLOCK_S:90,DOCK_S:60,BOARD_S:60,MAX_CALLS:14,MAX_FINALISTS:6,PER_STRUCT_FINAL:3,PER_STRUCT_OUT:2,MAX_OUT:5,MAX_DOMINATED:3,
-  MAX_INFLIGHT:3,TIMEOUT_MS:10000,RETRY_MS:1500,GRID:0.005,STATUS_TTL_MS:60000,ROUTE_BASE:'https://routing.openstreetmap.de/routed-',
-  INDEGO_BASE:'https://gbfs.bcycle.com/bcycle_indego/',NET_URL:'data/bus-network.json'};
+  MAX_INFLIGHT:3,TIMEOUT_MS:10000,RETRY_MS:1500,GRID:0.005,STATUS_TTL_MS:60000,ROUTE_BASE:'https://septa-proxy.tpgordon8.workers.dev/route/',
+  INDEGO_BASE:'https://septa-proxy.tpgordon8.workers.dev/indego/',ROUTE_DIRECT:'https://routing.openstreetmap.de/routed-',
+  INDEGO_DIRECT:'https://gbfs.bcycle.com/bcycle_indego/',NET_URL:'data/bus-network.json'};
 var tpNet=null,tpInfo=null,tpStatus=null,tpRoute={},tpQueue=[],tpInflight=0;
 function tpFail(code,msg){return {code:code,message:msg||code}}
 function resetPlannerCaches(){tpNet=null;tpInfo=null;tpStatus=null;tpRoute={}}
@@ -619,6 +620,19 @@ function tpGetJson(url,noStore){
     }).finally(function(){clearTimeout(t)});
   }
   return once().catch(function(){return new Promise(function(res){setTimeout(res,TP.RETRY_MS)}).then(once)});
+}
+/* Worker first (one attempt, no retry), then ONE fallback to the direct provider (tpGetJson, with its own retry) when the
+   Worker answers 5xx, cannot be reached or returns unparseable JSON. A 4xx from the Worker is final: no fallback. */
+function tpGetVia(workerUrl,directUrl,noStore){
+  var ctl=new AbortController(),t=setTimeout(function(){ctl.abort()},TP.TIMEOUT_MS);
+  return fetch(workerUrl,noStore?{signal:ctl.signal,cache:'no-store'}:{signal:ctl.signal}).then(function(r){
+    if(r.status>=400&&r.status<500){var e=new Error('HTTP '+r.status);e.final=true;throw e}
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
+  }).finally(function(){clearTimeout(t)}).catch(function(e){
+    if(e&&e.final)throw e;
+    return tpGetJson(directUrl,noStore);
+  });
 }
 function isNum(x){return typeof x==='number'&&isFinite(x)}
 function validateNetwork(n){
@@ -675,12 +689,12 @@ function mergeIndego(info,status){
 function loadIndego(fresh){
   var now=Date.now();
   if(!tpInfo){
-    var pi=tpGetJson(TP.INDEGO_BASE+'station_information.json').catch(function(){if(tpInfo===pi)tpInfo=null;throw 0});
+    var pi=tpGetVia(TP.INDEGO_BASE+'information',TP.INDEGO_DIRECT+'station_information.json').catch(function(){if(tpInfo===pi)tpInfo=null;throw 0});
     tpInfo=pi;
   }
   if(!tpStatus||fresh===true||now-tpStatus.t>=TP.STATUS_TTL_MS){
     var ps={t:now};
-    ps.p=tpGetJson(TP.INDEGO_BASE+'station_status.json',true).catch(function(){if(tpStatus===ps)tpStatus=null;throw 0});
+    ps.p=tpGetVia(TP.INDEGO_BASE+'status',TP.INDEGO_DIRECT+'station_status.json',true).catch(function(){if(tpStatus===ps)tpStatus=null;throw 0});
     tpStatus=ps;
   }
   return Promise.all([tpInfo,tpStatus.p]).then(function(r){return mergeIndego(r[0],r[1])},function(){
@@ -702,10 +716,11 @@ function routeLeg(profile,a,b,ctx){
   if(profile!=='foot'&&profile!=='bike'&&profile!=='car')return Promise.reject(tpFail('routing_unavailable','profile'));
   var key=routeKey(profile,a,b);
   if(tpRoute[key])return tpRoute[key];
-  var url=TP.ROUTE_BASE+profile+'/route/v1/driving/'+a.lng.toFixed(5)+','+a.lat.toFixed(5)+';'+b.lng.toFixed(5)+','+b.lat.toFixed(5)+'?overview=full&geometries=geojson';
+  var url=TP.ROUTE_BASE+profile+'?from='+a.lat.toFixed(5)+','+a.lng.toFixed(5)+'&to='+b.lat.toFixed(5)+','+b.lng.toFixed(5);
+  var direct=TP.ROUTE_DIRECT+profile+'/route/v1/driving/'+a.lng.toFixed(5)+','+a.lat.toFixed(5)+';'+b.lng.toFixed(5)+','+b.lat.toFixed(5)+'?overview=full&geometries=geojson';
   var p=new Promise(function(resolve,reject){
     tpQueue.push({ctx:ctx,resolve:resolve,reject:reject,run:function(){
-      return tpGetJson(url).then(function(j){
+      return tpGetVia(url,direct).then(function(j){
         var r=j&&j.code==='Ok'&&j.routes&&j.routes[0];
         if(!r||!isNum(r.distance)||!isNum(r.duration)||!r.geometry||!Array.isArray(r.geometry.coordinates)||r.geometry.coordinates.length<2)throw 0;
         return {meters:r.distance,seconds:r.duration,path:r.geometry.coordinates.map(function(c){return [c[1],c[0]]})};
