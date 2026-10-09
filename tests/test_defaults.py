@@ -14,7 +14,7 @@ FAST = {
 }
 
 PREFS, KEY = "septa.prefs.v1", "septa.defaults.v2"
-NEW = {"bus": True, "trolley": False, "subway": False, "train": False}
+NEW = {"bus": True, "trolley": False, "subway": False, "train": False, "indego": False}  # Indego stations are off by default (js/indego.js)
 OLD_ALL = {"bus": True, "trolley": True, "subway": True, "train": True}
 FAR = {"lat": 40.5, "lng": -75.0, "label": "Nowhere"}  # no fixture vehicle within 5 mi
 

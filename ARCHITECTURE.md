@@ -456,9 +456,9 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 
 | File | Lines | Holds |
 |------|-------|-------|
-| `js/util.js` | 420 | constants, formatting and geometry, `$`, the `localStorage` wrapper, saved preferences, places, starred routes, the shared `state` object, the Leaflet-missing banner |
+| `js/util.js` | 421 | constants, formatting and geometry, `$`, the `localStorage` wrapper, saved preferences, places, starred routes, the shared `state` object, the Leaflet-missing banner |
 | `js/feed.js` | 430 | `normBuses` (ghost filter), `normTrains`, `septa()` fetch through the Worker, idle pause, `refresh`, and `collect`/`apply`, the pipeline that turns feed data into what is drawn |
-| `js/map.js` | 570 | the Leaflet map, search-point and Home pins, vehicle markers, selection, the vehicle detail card |
+| `js/map.js` | 572 | the Leaflet map, search-point and Home pins, vehicle markers, selection, the vehicle detail card |
 | `js/landmarks.js` | 53 | the built-in list of about 40 well-known Philadelphia places (name, aliases, address, coordinates) as one string per place |
 | `js/suggest.js` | 496 | place and address suggestions: `attach(input, {onPick, biasProvider})` makes an ARIA 1.2 combobox; built-in places first, then Photon (debounce, abort, cache, rate limit) |
 | `js/panel.js` | 677 | the sidebar: status line, My routes, search box and geocoding, Use my location, `setCenter`/`setRadius`, mode chips, saved places, Get me home, the empty-state actions |
@@ -467,8 +467,9 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 | `js/routing.js` | 449 | trip planner data clients: planner constants `TP`, bus network, Indego, the routing queue, `routeLeg`, `cancelPlan` (no DOM) |
 | `js/candidates.js` | 217 | trip planner bus candidates: nearby stops and stations, wait estimates, `buildBusCandidates` (pure) |
 | `js/planner.js` | 535 | trip planner: leg assembly, schedule state, `planTrips` (no DOM) |
-| `js/trip.js` | 683 | trip planner interface: form, results, map drawing |
+| `js/trip.js` | 687 | trip planner interface: form, results, map drawing |
 | `js/sheet.js` | 74 | phone bottom sheet (peek or open), keeps the map's size in step, on-screen keyboard handling through `visualViewport` |
+| `js/indego.js` | 487 | Indego bike stations on the map: the mode chip's layer, markers, zoom hint, station card, status polling (section 15.5). Creates `S.indego` itself |
 | `js/main.js` | 115 | the `window.__SEPTA_TEST__` hook and the start-up calls |
 
 | Stylesheet | Holds |
@@ -482,10 +483,11 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 | `css/suggest.css` | the suggestion list (fixed position, option rows, highlight) |
 | `css/stops.css` | stop card and live stop board |
 | `css/alerts.css` | service alerts, banners, leave-now rules, toasts |
+| `css/indego.css` | Indego chip colour, station markers, the zoom hint pill and the station card, with their own light and dark tokens |
 
 The stylesheets load in the order of that table, and the rules inside each file keep the relative order they had in the old inline block. WP-F checked that no pair of rules with the same specificity and a shared property swapped order, and that computed styles of every element and screenshots at 390 and 1280 px, light and dark, were identical before and after.
 
-The inline script before the app scripts creates `window.SEPTA` (one object per file except `main`, which adds none, plus `failed` and `loadFailed`) and the load-error listener. `index.html` then loads `util`, `feed`, `map`, `landmarks`, `suggest`, `panel`, `stops`, `alerts`, `routing`, `candidates`, `planner`, `trip`, `sheet`, `main` in that order, then a one-line check that `main.js` ran.
+The inline script before the app scripts creates `window.SEPTA` (one object per file except `main`, which adds none, plus `failed` and `loadFailed`) and the load-error listener. `index.html` then loads `util`, `feed`, `map`, `landmarks`, `suggest`, `panel`, `stops`, `alerts`, `routing`, `candidates`, `planner`, `trip`, `sheet`, `indego`, `main` in that order, then a one-line check that `main.js` ran.
 
 ### 14.2 How the files share code
 
@@ -589,3 +591,14 @@ Still open after that round:
 | `cancelJob` and the Photon scheduler are page-wide, so `close()` and blur on one field cancel a pending job for any field | Only one field is typed in at a time; a per-field scheduler would add state for no user-visible gain |
 | A sheet wrapper element for a true `aria-controls` target | Needs a layout change in `css/layout.css` (flex and scroll of `#panel`) and the viewport matrix re-checked; the handle keeps `aria-expanded` |
 | The remaining over-80-line functions listed above (`planTrips`, `tripRender`, `buildDetail`, `renderStatusView`, ...) | Unchanged reasons in the table above |
+
+### 15.5 Indego bike stations on the map (v13)
+
+- **What.** A mode chip "Indego" (off by default) next to Bus, Trolley, Subway and Regional Rail. On, the map shows bike-share stations inside the visible map (not limited by the search radius). Files: `js/indego.js` (module `S.indego`, loaded after `sheet.js`), `css/indego.css`. Data comes from `S.routing.loadIndego`, the trip planner's client (Worker first, one direct fallback, in-memory cache), so there is no second client.
+- **Preference.** `filters.indego` in `septa.prefs.v1`, validated like the other modes as a boolean. `DEFAULT_FILTERS.indego = false` in `js/util.js`; a saved object without the key reads as off and is not rewritten on load. The defaults migration is untouched. "Show all modes" resets the other four and leaves Indego off.
+- **Visibility.** Markers only at zoom 14 or closer. At zoom 14 and 15 at most 150 markers are drawn, nearest the map centre first; at zoom 16 and closer every station in view. Below 14 a small pill at the top left says "Zoom in to see Indego stations" (not interactive, hidden while the banner or the idle bar shows). The chip's count is the number of stations in view.
+- **Marker.** A 44 px tap target holding a rounded tile with a bike icon and the number of bikes, and a tail at the station. Classes `av-none` (0, bike crossed out), `av-low` (1 to 2), `av-ok` (3 or more); the number is always shown. A station that is not renting counts as 0 bikes, one not taking returns as 0 docks, an out-of-service one has a dashed edge and says so in its name. `aria-label` "Indego station Broad & Race, 5 bikes, 7 open docks", `role=button`, `tabindex=0`, Enter and Space open the card. Tokens (`--ind-*`, `--indego`) live in `css/indego.css` for light, `prefers-color-scheme: dark` and `data-theme=dark`; badge text is at least 4.5:1 in all three (tested).
+- **Card.** `#indegoCard`, built by `js/indego.js`, sits where the vehicle card does (bottom left, and clear of the zoom buttons up to 840 px, using `S.map.CARD_NARROW`; the marker is panned into the strip above it). One card at a time: opening it clears the vehicle selection and closes the stop card; a vehicle or stop card opening closes it (a `MutationObserver` on their `hidden` attributes). Content: name, "5 bikes, 7 open docks", electric and classic split when the feed's types add up to the total, "Updated 40 s ago", Directions, Close. Escape and Close return focus to the marker. Directions calls `S.trip.setDestination({lat, lng, name})` (the only change in `js/trip.js`, 3 lines), opens the sheet and focuses From (or Plan trip when From is filled).
+- **Freshness.** Station information once per page (Worker caches it an hour, `routing.js` keeps it in memory). Status through `loadIndego(true)` every 60 s, only while the chip is on, the map is at zoom 14 or closer, the tab is visible and `S.feed.idleNow()` is false (the one-hour idle pause of section 2); the timer is cleared otherwise and a once-a-second check (no network) restarts it, asking at once on return. On failure the last data stays, the hint pill reads "Indego bike data unavailable. Showing the last known bikes." (or without the second sentence when nothing was ever loaded), markers dim once the last good answer is 3 minutes old, and nothing throws.
+- **Request budget.** `/indego/information` at most once per page load (plus the planner's own use of the same cache); `/indego/status` at most 60 per active hour with the layer on, 0 with it off, hidden, zoomed out or idle. The Worker caches status 30 s and information 1 h, so upstream calls are bounded the same way. The map bounds are never sent anywhere: the request has no parameters, so the privacy text is unchanged.
+- **Tests.** `tests/test_indego_layer.py` (hermetic; chip and persistence, no request while off, zoom rules and cap, classes and names, card and Directions, keyboard, one card at a time, polling pause when hidden, off, zoomed out and idle, failure and dimming, phone layout at 360 and 390, contrast, reduced motion). `tests/shots_indego.py` writes screenshots (light and dark, 390 and 1280).

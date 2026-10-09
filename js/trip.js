@@ -680,4 +680,8 @@
       });
   }
   S.trip.tripRenderPlaces = tripRenderPlaces;
+  /* Fills the To field with a known place (used by the Indego station card). pt: {lat, lng, name}. */
+  S.trip.setDestination = function (pt) {
+    tripSetField('to', pt.name, { pt: { lat: pt.lat, lng: pt.lng, name: pt.name } });
+  };
 })();

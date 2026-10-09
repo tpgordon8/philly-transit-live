@@ -554,6 +554,7 @@
   S.map.map = map;
   S.map.mapEl = mapEl;
   S.map.NARROW = NARROW;
+  S.map.CARD_NARROW = CARD_NARROW;
   S.map.animOK = animOK;
   S.map.drawCenter = drawCenter;
   S.map.drawHome = drawHome;

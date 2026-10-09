@@ -275,6 +275,7 @@
   /* Stored values are untrusted: anything malformed is ignored silently (and never rewritten on load). */
   var DEFAULT_FILTERS = { bus: true, trolley: false, subway: false, train: false },
     DEFAULT_RADIUS = 0.5;
+  DEFAULT_FILTERS.indego = false; /* Indego bike stations (js/indego.js): off unless the rider turned them on */
   function cleanPrefs(p) {
     var o = p && typeof p === 'object' && !Array.isArray(p) ? p : {},
       c = o.center,

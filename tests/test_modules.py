@@ -13,7 +13,7 @@ FAST = {
 }
 
 HOOK = "window.__SEPTA_TEST__ = true"
-FILES = ["util", "feed", "map", "landmarks", "suggest", "panel", "stops", "alerts", "routing", "candidates", "planner", "trip", "sheet", "main"]
+FILES = ["util", "feed", "map", "landmarks", "suggest", "panel", "stops", "alerts", "routing", "candidates", "planner", "trip", "sheet", "indego", "main"]
 
 
 def test_missing_script_file_shows_error_banner(root):

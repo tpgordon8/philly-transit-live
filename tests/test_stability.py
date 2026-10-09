@@ -338,7 +338,7 @@ def test_version_stamp_matches_content(root):
     html = (root / "index.html").read_text()
     token = stamp_version.content_hash(root)
     tags = stamp_version.stamped(html)
-    assert len(tags) == 14 + 9, tags  # every app script and stylesheet
+    assert len(tags) == 15 + 10, tags  # every app script and stylesheet
     assert all(t == token for _, t in tags), f"index.html is not stamped with ?v={token}: run python3 tests/stamp_version.py"
     assert "leaflet.min.js?" not in html and "fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" in html
     import test_modules
