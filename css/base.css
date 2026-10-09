@@ -1,11 +1,13 @@
 /* base.css: design tokens, reset, typography, header and brand. */
 :root{color-scheme:light;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}body{margin:0}[hidden]{display:none!important}
 /* Layout concept: signage-style control panel on the left, full-bleed map on the right.
-   Under 820px the map sits on top and the panel becomes a scrolling lower sheet. */
+   Up to 760px the map sits on top and the panel becomes a scrolling lower sheet. */
 :root{
   --paper:#eef1f4; --panel:#ffffff; --ink:#0f1c2c; --mute:#5b6b7c; --line:#d6dde4;
+  --line-strong:#7a8999; /* 3.6:1 on --panel and 3.2:1 on --paper: borders of text fields and unchecked chips */
   --accent:#1f5fae; --accent-ink:#ffffff;
-  --bus:#1f5fae; --trolley:#17814f; --train:#d4501a;
+  --bus:#0f6aa6; --trolley:#17814f; --train:#b8420f; /* bus is a touch greener than --accent; --train is 4.2:1 on #e8e0d8 map tiles */
+  --me:#0a6cff; --sel:#e6007e; --ring-out:#0f1c2c; --ring-in:#ffffff; --mk-edge:rgba(255,255,255,.9);
   --good:#17703f; --warn:#a85f00; --bad:#b8301f; --info:#1f5fae; --unk:#5b6b7c;
   --good-bg:#e1f3e8; --warn-bg:#fbeed6; --bad-bg:#fbe3df; --info-bg:#e1ecf9; --unk-bg:#e8ecf0;
   --map-bg:#dfe5ea; --tile-filter:none; --shadow:0 6px 22px rgba(15,28,44,.18);
@@ -17,21 +19,25 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --paper:#0a1119; --panel:#111b27; --ink:#e7eef6; --mute:#9aabbd; --line:#25364a;
+    --line-strong:#62778c;
     --accent:#5da4f3; --accent-ink:#06121f;
-    --bus:#5da4f3; --trolley:#3cc088; --train:#ff7d47;
+    --bus:#4cb4ea; --trolley:#3cc088; --train:#ff7d47;
+    --me:#6db3ff; --sel:#ffd23f; --ring-out:#ffffff; --ring-in:#0a1119; --mk-edge:rgba(255,255,255,.75);
     --good:#52d08c; --warn:#f0b04a; --bad:#ff8a78; --info:#7db6f7; --unk:#9aabbd;
     --good-bg:#12301f; --warn-bg:#33270f; --bad-bg:#3a1a15; --info-bg:#122a46; --unk-bg:#1b2a3a;
-    --map-bg:#0e1620; --tile-filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.7);
+    --map-bg:#0e1620; --tile-filter:invert(1) hue-rotate(180deg) brightness(.8) contrast(.88) saturate(.35);
     --shadow:0 6px 22px rgba(0,0,0,.5); color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
   --paper:#0a1119; --panel:#111b27; --ink:#e7eef6; --mute:#9aabbd; --line:#25364a;
+  --line-strong:#62778c;
   --accent:#5da4f3; --accent-ink:#06121f;
-  --bus:#5da4f3; --trolley:#3cc088; --train:#ff7d47;
+  --bus:#4cb4ea; --trolley:#3cc088; --train:#ff7d47;
+  --me:#6db3ff; --sel:#ffd23f; --ring-out:#ffffff; --ring-in:#0a1119; --mk-edge:rgba(255,255,255,.75);
   --good:#52d08c; --warn:#f0b04a; --bad:#ff8a78; --info:#7db6f7; --unk:#9aabbd;
   --good-bg:#12301f; --warn-bg:#33270f; --bad-bg:#3a1a15; --info-bg:#122a46; --unk-bg:#1b2a3a;
-  --map-bg:#0e1620; --tile-filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.7);
+  --map-bg:#0e1620; --tile-filter:invert(1) hue-rotate(180deg) brightness(.8) contrast(.88) saturate(.35);
   --shadow:0 6px 22px rgba(0,0,0,.5); color-scheme:dark;
 }
 /* The page is exactly one screen tall. dvh follows a phone browser's collapsing toolbar (vh is the fallback); --kb is the height an
@@ -43,6 +49,8 @@ body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-siz
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.skip-link{position:absolute;left:8px;top:8px;z-index:1250;min-width:44px;min-height:44px;padding:9px 13px;border:1px solid var(--accent);border-radius:6px;background:var(--panel);color:var(--ink);font-weight:600;transform:translateY(-200%)} /* off screen until it has focus, at full size so it is a normal tap target */
+.skip-link:focus{transform:none;cursor:pointer}
 .brand{padding:16px 18px 12px;border-bottom:1px solid var(--line)}
 /* The wordmark is set in the plain Helvetica-style system stack (ARCHITECTURE.md 15.1); no webfont, so no licensed font file ships. */
 .brand h1{margin:0;font:700 26px/1 var(--f-title);letter-spacing:normal;text-transform:none;color:var(--accent)}

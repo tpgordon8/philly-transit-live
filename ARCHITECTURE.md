@@ -472,7 +472,7 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 |------------|-------|
 | `css/leaflet.css` | the Leaflet stylesheet (was inlined; the Leaflet script tag and its SRI hash are untouched) |
 | `css/base.css` | design tokens and dark theme, reset, typography, header and brand, the status dot |
-| `css/layout.css` | app shell, sidebar, map stage, the phone bottom sheet and their responsive rules (820 px, phone landscape) |
+| `css/layout.css` | app shell, sidebar, map stage, the phone bottom sheet and their responsive rules (760 px, phone landscape) |
 | `css/map.css` | Leaflet overrides and controls, vehicle markers, pins, the vehicle card, the empty-state card |
 | `css/panel.css` | sidebar sections, search, buttons, chips, saved places, My routes |
 | `css/trip.css` | trip planner form, results and map drawing |
@@ -534,12 +534,21 @@ Goals from the owner: (1) the N/E/S/W badge and the vehicle's facing show the ro
 
 ### 15.2.1 WP-E as built
 
-- **Layout.** At most 820 px wide the grid is map over panel and the panel is a bottom sheet. `js/sheet.js` sets `#app[data-sheet]` to `peek` (panel row 176 px: handle, name and status on one line, search field) or `open` (the panel gets half the screen, so the map keeps at least 50%). It starts in `peek`; the handle (`#sheetHandle`, `aria-expanded`) toggles; focus on any control other than the search field opens it. Without the attribute (no JS) the sheet is open. Phone landscape (width at most 820, height at most 500) puts the panel back as a left column and hides the handle; 844x390 is wider than 820 and uses the sidebar.
+- **Layout.** At most 760 px wide (WP-H2: was 820, so a tablet held upright gets the side panel) the grid is map over panel and the panel is a bottom sheet. `js/sheet.js` sets `#app[data-sheet]` to `peek` (panel row 196 px since WP-H2, so the status line may wrap: handle, name and status on one line, search field) or `open` (the panel gets half the screen, so the map keeps at least 50%). It starts in `peek`; the handle (`#sheetHandle`, `aria-expanded`) toggles; focus on any control other than the search field opens it. Without the attribute (no JS) the sheet is open. Phone landscape (width at most 760, height at most 500) puts the panel back as a left column and hides the handle; 844x390 is wider than 760 and uses the sidebar.
 - **Map controls and cards.** The zoom buttons are 44 px and stay bottom-right. Below 820 px wide, or in a window shorter than 500 px, the vehicle card, stop card and empty-state card end 64 px short of the right edge, and the vehicle card sits above the attribution line, so no card covers a Leaflet control. The stop card is hidden while the vehicle card is open up to 1180 px wide (the map is then too narrow for both cards, 372 + 320 px) and returns when the vehicle card closes.
 - **Touch and text.** Buttons, chips, selects, range inputs, suggestion rows and the panel's links are at least 44 px high (links get padding, not line height); text inputs, selects and the stop card's field are 16 px.
 - **Viewport.** `viewport-fit=cover`; the root keeps `env(safe-area-inset-*)` on all four sides; the page is `100vh` with `100dvh` after it, less `--kb`. `--kb` is the height an on-screen keyboard covers when the browser leaves the layout alone (iOS): `sheet.js` reads it from `visualViewport` and shrinks the page by it, so the sheet and the field being typed in stay above the keyboard. Browsers that resize the layout (Android Chrome) need nothing. The suggestion list (WP-C) already opens above the field when there is more room there; a field outside the visual viewport closes it. After a keyboard settles the field is scrolled into view.
 - **Not changed.** The attribution link inside the Leaflet attribution control is small by design (required credit) and is exempt from the 44 px rule in `tests/test_responsive.py`; inline links in running text get a 44 px hit area through padding.
 - **Tests.** `tests/test_responsive.py` has one test per viewport (320, 360, 390, 414, 600, 768, 820, 1024, 1280, 1440 and 844x390 landscape; phones and landscape use Chromium mobile emulation) checking overflow, tap targets, font sizes, the shell, suggestions, vehicle and stop cards, focus rings and a planned trip, plus tests for the sheet, the keyboard (resized viewport and a faked `visualViewport`), safe areas, and a populated panel. `tests/shots_responsive.py` is the screenshot matrix and is not part of the suite. `tests/harness.py` `Session` gained `mobile` and `scale`.
+
+### 15.2.2 WP-H2 as built (accessibility and polish)
+
+- **Breakpoint.** The sheet layout is `max-width:760px` (`css/layout.css`, `js/map.js` `NARROW`). The cards (`#detail`, `#stopCard`, banner) keep their narrow rules up to 840 px, because with the 392 px side panel the map is under 450 px wide there and a 372 px card would cover the zoom buttons.
+- **Badges.** `js/map.js` toggles `.dir-lo` on the map below zoom 16; `css/map.css` hides `.dr` letters then, except on the selected marker and the `?` badge. The `aria-label` still names the direction.
+- **Tokens (`css/base.css`).** `--line-strong` (borders of text fields and unchecked chips, at least 3:1 on `--panel` and `--paper` in both themes), `--me` (location dot), `--sel` (selected-vehicle glow), `--ring-out` and `--ring-in` (marker focus ring), `--mk-edge` (marker outline); `--bus` now differs slightly from `--accent`; `--train` is `#b8420f` in light mode (4.2:1 on `#e8e0d8` tiles). Dark map tiles use `brightness(.8) saturate(.35)`.
+- **Keyboard.** A focused marker is raised (`setZIndexOffset(2000)`, restored on blur) and shows a 3 px ring with a contrasting 1 px inner ring. `#skipVeh` ("Skip vehicles") is the first focusable element in `#stage` and moves focus to the zoom buttons, past every marker.
+- **Reduced motion.** With `prefers-reduced-motion: reduce` the map is created with `zoomAnimation`, `fadeAnimation` and `markerZoomAnimation` off, `S.map.animOK()` gives `animate: false` to fit and pan calls, and `map.panBy` never glides.
+- **Tests.** `tests/test_ui_polish.py` (contrast is computed from computed styles), plus two tests in `tests/test_responsive.py`. `tests/shots_responsive.py --schemes light,dark` writes screenshots with a realistic fake tile.
 
 ### 15.3 Definition of done
 

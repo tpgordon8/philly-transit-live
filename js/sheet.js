@@ -1,4 +1,4 @@
-/* js/sheet.js: the phone bottom sheet and the on-screen keyboard. Up to 820 px wide the panel is a sheet under the map (css/layout.css):
+/* js/sheet.js: the phone bottom sheet and the on-screen keyboard. Up to 760 px wide the panel is a sheet under the map (css/layout.css):
    peek shows the handle, the status line and the search field; open shows everything. Wider screens ignore both states. */
 (function () {
   'use strict';

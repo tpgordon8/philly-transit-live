@@ -43,7 +43,7 @@ ES5 on purpose (`var`, classic scripts); Prettier only changes layout, so format
 
 ## Phones and small screens
 
-Up to 820 px wide the map takes the screen and the controls are a bottom sheet under it: the closed sheet shows the Septer name, the
+Up to 760 px wide the map takes the screen and the controls are a bottom sheet under it: the closed sheet shows the Septer name, the
 status line and the search field; the Controls handle (or reaching any control below the search field) opens it. Wide screens keep the
 sidebar, and so does a phone held sideways. Every button, chip, field and link is at least 44 px, text fields are 16 px so iOS does not
 zoom, and the page keeps clear of notches. `python3 tests/shots_responsive.py` saves a matrix of screenshots to `/tmp/claude-0/shots/`

@@ -27,6 +27,7 @@
 .pill.good{background:var(--good-bg);color:var(--good)} .pill.warn{background:var(--warn-bg);color:var(--warn)}
 .pill.bad{background:var(--bad-bg);color:var(--bad)} .pill.info{background:var(--info-bg);color:var(--info)}
 .pill.unk{background:var(--unk-bg);color:var(--unk)}
+#detail dd .btn.ghost{display:inline-flex;align-items:center;margin-left:-4px;padding:5px 8px;color:var(--accent);font-weight:600;vertical-align:middle}
 #detail .gone{padding:0 12px 12px;color:var(--warn);font-weight:600}
 
 /* Vehicle markers. Leaflet moves .veh-wrap with transform, so a transform transition glides it. */
@@ -37,7 +38,7 @@
 .veh-wrap .vb{position:absolute;left:2px;top:2px;overflow:visible;z-index:0;transform-origin:50% 50%} /* Leaflet gives map-pane svgs z-index:200, which would hide the badges */
 .veh-wrap .vb.f-N{transform:rotate(0deg)} .veh-wrap .vb.f-E{transform:rotate(90deg)}
 .veh-wrap .vb.f-S{transform:rotate(180deg)} .veh-wrap .vb.f-W{transform:rotate(270deg)}
-.veh-wrap .vb .bd{fill:var(--c);stroke:#0f1c2c;stroke-opacity:.55;stroke-width:.9}
+.veh-wrap .vb .bd{fill:var(--c);stroke:var(--mk-edge);stroke-width:1.1;paint-order:stroke}
 .veh-wrap .vb .wn{fill:#fff;opacity:.88}
 .veh-wrap .vb .rf{fill:#fff;opacity:.2}
 .veh-wrap .vb .wh{fill:#0f1c2c}
@@ -50,20 +51,42 @@
 .veh-wrap .rt.long{font-size:11px;padding:0 2px;letter-spacing:0}
 .veh-wrap .dr{z-index:1;position:absolute;left:30px;top:-8px;width:21px;height:21px;border-radius:50%;background:#0f1c2c;color:#fff;border:2px solid #fff;font:700 9px/17px var(--f-body);text-align:center;letter-spacing:-.02em}
 .veh-wrap .dr.none{background:#566676} /* white glyph on this gray is 5.9:1; the old #6b7a8a was 4.4:1 */
-.veh-wrap.stale{opacity:.4;filter:grayscale(1)}
-.veh-wrap.sel .vb{filter:drop-shadow(0 0 5px var(--accent)) drop-shadow(0 0 2px var(--accent))}
+.veh-wrap.stale{opacity:.7;filter:grayscale(1)}
+.veh-wrap.stale .vb .bd{stroke:#0f1c2c;stroke-opacity:.9;stroke-width:1.4;stroke-dasharray:3 2}
+/* Selected: a white halo then a wide glow in its own colour (--sel is neither the bus blue nor the train orange), and a ring on the number. */
+.veh-wrap.sel .vb{filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 4px var(--sel)) drop-shadow(0 0 7px var(--sel))}
+.veh-wrap.sel .rt{box-shadow:0 0 0 2px var(--sel)}
+/* Below zoom 16 the N/E/S/W letters crowd Center City: they hide (js/map.js toggles .dir-lo on the map) except on the selected vehicle
+   and the "?" for an unknown direction. The accessible name still carries the direction. */
+.dir-lo .veh-wrap:not(.sel) .dr:not(.none){display:none}
+/* A focused marker is raised in js/map.js; the ring is 3px with a contrasting inner ring so it reads on light and dark tiles. */
+.veh-wrap:focus{outline:none}
+.veh-wrap:focus-visible{outline:3px solid var(--ring-out);outline-offset:1px;border-radius:10px;box-shadow:0 0 0 1px var(--ring-in)}
 .pin{background:none;border:0}
-.pin .me{display:block;width:18px;height:18px;border-radius:50%;background:var(--accent);border:3px solid #fff;box-shadow:0 0 0 2px var(--accent),0 2px 8px rgba(0,0,0,.4)}
+.pin .me{position:relative;display:block;width:18px;height:18px;border-radius:50%;background:var(--me);border:3px solid #fff;box-shadow:0 0 0 1px rgba(15,28,44,.4),0 2px 6px rgba(0,0,0,.4)}
+.pin .me::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:2px solid var(--me);opacity:0;animation:mepulse 2.4s ease-out infinite}
+@keyframes mepulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(2.8);opacity:0}}
+@media (prefers-reduced-motion:reduce){.pin .me::after{animation:none}}
 .pin .hm{display:grid;place-items:center;width:26px;height:26px;border-radius:7px;background:#0f1c2c;color:#fff;border:2px solid #fff;font:700 14px var(--f-display);box-shadow:0 2px 8px rgba(0,0,0,.4)}
 path.rad{stroke:var(--accent);fill:var(--accent);fill-opacity:.06;stroke-width:1.5}
 path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-linecap:round;fill:none}
 @media (prefers-reduced-motion:reduce){.veh-wrap{transition:none!important}}
-/* Narrow or short screens: the cards leave the right-hand column free for the zoom buttons (44px wide, 10px in) and sit above the
+/* Narrow or short screens (a map under about 450px wide: a phone, or a tablet with the side panel beside it): the cards leave the right-hand column free for the zoom buttons (44px wide, 10px in) and sit above the
    attribution strip, so no card ever covers a Leaflet control. */
-@media (max-width:820px),(max-height:500px){
+@media (max-width:840px),(max-height:500px){
   /* The card never grows past the strip that select() reserves above it for the selected marker. */
   #detail{left:8px;right:64px;width:auto;bottom:26px;max-height:calc(100% - 90px)}
   #detail .dh{padding:8px 10px 8px;gap:8px}
+  /* Header on a phone: Close is a 44px icon button pinned top-right (its name stays "Close vehicle details"), so the header never wraps. */
+  #detail .dh{flex-wrap:nowrap;padding-right:52px}
+  #detail .dt{flex:1 1 0}
+  #detail .dh{gap:6px}
+  #detail .rbadge{font-size:18px;min-width:40px;padding:4px 6px}
+  #detail .dt b{font-size:18px}
+  #detail .dt span{font-size:12px}
+  #detail #starBtn{padding:4px 8px;font-size:13px}
+  #detail #detailClose{position:absolute;top:0;right:0;width:44px;padding:0;font-size:0;color:var(--mute)}
+  #detail #detailClose::before{content:"\00d7";font-size:28px;line-height:1}
   #detail dl{padding:6px 10px 8px;gap:3px 12px}
   #stage:has(#banner:not([hidden])) #detail,#stage:has(#idleBar:not([hidden])) #detail{max-height:calc(100% - 122px)}
   /* The zoom buttons live bottom-right; keep the empty-state card clear of them. */

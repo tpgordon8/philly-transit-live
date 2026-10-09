@@ -282,7 +282,7 @@ def test_failure_is_silent_and_submit_still_geocodes(root):
             wait_hits(s, 1)
             wait_live(s, "No suggestions")
             assert opts(s) == [] and s.page.get_attribute("#addr", "aria-expanded") == "false"
-            assert s.page.is_visible("#note") is True and s.page.inner_text("#note") == ""
+            assert s.page.evaluate("getComputedStyle(document.querySelector('#note')).display") != "none" and s.page.inner_text("#note") == ""  # empty, so it takes no room (is_visible needs a box), but it is not display:none
             s.page.keyboard.press("Enter")  # today's behaviour: the form submits and Nominatim answers
             s.page.wait_for_function("/Showing vehicles near/.test(document.querySelector('#note').textContent)")
             assert len(reqs) == 1 and "q=Origin" in reqs[0], reqs
