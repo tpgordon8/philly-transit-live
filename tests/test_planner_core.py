@@ -12,6 +12,7 @@ from harness import FIX, Session, haversine_m
 
 # Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
 FAST = {
+    "test_s_rank_and_dominance_use_the_exact_sum",
     "test_a_load_network_rejects_malformed_and_indexes_good",
     "test_a_nearby_stops_radius",
     "test_a_route_leg_client",
@@ -203,7 +204,7 @@ def test_a_route_leg_client(root):
         # the reverse direction and other profiles are different keys
         s.page.evaluate("([a, b]) => window.__SEPTA_TEST__.routeLeg('foot', b, a)", [a, b])
         assert len(s.mocks.routing_hits) == 4
-        # at most three requests in flight
+        # at most two requests in flight (and 250 ms between starts: test_w_routing_queue_is_paced)
         s.page.evaluate("""() => { window.__maxIn = 0; window.__in = 0; const f = window.fetch;
             window.fetch = function (u, o) { if (!String(u).includes('routing.openstreetmap.de') && !String(u).includes('/route/')) return f.call(window, u, o);
                 window.__in++; window.__maxIn = Math.max(window.__maxIn, window.__in);
@@ -211,7 +212,7 @@ def test_a_route_leg_client(root):
         n = s.page.evaluate("""async () => { const T = window.__SEPTA_TEST__; const ps = [];
             for (let i = 0; i < 10; i++) ps.push(T.routeLeg('foot', {lat: 39.9 + i * 0.001, lng: -75.1}, {lat: 39.91, lng: -75.12 + i * 0.001}));
             const r = await Promise.all(ps); return r.length; }""")
-        assert n == 10 and s.page.evaluate("window.__maxIn") <= 3 and s.page.evaluate("window.__maxIn") >= 2
+        assert n == 10 and 1 <= s.page.evaluate("window.__maxIn") <= 2
         assert len(s.mocks.routing_hits) == 14
 
 
@@ -543,7 +544,8 @@ def check_options(res):
     per = {}
     for o in opts:
         per[o["structure"]] = per.get(o["structure"], 0) + 1
-        assert o["minutes"] == sum(l["minutes"] for l in o["legs"]), o
+        exact = sum(l["raw"] for l in o["legs"])  # the total is the exact sum rounded up once (WP5), not the sum of rounded legs
+        assert o["minutes"] == math.ceil(exact - 1e-9) and abs(o["raw"] - exact) < 1e-9, o
         for l in o["legs"]:
             assert l["mode"] in ("walk", "bike", "bus", "car")
             assert isinstance(l["minutes"], int) and l["minutes"] >= 0
@@ -767,7 +769,11 @@ def test_j_ordering_and_caps_with_dominated(root):
             res = ok(plan(s, o, d, vs))
             check_options(res)
             assert len(res["options"]) <= 8
-            ref = min(x["minutes"] for x in res["options"] if x["structure"] in ("walk", "walk-bike-walk"))
+            refs = [x["minutes"] for x in res["options"] if x["structure"] in ("walk", "walk-bike-walk")]
+            if not refs:  # five faster options (ranked on exact minutes) pushed the walk and bike baselines out of the list
+                assert len([x for x in res["options"] if not x["dominated"]]) == 5, res["options"]
+                continue
+            ref = min(refs)
             assert all(x["dominated"] == (x["structure"] not in ("walk", "walk-bike-walk", "car") and x["minutes"] >= ref) for x in res["options"])
         # many dominated candidates: only three come back, still two per structure at most
         res = ok(plan(s, O, {"lat": O["lat"] + 0.0012, "lng": O["lng"]}, vs))
@@ -951,3 +957,43 @@ def test_k_no_route_answer_means_no_trip_found(root):
         # an unreachable service is still an error, not "no trip"
         s.page.evaluate("""() => { window.fetch = function () { return Promise.resolve(new Response('{}', {status: 500})); }; window.__SEPTA_TEST__.resetPlannerCaches(); }""")
         assert plan_o(s, O, D, [veh("a", "X47", "S1")], today="20260601") == {"err": "routing_unavailable"}
+
+
+# ---------------------------------------------------------------- (s) WP5: rank and dominance use exact minutes
+RANK_JS = """async ([o, d, v]) => {
+    const T = window.__SEPTA_TEST__, f = window.fetch; let speed = 1.25; T.TP.GAP_MS = 0;
+    const hav = (a, b, c, e) => { const R = 6371008.8, r = x => x * Math.PI / 180, p = Math.sin(r(c - a) / 2) ** 2 + Math.cos(r(a)) * Math.cos(r(c)) * Math.sin(r(e - b) / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(p)); };
+    window.fetch = function (u, opts) {
+        u = String(u);
+        const m = /\\/route\\/(\\w+)\\?from=([\\d.-]+),([\\d.-]+)&to=([\\d.-]+),([\\d.-]+)/.exec(u);
+        if (!m) return f.call(window, u, opts);
+        const [la1, ln1, la2, ln2] = m.slice(2).map(Number), meters = hav(la1, ln1, la2, ln2) * 1.25;
+        const dur = meters / (m[1] === 'foot' ? speed : m[1] === 'car' ? 8 : 4);
+        return Promise.resolve(new Response(JSON.stringify({code: 'Ok', routes: [{distance: meters, duration: dur, geometry: {type: 'LineString', coordinates: [[ln1, la1], [ln2, la2]]}}]}), {status: 200, headers: {'content-type': 'application/json'}}));
+    };
+    const run = async s => { speed = s; T.resetPlannerCaches(); const r = await T.planTrips(o, d, {vehicles: v});
+        return {r, w: r.options.find(x => x.structure === 'walk'), b: r.options.find(x => x.structure === 'walk-bus-walk')}; };
+    // bisect the walking speed where walking the whole way and the walk-bus-walk trip take the same exact time
+    let lo = 0.4, hi = 4;
+    for (let i = 0; i < 14; i++) { const mid = (lo + hi) / 2, {w, b} = await run(mid); if (!b) return {err: 'no bus option at ' + mid}; if (w.raw > b.raw) lo = mid; else hi = mid; }
+    for (const k of [0.0005, 0.001, 0.002, 0.004, 0.008, 0.016, 0.03]) {
+        const {r, w, b} = await run(lo * (1 - k));
+        if (b && w.raw > b.raw && w.minutes === b.minutes) { window.fetch = f; return {found: true, k, w: {minutes: w.minutes, raw: w.raw}, b: {minutes: b.minutes, raw: b.raw, dominated: b.dominated},
+            order: r.options.map(x => [x.structure, x.minutes, x.raw, x.dominated]), best: r.bestMinutes}; }
+    }
+    window.fetch = f; return {found: false, lo};
+}"""
+
+
+def test_s_rank_and_dominance_use_the_exact_sum(root):
+    with Session(root, init_scripts=[HOOK]) as s:
+        open_session(s)
+        no_bikes(s)
+        r = s.page.evaluate(RANK_JS, [O, D, [veh("a", "X47", "S1")]])
+        assert r.get("found"), r
+        # the bus trip and walking show the same rounded total, but the bus is faster by its exact minutes
+        assert r["w"]["minutes"] == r["b"]["minutes"] and r["b"]["raw"] < r["w"]["raw"], r
+        assert r["b"]["dominated"] is False, "not slower than walking: compared on exact minutes, not on the rounded totals"
+        names = [x[0] for x in r["order"]]
+        assert names.index("walk-bus-walk") < names.index("walk"), ("ranked on the exact sum", r["order"])
+        assert r["best"] == r["b"]["minutes"]

@@ -137,6 +137,14 @@ def run(base):
         st, h, _ = get(base, "/Alerts", origin="http://localhost:8765")
         assert st == 200 and h.get("Access-Control-Allow-Origin") == "http://localhost:8765", f"HTTP {st}, ACAO {h.get('Access-Control-Allow-Origin')!r}"
 
+    def no_origin_refused():
+        # /route and /indego spend a third party's capacity: a request without an allowed Origin (curl, a script) is refused
+        for p in ("/route/foot?from=39.9526,-75.1652&to=39.9496,-75.1503", "/indego/status", "/indego/information"):
+            st, _, _ = get(base, p, origin=None)
+            assert st == 403, f"{p} without an Origin gave HTTP {st}, want 403"
+            st, _, _ = get(base, p, origin="https://evil.example")
+            assert st == 403, f"{p} with a foreign Origin gave HTTP {st}, want 403"
+
     def unknown():
         st, _, _ = get(base, "/nope")
         assert st == 404, f"HTTP {st}, want 404"
@@ -153,6 +161,7 @@ def run(base):
     check("/route/<foot|bike|car>: OSRM route with distance, duration, geometry", route)
     check("/route: bad input gets 400, unknown profile 404", route_bad)
     check("/indego/information and /indego/status: GBFS station lists", indego)
+    check("/route and /indego without an allowed Origin get 403", no_origin_refused)
     check("Origin 'null' and empty Origin get 403", null_origin)
     check("localhost origin on any port is allowed", localhost_origin)
     return results

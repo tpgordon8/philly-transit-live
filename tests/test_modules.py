@@ -7,6 +7,7 @@ from harness import Session
 
 # Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
 FAST = {
+    "test_isnum_is_defined_once_and_exported_before_the_leaflet_early_return",
     "test_missing_script_file_shows_error_banner",
     "test_page_adds_only_the_septa_namespace",
 }
@@ -62,3 +63,14 @@ def test_js_files_are_small_and_listed_in_order(root):
     assert html.index("leaflet.min.js") < html.index("js/util.js"), "Leaflet must load before the app"
     inline = sum(m.count("\n") + 1 for m in re.findall(r"<script>\n(.*?)</script>", html, flags=re.S))
     assert inline < 60, inline
+
+
+def test_isnum_is_defined_once_and_exported_before_the_leaflet_early_return(root):
+    root = pathlib.Path(root)
+    src = {n: (root / "js" / f"{n}.js").read_text() for n in FILES}
+    defs = [n for n in FILES if re.search(r"function isNum\(", src[n])]
+    assert defs == ["util"], defs
+    u = src["util"]
+    early = u.index("if(typeof L==='undefined'){")
+    assert u.index("function isNum(") < early and u.index("S.util.isNum=isNum") < early, "isNum must exist even when Leaflet is missing"
+    assert "isNum=S.util.isNum" in src["planner"] and "isNum=S.util.isNum" in src["trip"]

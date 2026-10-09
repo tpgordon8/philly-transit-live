@@ -206,13 +206,15 @@ CANCEL_JS = """async () => {
     await new Promise(r => setTimeout(r, 700));
     const before = started.length;
     T.cancelPlan(A);
+    const tc = performance.now();
     const outcomes = await Promise.all(ps);
+    const settleMs = performance.now() - tc;
     hang = false;
     const t0 = performance.now(), n0 = started.length;
     const B = {};
     const r = await T.routeLeg('foot', pt(9), {lat: 39.96, lng: -75.15}, B);
     window.fetch = f;
-    return {before, outcomes, aborted, startedAfter: started.length - n0, bStartDelay: started[n0] - t0, meters: r.meters, deadFlag: A.dead};
+    return {before, outcomes, settleMs, aborted, startedAfter: started.length - n0, bStartDelay: started[n0] - t0, meters: r.meters, deadFlag: A.dead};
 }"""
 
 
@@ -224,7 +226,7 @@ def test_w_cancel_plan_drops_queue_aborts_inflight_and_frees_slots(root):
         r = s.page.evaluate(CANCEL_JS)
         assert r["before"] == 2, r                              # two slots, both hung
         assert r["outcomes"] == ["routing_unavailable"] * 6, r  # in-flight and queued all ended
-        assert r["aborted"] == 2, r                             # the two in-flight requests were aborted
+        assert r["aborted"] == 2 and r["settleMs"] < 1000, r    # the two in-flight requests were aborted at once, not left to time out (10 s)
         assert r["startedAfter"] == 1, r                        # nothing queued from the dead plan was ever fetched
         assert r["bStartDelay"] < 400 and r["meters"] > 0, r    # the new plan did not wait behind dead items
         assert r["deadFlag"] is True
