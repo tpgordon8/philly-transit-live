@@ -265,6 +265,7 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
 .tp-top{margin:2px 0 0;font-weight:600;overflow-wrap:anywhere}
 .tp-acts{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
 .tp-acts .btn{flex:1 1 auto}
+.tp-warn{margin:6px 0 0;padding:8px 11px;border-radius:7px;background:var(--warn-bg);color:var(--warn);font-weight:600;font-size:12.5px;overflow-wrap:anywhere}
 .tp-msg{margin:6px 0 0;padding:9px 11px;border-radius:7px;background:var(--bad-bg);color:var(--bad);font-weight:600;overflow-wrap:anywhere}
 .tp-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
 .tp-opt{min-width:0}
@@ -317,6 +318,10 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
   #toasts{top:auto;bottom:calc(8px + env(safe-area-inset-bottom,0px));left:8px;right:8px;width:auto}
   #toasts .toast:not(:last-child){display:none}
   .foot{padding-bottom:72px}
+}
+/* Phones: with a trip drawn the map gets half the screen (never under 45%), the options scroll in the panel below. */
+@media (max-width:480px){
+  #app{grid-template-rows:minmax(45vh,50%) minmax(0,1fr)}
 }
 </style>
 
@@ -604,7 +609,7 @@ function evalRule(rule,vehicles,now,src){
    Third parties receive only leg endpoints (routing service) or nothing (Indego, own static file). */
 var TP={WALK_MPS:1.25,BIKE_MPS:3.6,CIRC:1.3,WALK_MAX_M:0.6*1609.344,BIKE_MAX_M:2.0*1609.344,STN_NEAR_M:0.15*1609.344,
   STN_START_M:1200,UNLOCK_S:90,DOCK_S:60,BOARD_S:60,MAX_CALLS:14,MAX_FINALISTS:6,PER_STRUCT_FINAL:3,PER_STRUCT_OUT:2,MAX_OUT:5,MAX_DOMINATED:3,
-  MAX_INFLIGHT:3,TIMEOUT_MS:10000,RETRY_MS:1500,GRID:0.005,STATUS_TTL_MS:60000,ROUTE_BASE:'https://routing.openstreetmap.de/routed-',
+  MAX_INFLIGHT:3,STALE_DAYS:14,today:null,TIMEOUT_MS:10000,RETRY_MS:1500,GRID:0.005,STATUS_TTL_MS:60000,ROUTE_BASE:'https://routing.openstreetmap.de/routed-',
   INDEGO_BASE:'https://gbfs.bcycle.com/bcycle_indego/',NET_URL:'data/bus-network.json'};
 var tpNet=null,tpInfo=null,tpStatus=null,tpRoute={},tpQueue=[],tpInflight=0;
 function tpFail(code,msg){return {code:code,message:msg||code}}
@@ -706,10 +711,11 @@ function routeLeg(profile,a,b,ctx){
   var p=new Promise(function(resolve,reject){
     tpQueue.push({ctx:ctx,resolve:resolve,reject:reject,run:function(){
       return tpGetJson(url).then(function(j){
+        if(j&&j.code==='NoRoute')throw tpFail('no_route','There is no street route between those points.');
         var r=j&&j.code==='Ok'&&j.routes&&j.routes[0];
         if(!r||!isNum(r.distance)||!isNum(r.duration)||!r.geometry||!Array.isArray(r.geometry.coordinates)||r.geometry.coordinates.length<2)throw 0;
         return {meters:r.distance,seconds:r.duration,path:r.geometry.coordinates.map(function(c){return [c[1],c[0]]})};
-      }).catch(function(){throw tpFail('routing_unavailable','Walking, biking or driving directions could not be loaded.')});
+      }).catch(function(e){throw e&&e.code==='no_route'?e:tpFail('routing_unavailable','Walking, biking or driving directions could not be loaded.')});
     }});
     tpPump();
   });
@@ -841,19 +847,21 @@ function candidateSpecs(c,ix,O,D){
   var egr=c.egress.type==='walk'?[{p:'foot',a:ap,b:D}]:bikeSpecs(ap,c.egress.s3,c.egress.s4,D);
   return {acc:acc,egr:egr,bp:bp,ap:ap,all:acc.concat(egr)};
 }
-function bikeNote(s1,s2){
-  return ['Includes '+TP.UNLOCK_S+' s to unlock and '+TP.DOCK_S+' s to dock.',
-    'Indego counts as of '+clockText(Math.min(s1.asOf||Date.now(),s2.asOf||Date.now()))+': '+s1.bikes+' bike'+(s1.bikes===1?'':'s')+' ('+s1.ebikes+' electric) at '+s1.name+', '+s2.docks+' free dock'+(s2.docks===1?'':'s')+' at '+s2.name+'.'];
+function bikeNote(){
+  return ['Includes '+TP.UNLOCK_S+' s to unlock and '+TP.DOCK_S+' s to dock.'];
 }
+/* Structured Indego station of a bike leg: the data the pins and the step text read, never parsed back out of a note. */
+function stationOf(s){return {name:s.name||'',bikes:s.bikes|0,ebikes:s.ebikes|0,docks:s.docks|0,asOf:s.asOf||null}}
 function mkLeg(mode,from,to,r,extraSec,basis,notes){
   var raw=(r.seconds+extraSec)/60;
   return {mode:mode,from:{lat:from.lat,lng:from.lng,name:from.name||''},to:{lat:to.lat,lng:to.lng,name:to.name||''},meters:Math.round(r.meters),
     minutes:ceilMin(raw),raw:raw,basis:basis,path:r.path.slice(),notes:notes||[]};
 }
+function withStations(leg,s1,s2){leg.stations={from:stationOf(s1),to:stationOf(s2)};return leg}
 /* Build the three legs of a bike trip from routed results [foot, bike, foot]. */
 function bikeTripLegs(rs,from,s1,s2,to){
   return [mkLeg('walk',from,stPt(s1),rs[0],0,'routed',[]),
-    mkLeg('bike',stPt(s1),stPt(s2),rs[1],TP.UNLOCK_S+TP.DOCK_S,'routed',bikeNote(s1,s2)),
+    withStations(mkLeg('bike',stPt(s1),stPt(s2),rs[1],TP.UNLOCK_S+TP.DOCK_S,'routed',bikeNote()),s1,s2),
     mkLeg('walk',stPt(s2),to,rs[2],0,'routed',[])];
 }
 function assembleBus(c,rs,spec,ix,veh){
@@ -881,43 +889,84 @@ function optionOf(structure,legs){
   legs.forEach(function(l){t+=l.minutes;m+=l.meters});
   return {structure:structure,minutes:t,meters:m,legs:legs};
 }
+/* 'Today' as a day number. Injectable for tests: opts.today or TP.today, as 'YYYYMMDD' or epoch ms; default is the local date. */
+function ymdIdx(s){var m=/^(\d{4})(\d{2})(\d{2})$/.exec(String(s));return m?Date.UTC(+m[1],+m[2]-1,+m[3])/864e5:null}
+function tpTodayIdx(inj){
+  var v=inj!=null?inj:TP.today;
+  if(typeof v==='string'&&ymdIdx(v)!=null)return ymdIdx(v);
+  var d=isNum(v)?new Date(v):new Date();
+  return Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/864e5;
+}
+/* The bus schedule's validity against today: null when fine, else {state:'expired'|'expiring', end, days}. */
+function scheduleState(feed,today){
+  var e=feed&&ymdIdx(feed.end);
+  if(e==null)return null;
+  var days=e-today;
+  if(days<0)return {state:'expired',end:feed.end,days:days};
+  if(days<=TP.STALE_DAYS)return {state:'expiring',end:feed.end,days:days};
+  return null;
+}
+/* Routes that serve both ends of the trip (a pattern with a stop near the start before a stop near the finish) when none
+   of them has a live vehicle; [] when at least one does, null when no route serves the trip at all. */
+function noLiveRoutes(ix,O,D,veh){
+  var nO={},nD={},serve={},live={};
+  nearbyStops(ix,O,TP.BIKE_MAX_M).forEach(function(s){nO[s.id]=1});
+  nearbyStops(ix,D,TP.BIKE_MAX_M).forEach(function(s){nD[s.id]=1});
+  veh.forEach(function(v){live[String(v.route)]=1});
+  ix.net.patterns.forEach(function(p){
+    var first=-1,last=-1;
+    p.stops.forEach(function(id,i){if(nO[id]&&first<0)first=i;if(nD[id])last=i});
+    if(first>=0&&last>first)serve[p.route]=1;
+  });
+  var rs=Object.keys(serve).sort();
+  if(!rs.length)return null;
+  return rs.some(function(r){return live[r]})?[]:rs.slice(0,4);
+}
 function planTrips(origin,dest,opts){
   opts=opts||{};
   if(!origin||!dest||!isNum(origin.lat)||!isNum(origin.lng)||!isNum(dest.lat)||!isNum(dest.lng))return Promise.reject(tpFail('bad_input','Origin and destination need coordinates.'));
   var O={lat:origin.lat,lng:origin.lng,name:origin.name||'Start'},D={lat:dest.lat,lng:dest.lng,name:dest.name||'Destination'};
   var ctx={calls:0,dead:false},notes=[];
-  function note(t){if(notes.indexOf(t)<0)notes.push(t)}
+  var today=tpTodayIdx(opts.today);
+  /* Planner notes are structured: {code, ...data}. The UI words them. Legacy availability notes carry a ready-made `text`. */
+  function note(code,extra){for(var i=0;i<notes.length;i++)if(notes[i].code===code)return;notes.push(Object.assign({code:code},extra||{}))}
   return Promise.all([loadNetwork().then(function(x){return x},function(){return null}),loadIndego(true).then(function(x){return x},function(){return null})]).then(function(r){
     var nw=r[0],stations=r[1],veh,busUp=true;
-    if(!stations)note('Indego bike data unavailable, bike options hidden.');
+    if(!stations)note('indego_unavailable',{text:'Indego bike data unavailable, bike options hidden.'});
     if(opts.vehicles)veh=opts.vehicles;
     else{
       var src=(typeof state!=='undefined'&&state&&state.src)?state.src.bus:null;
       busUp=!!(src&&src.ok&&Date.now()-src.ok<=DROP_AFTER_MS&&!src.stale&&!skipped.bus);
       veh=busUp?collect():[];
-      if(!busUp)note('Live bus data unavailable, bus options hidden.');
+      if(!busUp)note('bus_feed_unavailable',{text:'Live bus data unavailable, bus options hidden.'});
     }
     veh=veh.filter(isBusKind);
-    if(!nw)note('Bus schedule data unavailable, bus options hidden.');
+    if(!nw)note('network_unavailable',{text:'Bus schedule data unavailable, bus options hidden.'});
+    else{
+      var st=scheduleState(nw.net.feed,today);
+      if(st)note('schedule_stale',st);
+      if(busUp){var nl=noLiveRoutes(nw.index,O,D,veh);if(nl&&nl.length)note('no_live_bus',{routes:nl})}
+    }
     /* Baseline structures: walk, car, walk-bike-walk. */
     var base=[],walkSpec={p:'foot',a:O,b:D},carSpec={p:'car',a:O,b:D},bikePair=null,bikeSpec=null;
     if(stations){
       var bk=nearbyStations(stations,O,TP.STN_START_M,'bike').slice(0,3),dk=nearbyStations(stations,D,TP.STN_START_M,'dock').slice(0,3);
       bikePair=bestBikePair(O,D,bk,dk);
       if(bikePair)bikeSpec=bikeSpecs(O,bikePair.s1,bikePair.s2,D);
-      else note(bk.length?'No free Indego dock near the destination, bike option hidden.':'No Indego bike available near the start, bike option hidden.');
+      else if(bk.length)note('no_indego_dock',{text:'No free Indego dock near the destination, bike option hidden.'});
+      else note('no_indego_bike',{text:'No Indego bike available near the start, bike option hidden.'});
     }
     var keys={};
     function addKeys(specs){specs.forEach(function(s){keys[routeKey(s.p,s.a,s.b)]=1})}
     addKeys([walkSpec,carSpec]);if(bikeSpec)addKeys(bikeSpec);
     /* Finalists: pre-ranked candidates in order, within the routing budget (unique legs) and the per-structure hedge. */
-    var finals=[],perStruct={};
+    var finals=[],perStruct={},skipEst=null;
     if(nw&&veh.length){
       buildBusCandidates(nw.index,O,D,stations,veh).forEach(function(c){
         if(finals.length>=TP.MAX_FINALISTS||(perStruct[c.structure]||0)>=TP.PER_STRUCT_FINAL)return;
         var spec=candidateSpecs(c,nw.index,O,D),add=0,seen={};
         spec.all.forEach(function(s){var k=routeKey(s.p,s.a,s.b);if(!keys[k]&&!seen[k]){seen[k]=1;add++}});
-        if(Object.keys(keys).length+add>TP.MAX_CALLS)return;
+        if(Object.keys(keys).length+add>TP.MAX_CALLS){if(skipEst==null)skipEst=c.est;return}
         addKeys(spec.all);perStruct[c.structure]=(perStruct[c.structure]||0)+1;
         finals.push({c:c,spec:spec});
       });
@@ -925,27 +974,39 @@ function planTrips(origin,dest,opts){
     function go(s){return routeLeg(s.p,s.a,s.b,ctx).then(function(v){return {v:v}},function(e){return {e:e}})}
     var pWalk=go(walkSpec),pCar=go(carSpec),pBike=bikeSpec?Promise.all(bikeSpec.map(go)):null;
     var pFin=finals.map(function(f){return Promise.all(f.spec.all.map(go))});
+    function asOfOf(){return {indego:stations?stations.asOf:null,network:nw?{generated:nw.net.generated||null,feed:nw.net.feed||null}:null}}
     return pWalk.then(function(w){
+      if(w.e&&w.e.code==='no_route'){ /* the routing service answered: there is no street path between the points */
+        ctx.dead=true;
+        return {options:[],notes:notes,bestMinutes:null,hiddenCount:0,asOf:asOfOf(),stats:{routingCalls:ctx.calls,finalists:0}};
+      }
       if(w.e){ctx.dead=true;throw w.e}
       return Promise.all([pCar,pBike||Promise.resolve(null),Promise.all(pFin)]).then(function(rest){
         var options=[],car=rest[0],bk=rest[1];
         options.push(optionOf('walk',[mkLeg('walk',O,D,w.v,0,'routed',[])]));
-        if(car.e)note('Car directions unavailable, car option hidden.');
+        if(car.e)note('car_unavailable',{text:'Car directions unavailable, car option hidden.'});
         else{
           var cl=mkLeg('car',O,D,car.v,0,'routed',['No traffic or parking data: the time is for free-flowing roads and does not include finding parking.']);
           options.push(optionOf('car',[cl]));
         }
         if(bk){
-          if(bk.some(function(x){return x.e}))note('Bike directions unavailable, bike option hidden.');
+          if(bk.some(function(x){return x.e}))note('bike_unavailable',{text:'Bike directions unavailable, bike option hidden.'});
           else options.push(optionOf('walk-bike-walk',bikeTripLegs(bk.map(function(x){return x.v}),O,bikePair.s1,bikePair.s2,D)));
         }
-        var dropped=0;
+        var failed=0,waitless={};
         rest[2].forEach(function(rs,i){
-          if(rs.some(function(x){return x.e})){dropped++;return}
+          if(rs.some(function(x){return x.e})){failed++;return}
           var legs=assembleBus(finals[i].c,rs.map(function(x){return x.v}),finals[i].spec,nw.index,veh);
-          if(legs)options.push(optionOf(finals[i].c.structure,legs));else dropped++;
+          if(legs)options.push(optionOf(finals[i].c.structure,legs));else waitless[finals[i].c.pattern.route]=1;
         });
-        if(dropped)note('Some bus options could not be completed and were left out.');
+        /* Only when the call budget kept out a candidate that ranked ahead of one that was routed (or ahead of every one). */
+        if(skipEst!=null&&(!finals.length||finals.some(function(f){return f.c.est>skipEst})))note('routing_limit');
+        if(failed)note('routing_failed',{count:failed});
+        if(Object.keys(waitless).length){
+          var nl0=null;notes.forEach(function(n){if(n.code==='no_live_bus')nl0=n});
+          var rl=Object.keys(waitless).sort();
+          if(nl0)nl0.routes=nl0.routes.concat(rl.filter(function(x){return nl0.routes.indexOf(x)<0}));else note('no_live_bus',{routes:rl});
+        }
         options.sort(function(a,b){return a.minutes-b.minutes});
         /* An option that is not a single-mode baseline and takes at least as long as the best walk-only or bike-only
            trip is "dominated": shown after the main list, never hidden silently. Car is never a reference. */
@@ -970,8 +1031,10 @@ function planTrips(origin,dest,opts){
           if(!o.dominated||hid>=TP.MAX_DOMINATED||(per[o.structure]||0)>=TP.PER_STRUCT_OUT)return;
           per[o.structure]=(per[o.structure]||0)+1;hid++;res.push(o);
         });
+        if(options.some(function(o){return o.structure.indexOf('bus')>=0})&&!res.some(function(o){return o.structure.indexOf('bus')>=0&&!o.dominated}))
+          note('no_bus_beats_baseline',{baseline:refKind});
         return {options:res,notes:notes,bestMinutes:best,hiddenCount:hid,
-          asOf:{indego:stations?stations.asOf:null,network:nw?{generated:nw.net.generated||null,feed:nw.net.feed||null}:null},
+          asOf:asOfOf(),
           stats:{routingCalls:ctx.calls,finalists:finals.length}};
       });
     });
@@ -2088,7 +2151,9 @@ function renderNotify(){
    Everything lives in memory: no localStorage key, nothing is written to prefs, and nothing here touches the Worker, the 15 s
    refresh or the vehicle markers. The map drawing is one Leaflet layer group, separate from `markers`. */
 var tripLayer=L.layerGroup().addTo(map);
-var trip={seq:0,busy:false,res:null,sel:0,last:null,autoShown:false};
+if(window.__SEPTA_TEST__&&typeof window.__SEPTA_TEST__==='object')window.__SEPTA_TEST__.tripMap=map; /* test hook: read centre and zoom */
+var trip={seq:0,busy:false,res:null,sel:0,last:null,autoShown:false,view:null};
+var PHONE=window.matchMedia('(max-width:480px)');
 var fieldPt={from:null,to:null};            /* {kind:'center'} | {pt:{lat,lng,name}}; cleared when the user edits the text */
 var TRIP_REDUCED=function(){return window.matchMedia('(prefers-reduced-motion: reduce)').matches};
 function tripFieldEl(w){return $(w==='from'?'#tripFrom':'#tripTo')}
@@ -2157,7 +2222,7 @@ $('#tripForm').addEventListener('submit',function(e){
 function startTrip(fixed){
   var seq=++trip.seq,box=$('#tripResults');
   tripErr('from','');tripErr('to','');
-  trip.res=null;tripLayer.clearLayers();
+  trip.res=null;trip.fit=null;tripLayer.clearLayers();
   tripBusy(true);
   box.hidden=false;box.replaceChildren(el('p','tp-mute','Planning...'));
   /* Clearing while a plan is in flight cancels it: the sequence number moves on and the late answer is ignored. */
@@ -2179,7 +2244,7 @@ function startTrip(fixed){
     return planTrips(p.o,p.d).then(function(res){
       if(seq!==trip.seq)return;
       tripBusy(false);
-      if(!res.options.length){tripFail('No trip found. Try different points.',false);return}
+      if(!res.options.length){tripFail('No trip found. Try different points.',false,'tripNone');return}
       trip.res=res;
       var first=0;
       for(var i=0;i<res.options.length;i++)if(res.options[i].structure!=='car'){first=i;break}
@@ -2193,11 +2258,16 @@ function startTrip(fixed){
     });
   });
 }
-function tripFail(msg,retry){
+/* The map centre and zoom from before the plan was drawn; Clear trip and the failure states put the map back there. */
+function tripRestoreView(){
+  var v=trip.view;trip.view=null;trip.fit=null;
+  if(v)map.setView(v.center,v.zoom,{animate:!TRIP_REDUCED()});
+}
+function tripFail(msg,retry,id){
   var box=$('#tripResults');
   box.hidden=false;box.setAttribute('aria-busy','false');box.replaceChildren();
-  trip.res=null;tripLayer.clearLayers();
-  var m=el('p','tp-msg',msg);m.setAttribute('role','alert');box.appendChild(m);
+  trip.res=null;tripLayer.clearLayers();tripRestoreView();
+  var m=el('p','tp-msg',msg);m.setAttribute('role','alert');if(id)m.id=id;box.appendChild(m);
   if(retry){
     var b=el('button','btn','Retry');b.type='button';b.id='tripRetry';b.style.marginTop='8px';
     b.addEventListener('click',function(){if(!trip.busy&&trip.last)startTrip(trip.last)});
@@ -2207,7 +2277,7 @@ function tripFail(msg,retry){
 function tripClear(){
   trip.seq++;trip.res=null;trip.last=null;
   tripBusy(false);
-  tripLayer.clearLayers();
+  tripLayer.clearLayers();tripRestoreView();
   var box=$('#tripResults');box.replaceChildren();box.hidden=true;box.setAttribute('aria-busy','false');
   $('#tripLive').textContent='';
   $('#tripGo').focus();
@@ -2231,6 +2301,22 @@ function tripAgo(ms){
   var n=Math.max(0,Math.round((Date.now()-ms)/60000));
   return n>=120?Math.round(n/60)+' h ago':(n<1?'under 1 min ago':n+' min ago');
 }
+var MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function tripDateText(ymd){var m=/^(\d{4})(\d{2})(\d{2})$/.exec(String(ymd));return m?MONTHS[+m[2]-1]+' '+(+m[3])+', '+m[1]:String(ymd||'')}
+/* One plain sentence per note code; availability notes (indego, car, bike, feeds) arrive with their own text. */
+function tripNoteText(n){
+  var rs=(n.routes||[]).join(', ');
+  switch(n.code){
+  case 'routing_limit':return 'To stay within the free routing service\'s limits, the planner checked only the most promising bus options, so a slower-looking bus trip may be missing.';
+  case 'routing_failed':return (n.count===1?'Directions for one bus option':'Directions for '+n.count+' bus options')+' could not be loaded, so '+(n.count===1?'it was':'they were')+' left out. Re-plan to try again.';
+  case 'no_live_bus':return 'No bus is being tracked right now on '+(rs?'route'+(n.routes.length===1?' ':'s ')+rs:'the routes that serve this trip')+', so there is no live wait to show for them.';
+  case 'no_bus_beats_baseline':return 'Buses run between these points, but none is faster than '+(n.baseline||'walking')+' the whole way.';
+  case 'schedule_stale':return n.state==='expired'
+    ?'The bus schedule data ended on '+tripDateText(n.end)+', so bus ride times may be out of date.'
+    :'The bus schedule data ends on '+tripDateText(n.end)+' ('+(n.days===0?'today':n.days===1?'tomorrow':'in '+n.days+' days')+'); bus ride times may soon be out of date.';
+  default:return n.text||'';
+  }
+}
 function tripStep(l,asOf){
   var li=el('li'),mi=fmtMi(l.meters/1609.344),a=l.from.name||'start',b=l.to.name||'end';
   function sub(t){li.appendChild(el('span','tp-sub',t))}
@@ -2242,10 +2328,12 @@ function tripStep(l,asOf){
     return li;
   }
   li.appendChild(document.createTextNode((l.mode==='car'?'Drive':l.mode==='bike'?'Bike':'Walk')+' '+l.minutes+' min, '+mi+' from '+a+' to '+b));
-  (l.notes||[]).forEach(function(n){
-    if(l.mode==='bike'&&asOf)n=n.replace(/(counts as of )\d{1,2}:\d{2}\s?[AP]M/i,'$1'+tripAgo(asOf));
-    sub(n);
-  });
+  (l.notes||[]).forEach(sub);
+  var st=l.mode==='bike'&&l.stations;
+  if(st){
+    var ts=[st.from.asOf,st.to.asOf].filter(Boolean),at=ts.length?Math.min.apply(null,ts):asOf,pl=function(n,w){return n+' '+w+(n===1?'':'s')};
+    sub('Indego counts as of '+(at?tripAgo(at):'an unknown time')+': '+pl(st.from.bikes,'bike')+' ('+st.from.ebikes+' electric) at '+st.from.name+', '+pl(st.to.docks,'free dock')+' at '+st.to.name+'.');
+  }
   return li;
 }
 function tripRender(){
@@ -2256,7 +2344,7 @@ function tripRender(){
     var fo=res.options[fast];
     box.appendChild(el('p','tp-top','Fastest without a car: '+tripModeWord(fo)+', '+fo.minutes+' min'));
   }
-  res.notes.forEach(function(n){box.appendChild(el('p','tp-mute',n))});
+  res.notes.forEach(function(n){box.appendChild(el('p',n.code==='schedule_stale'?'tp-warn':'tp-mute',tripNoteText(n))).dataset.code=n.code});
   var acts=el('div','tp-acts'),rp=el('button','btn','Re-plan');rp.type='button';rp.id='replan';
   rp.addEventListener('click',function(){if(!trip.busy&&trip.last)startTrip(trip.last)});
   var sm=el('button','btn','Show on map');sm.type='button';sm.id='showMap';sm.addEventListener('click',tripShowMap);
@@ -2290,6 +2378,8 @@ function tripRender(){
     mb.addEventListener('click',function(){var open=mb.getAttribute('aria-expanded')!=='true';mb.setAttribute('aria-expanded',open?'true':'false');more.hidden=!open});
     box.appendChild(mb);box.appendChild(more);
   }
+  var feed=res.asOf&&res.asOf.network&&res.asOf.network.feed;
+  if(feed&&feed.start)box.appendChild(el('p','tp-mute','Bus schedule data as of '+tripDateText(feed.start))).id='tripSched';
   h.focus();
   var n=res.options.length;
   $('#tripLive').textContent=n+' trip option'+(n===1?'':'s')+(res.bestMinutes!=null?', fastest '+res.bestMinutes+' minutes':'');
@@ -2305,8 +2395,11 @@ function tripSelect(i){
   });
   tripDraw();
 }
+/* Brings the plan back into view: on a phone the map is scrolled to the top of the screen, and the map returns to the
+   selected option however far it was panned. */
 function tripShowMap(){
-  try{mapEl.scrollIntoView({block:'nearest',behavior:TRIP_REDUCED()?'auto':'smooth'})}catch(e){}
+  try{mapEl.scrollIntoView({block:PHONE.matches?'start':'nearest',behavior:TRIP_REDUCED()?'auto':'smooth'})}catch(e){}
+  tripFit();
 }
 /* ----- Map drawing ----- */
 function tripMarker(ll,cls,title,sub){
@@ -2332,16 +2425,21 @@ function tripDraw(){
   tripMarker([last.to.lat,last.to.lng],'tp-end tp-below','End');
   o.legs.forEach(function(l){
     if(l.mode==='bike'){
-      var note=(l.notes||[]).join(' '),bk=/(\d+) bikes? \(/.exec(note),dk=/(\d+) free docks? at /.exec(note);
-      tripMarker([l.from.lat,l.from.lng],'tp-stn',l.from.name||'Indego',bk?bk[1]+' bike'+(bk[1]==='1'?'':'s'):'');
-      tripMarker([l.to.lat,l.to.lng],'tp-stn',l.to.name||'Indego',dk?dk[1]+' dock'+(dk[1]==='1'?'':'s'):'');
+      var st=l.stations;
+      tripMarker([l.from.lat,l.from.lng],'tp-stn',l.from.name||'Indego',st?st.from.bikes+' bike'+(st.from.bikes===1?'':'s'):'');
+      tripMarker([l.to.lat,l.to.lng],'tp-stn',l.to.name||'Indego',st?st.to.docks+' dock'+(st.to.docks===1?'':'s'):'');
     }else if(l.mode==='bus'){
       tripMarker([l.from.lat,l.from.lng],'tp-stop','Board '+l.route,'');
       tripMarker([l.to.lat,l.to.lng],'tp-stop','Exit '+l.route,'');
     }
   });
-  if(all.length)map.fitBounds(L.latLngBounds(all),{paddingTopLeft:[34,58],paddingBottomRight:[34,44],animate:!TRIP_REDUCED()});
+  trip.fit=all.length?L.latLngBounds(all):null;
+  if(trip.fit){
+    if(!trip.view)trip.view={center:map.getCenter(),zoom:map.getZoom()};
+    tripFit();
+  }
 }
+function tripFit(){if(trip.fit)map.fitBounds(trip.fit,{paddingTopLeft:[34,58],paddingBottomRight:[34,44],animate:!TRIP_REDUCED()})}
 
 /* ----- Boot ----- */
 $('#radius').value=state.radius;$('#radiusOut').textContent=state.radius+' mi';

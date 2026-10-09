@@ -255,7 +255,14 @@ def test_b_bike_only_picks_nearest_with_bike_and_dock_with_overheads(root):
         assert legs[0]["minutes"] == math.ceil(walk_min(o, sll(s1)) - 1e-9)
         assert legs[2]["minutes"] == math.ceil(walk_min(sll(s2), d) - 1e-9)
         assert any("unlock" in n and "dock" in n for n in legs[1]["notes"]), legs[1]["notes"]
-        assert any("Indego counts as of" in n for n in legs[1]["notes"])
+        assert not any("Indego counts" in n for n in legs[1]["notes"]), "counts are data on the leg, not note text"
+        for side, st_ in (("from", s1), ("to", s2)):
+            got = legs[1]["stations"][side]
+            sid = next(x for x in s.mocks.indego_status["data"]["stations"] if x["station_id"] == st_["station_id"])
+            assert got == {"name": st_["name"], "bikes": sid["num_bikes_available"], "ebikes": sid["num_bikes_available_types"]["electric"],
+                           "docks": sid["num_docks_available"], "asOf": got["asOf"]} and got["asOf"] > 0, (side, got)
+        assert legs[1]["stations"]["from"]["bikes"] == 5 and legs[1]["stations"]["to"]["docks"] == 6
+        assert "stations" not in legs[0] and "stations" not in legs[2]
         assert all(l["basis"] == "routed" for l in legs)
         hits = [(h["profile"], h["from"], h["to"]) for h in s.mocks.routing_hits]
         assert ("foot", o, sll(s1)) in hits and ("bike", sll(s1), sll(s2)) in hits and ("foot", sll(s2), d) in hits
@@ -291,13 +298,13 @@ def test_b_bike_dropped_without_bikes_or_docks(root):
         s.mocks.set_all(bikes=0, docks=5)
         res = ok(plan(s, {"lat": o[0], "lng": o[1]}, {"lat": d[0], "lng": d[1]}, []))
         assert not by_structure(res, "walk-bike-walk")
-        assert any("No Indego bike available near the start" in n for n in res["notes"]), res["notes"]
+        assert any(n["code"] == "no_indego_bike" and "No Indego bike available near the start" in n["text"] for n in res["notes"]), res["notes"]
         assert by_structure(res, "walk") and by_structure(res, "car")
         # bikes everywhere, no dock anywhere
         s.mocks.set_all(bikes=5, docks=0)
         res = ok(plan(s, {"lat": o[0], "lng": o[1]}, {"lat": d[0], "lng": d[1]}, []))
         assert not by_structure(res, "walk-bike-walk")
-        assert any("No free Indego dock near the destination" in n for n in res["notes"]), res["notes"]
+        assert any(n["code"] == "no_indego_dock" and "No free Indego dock near the destination" in n["text"] for n in res["notes"]), res["notes"]
         # a station that has bikes but whose renting flag is off does not count
         s.mocks.set_all(bikes=0, docks=5)
         for x in near_o[:6]:
@@ -314,7 +321,7 @@ def test_b_indego_unavailable_keeps_walk_car_and_bus(root):
         structs = {o["structure"] for o in res["options"]}
         assert {"walk", "car", "walk-bus-walk"} <= structs, structs
         assert not any("bike" in x for x in structs)
-        assert any("Indego bike data unavailable" in n for n in res["notes"]), res["notes"]
+        assert any(n["code"] == "indego_unavailable" and "Indego bike data unavailable" in n["text"] for n in res["notes"]), res["notes"]
         assert res["asOf"]["indego"] is None
 
 
@@ -636,7 +643,7 @@ def test_h_stale_or_dropped_bus_data_hides_bus_options(root):
         res = ok(plan(s, O, D, None))
         opts = [o for o in by_structure(res, "walk-bus-walk") if bus_leg(o)["route"] == "X47"]
         assert opts and bus_leg(opts[0])["basis"] == "live" and bus_leg(opts[0])["vehicleKey"] == "b9001", res["options"]
-        assert not any("Live bus data unavailable" in n for n in res["notes"])
+        assert not any(n["code"] == "bus_feed_unavailable" for n in res["notes"])
         # the feed fails: stale after 22 s, dropped after 120 s. Both hide every bus option and say so.
         s.worker.mode = "http502"
         s.tick(40000)
@@ -644,7 +651,7 @@ def test_h_stale_or_dropped_bus_data_hides_bus_options(root):
         for label in ("stale", "dropped"):
             res = ok(plan(s, O, D, None))
             assert not [o for o in res["options"] if "bus" in o["structure"]], (label, res["options"])
-            assert "Live bus data unavailable, bus options hidden." in res["notes"], (label, res["notes"])
+            assert any(n["code"] == "bus_feed_unavailable" and n["text"] == "Live bus data unavailable, bus options hidden." for n in res["notes"]), (label, res["notes"])
             assert by_structure(res, "walk") and by_structure(res, "car")
             s.tick(130000)
 
@@ -756,3 +763,181 @@ def test_j_ordering_and_caps_with_dominated(root):
         res = ok(plan(s, O, {"lat": O["lat"] + 0.0012, "lng": O["lng"]}, vs))
         check_options(res)
         assert res["hiddenCount"] <= 3
+
+
+# ---------------------------------------------------------------- (k) WP2: structured notes, stations, schedule validity
+def plan_o(s, o, d, vehicles, **opts):
+    """plan() with extra planner options (today, ...)."""
+    return s.page.evaluate("""async ([o, d, v, extra]) => {
+        const T = window.__SEPTA_TEST__;
+        try { return {ok: await T.planTrips(o, d, Object.assign({vehicles: v}, extra))}; }
+        catch (e) { return {err: e && e.code ? e.code : String(e)}; }
+    }""", [o, d, vehicles, opts])
+
+
+def codes(res):
+    return [n["code"] for n in res["notes"]]
+
+
+def note_of(res, code):
+    return next(n for n in res["notes"] if n["code"] == code)
+
+
+def test_k_every_note_is_structured_with_a_code(root):
+    with Session(root, init_scripts=[HOOK]) as s:
+        open_session(s)
+        s.mocks.set_all(bikes=0, docks=5)
+        s.mocks.indego_mode = "http500"
+        res = ok(plan_o(s, O, D, [veh("a", "X47", "S1")], today="20260601"))
+        assert res["notes"] and all(isinstance(n, dict) and isinstance(n["code"], str) for n in res["notes"]), res["notes"]
+        assert "indego_unavailable" in codes(res)
+        assert not any("could not be completed" in json.dumps(n) for n in res["notes"])
+
+
+def test_k_schedule_stale_boundaries_and_injectable_today(root):
+    with Session(root, init_scripts=[HOOK]) as s:
+        open_session(s)
+        no_bikes(s)
+        vs = [veh("a", "X47", "S1")]
+        assert NET["feed"]["end"] == "20261231"
+        # more than 14 days left: no note
+        for today in ("20260101", "20261201", "20261216"):
+            res = ok(plan_o(s, O, D, vs, today=today))
+            assert "schedule_stale" not in codes(res), today
+        # the last 15 days up to and including the end date: expiring, with the days left
+        for today, days in (("20261217", 14), ("20261224", 7), ("20261231", 0)):
+            n = note_of(ok(plan_o(s, O, D, vs, today=today)), "schedule_stale")
+            assert (n["state"], n["days"], n["end"]) == ("expiring", days, "20261231"), (today, n)
+        # past the end: expired
+        for today, days in (("20270101", -1), ("20280101", -366)):
+            n = note_of(ok(plan_o(s, O, D, vs, today=today)), "schedule_stale")
+            assert (n["state"], n["days"]) == ("expired", days), (today, n)
+        # today can also be set once for the page (TP.today) and as epoch milliseconds
+        s.page.evaluate("window.__SEPTA_TEST__.TP.today = '20270301'")
+        assert note_of(ok(plan(s, O, D, vs)), "schedule_stale")["state"] == "expired"
+        s.page.evaluate("window.__SEPTA_TEST__.TP.today = null")
+        ms = s.page.evaluate("new Date(2026, 11, 20, 12, 0).getTime()")
+        assert note_of(ok(plan_o(s, O, D, vs, today=ms)), "schedule_stale")["days"] == 11
+        # the feed object is always reported for the UI line
+        assert ok(plan_o(s, O, D, vs, today="20260601"))["asOf"]["network"]["feed"] == NET["feed"]
+        # a network file without feed dates produces no stale note
+        n2 = copy.deepcopy(NET); del n2["feed"]
+        s.mocks.network = n2
+        s.page.evaluate("window.__SEPTA_TEST__.resetPlannerCaches()")
+        assert "schedule_stale" not in codes(ok(plan_o(s, O, D, vs, today="20990101")))
+
+
+def test_k_routing_limit_when_the_call_budget_skips_candidates(root):
+    with Session(root, init_scripts=[HOOK]) as s:
+        open_session(s)
+        no_bikes(s)
+        vs = [veh("a", "X47", "S1")]
+        res = ok(plan_o(s, O, D, vs, today="20260601"))
+        assert "routing_limit" not in codes(res) and by_structure(res, "walk-bus-walk")
+        s.page.evaluate("window.__SEPTA_TEST__.resetPlannerCaches(); window.__SEPTA_TEST__.TP.MAX_CALLS = 3")
+        res = ok(plan_o(s, O, D, vs, today="20260601"))
+        assert codes(res).count("routing_limit") == 1, res["notes"]
+        assert by_structure(res, "walk") and by_structure(res, "car"), "the baselines are still returned"
+        assert res["stats"]["routingCalls"] <= 3
+
+
+def test_k_routing_failed_when_bus_legs_cannot_be_routed(root):
+    with Session(root, init_scripts=[HOOK]) as s:
+        open_session(s)
+        no_bikes(s)
+        vs = [veh("a", "X47", "S1")]
+        res = ok(plan_o(s, O, D, vs, today="20260601"))
+        assert "routing_failed" not in codes(res)
+        # the routing service refuses every leg that starts at stop S12 (a bus exit), answers everything else
+        s.page.evaluate("""() => { const f = window.fetch; window.fetch = function (u, o) {
+            if (String(u).includes('route/v1/driving/-75.15800,39.95750;')) return Promise.resolve(new Response('{}', {status: 500}));
+            return f.call(window, u, o); }; }""")
+        s.page.evaluate("window.__SEPTA_TEST__.resetPlannerCaches()")
+        res = ok(plan_o(s, O, D, vs, today="20260601"))
+        n = note_of(res, "routing_failed")
+        assert n["count"] >= 1 and "routing_limit" not in codes(res), res["notes"]
+        assert by_structure(res, "walk") and by_structure(res, "car")
+        assert not any(l.get("toIdx") == 11 for o in res["options"] for l in o["legs"] if l["mode"] == "bus"), "options using S12 were left out"
+
+
+def test_k_no_live_bus_names_routes_that_serve_the_trip(root):
+    with Session(root, init_scripts=[HOOK]) as s:
+        open_session(s)
+        no_bikes(s)
+        # nothing tracked: the routes that serve both ends are named
+        res = ok(plan_o(s, O, D, [], today="20260601"))
+        n = note_of(res, "no_live_bus")
+        assert "X47" in n["routes"] and set(n["routes"]) <= {"X47", "X45", "X99"}, n
+        assert not [o for o in res["options"] if "bus" in o["structure"]]
+        # only a bus on a route outside the network is tracked: still no live bus for the trip
+        assert "no_live_bus" in codes(ok(plan_o(s, O, D, [veh("z", "ZZ9", "Z1")], today="20260601")))
+        # a live bus on a serving route: no note
+        assert "no_live_bus" not in codes(ok(plan_o(s, O, D, [veh("a", "X47", "S1")], today="20260601")))
+        # a trip no route serves at all is not a "no live bus" case
+        far_o, far_d = {"lat": 39.99, "lng": -75.05}, {"lat": 39.995, "lng": -75.04}
+        assert "no_live_bus" not in codes(ok(plan_o(s, far_o, far_d, [], today="20260601")))
+        # a tracked bus is past the stop and the schedule has no headway: no wait can be shown, so the route counts as not live
+        n2 = copy.deepcopy(NET)
+        for p in n2["patterns"]:
+            p["hw"] = None
+        s.mocks.network = n2
+        s.page.evaluate("window.__SEPTA_TEST__.resetPlannerCaches()")
+        res = ok(plan_o(s, O, D, [veh("p", "X47", "S7")], today="20260601"))
+        assert "X47" in note_of(res, "no_live_bus")["routes"]
+        assert not [o for o in res["options"] if "bus" in o["structure"]]
+
+
+def test_k_no_bus_beats_baseline(root):
+    with Session(root, init_scripts=[HOOK]) as s:
+        open_session(s)
+        no_bikes(s)
+        short = {"lat": O["lat"] + 0.0012, "lng": O["lng"]}
+        res = ok(plan_o(s, O, short, [veh("a", "X47", "S1")], today="20260601"))
+        assert any("bus" in o["structure"] for o in res["options"]), "dominated buses are still listed"
+        assert note_of(res, "no_bus_beats_baseline")["baseline"] == "walking"
+        # a bus that does beat walking: no note
+        res = ok(plan_o(s, O, D, [veh("a", "X47", "S2")], today="20260601"))
+        assert "no_bus_beats_baseline" not in codes(res)
+        # no bus option at all is a different situation
+        assert "no_bus_beats_baseline" not in codes(ok(plan_o(s, O, D, [], today="20260601")))
+        # with bikes, the reference can be biking
+        s.mocks.set_all(bikes=5, docks=5)
+        res = ok(plan_o(s, O, D, [veh("a", "X47", "S1")], today="20260601"))
+        if all(o["dominated"] for o in res["options"] if "bus" in o["structure"]):
+            assert note_of(res, "no_bus_beats_baseline")["baseline"] in ("walking", "biking")
+
+
+def test_k_station_objects_on_every_bike_leg(root):
+    with Session(root, init_scripts=[HOOK]) as s:
+        open_session(s)
+        s.mocks.set_all(bikes=4, docks=3)
+        res = ok(plan_o(s, O, D, [veh("a", "X47", "S2")], today="20260601"))
+        seen = 0
+        for o in res["options"]:
+            for l in o["legs"]:
+                if l["mode"] == "bike":
+                    seen += 1
+                    st = l["stations"]
+                    assert st["from"]["name"] == l["from"]["name"] and st["to"]["name"] == l["to"]["name"], (st, l["from"], l["to"])
+                    assert (st["from"]["bikes"], st["from"]["ebikes"]) == (4, 2) and st["to"]["docks"] == 3, st
+                    assert st["from"]["asOf"] > 0 and st["to"]["asOf"] > 0
+                    assert set(st["from"]) == {"name", "bikes", "ebikes", "docks", "asOf"}
+                    assert not any("Indego counts" in n for n in l["notes"])
+                else:
+                    assert "stations" not in l
+        assert seen >= 2, "a bike-only trip and bike legs inside bus trips"
+        assert any(o["structure"] != "walk-bike-walk" and any(l["mode"] == "bike" for l in o["legs"]) for o in res["options"])
+
+
+def test_k_no_route_answer_means_no_trip_found(root):
+    with Session(root, init_scripts=[HOOK]) as s:
+        open_session(s)
+        no_bikes(s)
+        s.page.evaluate("""() => { const f = window.fetch; window.fetch = function (u, o) {
+            if (String(u).includes('routed-foot')) return Promise.resolve(new Response('{"code":"NoRoute","routes":[]}', {status: 200, headers: {'content-type': 'application/json'}}));
+            return f.call(window, u, o); }; }""")
+        res = ok(plan_o(s, O, D, [veh("a", "X47", "S1")], today="20260601"))
+        assert res["options"] == [] and res["bestMinutes"] is None, res
+        # an unreachable service is still an error, not "no trip"
+        s.page.evaluate("""() => { window.fetch = function () { return Promise.resolve(new Response('{}', {status: 500})); }; window.__SEPTA_TEST__.resetPlannerCaches(); }""")
+        assert plan_o(s, O, D, [veh("a", "X47", "S1")], today="20260601") == {"err": "routing_unavailable"}

@@ -28,7 +28,8 @@ def geo(lat, lng, name="X"):
 def nominatim():
     return {"q=Origin": geo(O["lat"], O["lng"], "Origin St"), "q=Dest": geo(D["lat"], D["lng"], "Dest Ave"),
             "q=Other": geo(D2["lat"], D2["lng"], "Other Ave"), "q=10th": geo(39.9553, -75.1560, "10th and Race"),
-            "q=Nowhere": (200, "application/json", "[]")}
+            "q=Nowhere": (200, "application/json", "[]"),
+            "q=Near": geo(O["lat"] + 0.0012, O["lng"], "Near St")}
 
 
 def session(**kw):
@@ -37,7 +38,7 @@ def session(**kw):
     return Session(**kw)
 
 
-def boot(s, bikes=5, net=NET):
+def boot(s, bikes=5, net=NET, bus_route="X47"):
     """Open the page with the synthetic network, one live X47 bus and (by default) 5 bikes / 5 docks everywhere."""
     s.mocks.network = copy.deepcopy(net)
     if bikes is not None:
@@ -45,7 +46,7 @@ def boot(s, bikes=5, net=NET):
     tv = s.worker.data["TransitView"]["bus"]
     newest = max(int(b["timestamp"]) for b in tv)
     bus = dict(tv[0])
-    bus.update(route_id="X47", next_stop_id="S1", VehicleID="99001", label="99001", timestamp=newest, late=0, lat="39.9300", lng="-75.1580")
+    bus.update(route_id=bus_route, next_stop_id="S1", VehicleID="99001", label="99001", timestamp=newest, late=0, lat="39.9300", lng="-75.1580")
     tv.append(bus)
     s.open()
     s.wait_live()
@@ -183,6 +184,9 @@ def test_a_step_wording_for_walk_bike_and_bus(root):
         assert steps[1].startswith(f"Bike {b['minutes']} min, ") and " bikes (" in steps[1] and " free docks at " in steps[1]
         assert "min ago" in steps[1] or "under 1 min ago" in steps[1] or " h ago" in steps[1], steps[1]
         assert "mi from" in steps[0]
+        st = b["stations"]
+        assert re.search(r"Indego counts as of [^:]+: %d bikes \(%d electric\) at %s, %d free docks at %s\." % (
+            st["from"]["bikes"], st["from"]["ebikes"], re.escape(st["from"]["name"]), st["to"]["docks"], re.escape(st["to"]["name"])), steps[1]), (steps[1], st)
     # bus legs: live wait wording, then typical wording when no bus is upstream
     with session() as s:
         boot(s, bikes=0)
@@ -648,3 +652,197 @@ def test_l_real_network_smoke_center_city(root):
         assert s.mocks.network_hits == 1
         assert lines(s) and "Start" in pins(s)
         no_errors(s)
+
+
+# ------------------------------------------------------------------ (k) WP2: planner notes, schedule line, view restore, phone
+FAIL_S12 = """() => { const f = window.fetch; window.fetch = function (u, o) {
+    if (String(u).includes('route/v1/driving/-75.15800,39.95750;')) return Promise.resolve(new Response('{}', {status: 500}));
+    return f.call(window, u, o); }; }"""
+NO_ROUTE_FOOT = """() => { const f = window.fetch; window.fetch = function (u, o) {
+    if (String(u).includes('routed-foot')) return Promise.resolve(new Response('{"code":"NoRoute","routes":[]}', {status: 200, headers: {'content-type': 'application/json'}}));
+    return f.call(window, u, o); }; }"""
+
+
+def set_today(s, ymd):
+    s.page.evaluate("(d) => { window.__SEPTA_TEST__.TP.today = d; }", ymd)
+
+
+def note_texts(s):
+    return s.page.evaluate("Object.fromEntries([...document.querySelectorAll('#tripResults [data-code]')].map(p => [p.dataset.code, p.textContent]))")
+
+
+def test_k_each_planner_note_has_its_own_sentence(root):
+    got = {}
+    with session() as s:                                        # routing_limit
+        boot(s, bikes=0)
+        set_today(s, "20260601")
+        s.page.evaluate("window.__SEPTA_TEST__.TP.MAX_CALLS = 3")
+        plan_ui(s)
+        got["routing_limit"] = note_texts(s)
+        no_errors(s)
+    with session() as s:                                        # routing_failed
+        boot(s, bikes=0)
+        set_today(s, "20260601")
+        s.page.evaluate(FAIL_S12)
+        plan_ui(s)
+        got["routing_failed"] = note_texts(s)
+        no_errors(s)
+    with session() as s:                                        # no_live_bus
+        boot(s, bikes=0, bus_route="ZZ9")
+        set_today(s, "20260601")
+        plan_ui(s)
+        got["no_live_bus"] = note_texts(s)
+        assert s.page.locator("#tripResults .tp-card").count() >= 2
+        no_errors(s)
+    with session() as s:                                        # no_bus_beats_baseline
+        boot(s, bikes=0)
+        set_today(s, "20260601")
+        plan_ui(s, "Origin St", "Near St")
+        got["no_bus_beats_baseline"] = note_texts(s)
+        no_errors(s)
+    with session() as s:                                        # schedule_stale (expired)
+        boot(s, bikes=0)
+        set_today(s, "20270301")
+        plan_ui(s)
+        got["schedule_stale"] = note_texts(s)
+        no_errors(s)
+    want = {
+        "routing_limit": "To stay within the free routing service's limits, the planner checked only the most promising bus options, so a slower-looking bus trip may be missing.",
+        "routing_failed": "Directions for one bus option could not be loaded, so it was left out. Re-plan to try again.",
+        "no_live_bus": "No bus is being tracked right now on route",
+        "no_bus_beats_baseline": "Buses run between these points, but none is faster than walking the whole way.",
+        "schedule_stale": "The bus schedule data ended on Dec 31, 2026, so bus ride times may be out of date.",
+    }
+    texts = []
+    for code, w in want.items():
+        t = got[code].get(code)
+        assert t is not None, (code, got[code])
+        if code == "routing_failed":
+            assert t.startswith("Directions for ") and t.endswith(" left out. Re-plan to try again.") and "could not be loaded" in t, t
+        elif code == "no_live_bus":
+            assert t.startswith(w) and t.endswith(", so there is no live wait to show for them.") and "X47" in t, t
+        else:
+            assert t == w, (code, t)
+        texts.append(t)
+        assert "could not be completed" not in " ".join(got[code].values()), "the generic sentence is gone"
+    assert len(set(texts)) == 5, "five distinct sentences"
+
+
+def test_k_schedule_line_under_options_and_validity_warning(root):
+    with session() as s:
+        boot(s, bikes=0)
+        for today, state in (("20261001", None), ("20261217", "ends"), ("20261231", "ends"), ("20270101", "ended")):
+            set_today(s, today)
+            plan_ui(s) if s.page.locator("#tripResults .tp-card").count() == 0 else (s.page.click("#replan"), wait_cards(s))
+            s.page.wait_for_function("!document.querySelector('#tripGo').disabled")
+            line = s.page.locator("#tripSched")
+            assert line.inner_text() == "Bus schedule data as of Jan 1, 2026", line.inner_text()
+            order = s.page.evaluate("""() => { const kids = [...document.querySelector('#tripResults').children];
+                return [kids.indexOf(document.querySelector('#tripSched')), kids.indexOf(document.querySelector('#tripList'))]; }""")
+            assert order[0] > order[1] >= 0, "the schedule line sits under the options"
+            warn = s.page.locator("#tripResults .tp-warn")
+            if state is None:
+                assert warn.count() == 0, today
+            else:
+                assert warn.count() == 1 and warn.is_visible(), today
+                txt = warn.inner_text()
+                assert "Dec 31, 2026" in txt and ("ended on" in txt if state == "ended" else "ends on" in txt), txt
+                if today == "20261217":
+                    assert "(in 14 days)" in txt, txt
+                if today == "20261231":
+                    assert "(today)" in txt, txt
+        no_errors(s)
+
+
+def view(s):
+    return s.page.evaluate("(() => { const m = window.__SEPTA_TEST__.tripMap, c = m.getCenter(); return {lat: c.lat, lng: c.lng, z: m.getZoom()}; })()")
+
+
+def same_view(a, b):
+    return abs(a["lat"] - b["lat"]) < 1e-6 and abs(a["lng"] - b["lng"]) < 1e-6 and a["z"] == b["z"]
+
+
+def test_k_clear_trip_restores_the_map_view_from_before_the_plan(root):
+    with session() as s:
+        boot(s)
+        s.page.emulate_media(reduced_motion="reduce")
+        s.page.evaluate("window.__SEPTA_TEST__.tripMap.setView([39.97, -75.19], 12, {animate: false})")
+        s.settle()
+        before = view(s)
+        plan_ui(s)
+        s.settle()
+        planned = view(s)
+        assert not same_view(before, planned), "the plan was fitted to the map"
+        # picking another option refits, but Clear still returns to the view from before the plan
+        card_for(s, "Bike ").click()
+        s.settle()
+        card_for(s, "Bus X47").click()
+        s.settle()
+        s.page.click("#replan")
+        s.page.wait_for_function("document.querySelector('#tripResults .tp-card') && !document.querySelector('#tripGo').disabled")
+        s.settle()
+        s.page.evaluate("window.__SEPTA_TEST__.tripMap.setView([39.9, -75.1], 15, {animate: false})")
+        s.page.click("#tripClear")
+        s.settle()
+        assert same_view(view(s), before), (view(s), before)
+        # a second plan and clear starts from wherever the map is then
+        s.page.evaluate("window.__SEPTA_TEST__.tripMap.setView([39.95, -75.17], 13, {animate: false})")
+        mid = view(s)
+        plan_ui(s)
+        s.page.click("#tripClear")
+        s.settle()
+        assert same_view(view(s), mid)
+        # clearing with nothing drawn leaves the map alone
+        s.page.evaluate("window.__SEPTA_TEST__.tripMap.setView([39.96, -75.2], 11, {animate: false})")
+        no_errors(s)
+
+
+def test_k_no_trip_found_state(root):
+    with session() as s:
+        boot(s, bikes=0)
+        s.page.emulate_media(reduced_motion="reduce")
+        s.page.evaluate(NO_ROUTE_FOOT)
+        s.settle()
+        before = view(s)
+        fill(s)
+        s.page.click("#tripGo")
+        s.page.wait_for_selector("#tripNone", timeout=15000)
+        msg = s.page.locator("#tripNone")
+        assert msg.inner_text() == "No trip found. Try different points." and msg.get_attribute("role") == "alert"
+        assert s.page.locator("#tripResults .tp-card").count() == 0 and s.page.locator("#tripRetry").count() == 0
+        assert lines(s) == [] and pins(s) == [] and not s.page.locator("#tripGo").is_disabled()
+        assert s.page.get_attribute("#tripResults", "aria-busy") == "false"
+        assert same_view(view(s), before)
+        # an unreachable routing service is the other failure, with Retry
+        s.page.evaluate("() => { const f = window.fetch; window.fetch = function (u, o) { if (String(u).includes('routing.openstreetmap.de')) return Promise.resolve(new Response('{}', {status: 500})); return f.call(window, u, o); }; window.__SEPTA_TEST__.resetPlannerCaches(); }")
+        s.page.click("#tripGo")
+        s.page.wait_for_selector("#tripRetry", timeout=20000)
+        assert s.page.locator("#tripNone").count() == 0 and "routing service" in s.page.inner_text("#tripResults")
+
+
+def test_k_phone_map_size_and_show_on_map(root):
+    for size in ((390, 844), (360, 640), (320, 568), (480, 800)):
+        with session(viewport=size, init_scripts=[HOOK, SEED_PREFS, SV_SPY]) as s:
+            boot(s)
+            s.page.emulate_media(reduced_motion="reduce")
+            plan_ui(s)
+            s.settle()
+            h = s.page.evaluate("document.querySelector('#map').getBoundingClientRect().height")
+            assert h >= 0.45 * size[1], (size, h)
+            assert h >= 0.49 * size[1], ("the map gets half the phone screen while planning", size, h)
+            sv0 = len(s.page.evaluate("window.__sv"))
+            # pan the map far away, then Show on map: it scrolls to the map and refits the plan
+            planned = view(s)
+            s.page.evaluate("window.__SEPTA_TEST__.tripMap.setView([39.6, -75.6], 9, {animate: false})")
+            s.page.click("#showMap")
+            s.settle()
+            sv = s.page.evaluate("window.__sv")
+            assert len(sv) == sv0 + 1 and sv[-1]["id"] == "map" and sv[-1]["a"]["block"] == "start", sv[-1]
+            assert same_view(view(s), planned), (view(s), planned)
+            if size == (390, 844):
+                s.shot("wp2_phone_after")
+    with session(viewport=(700, 900), init_scripts=[HOOK, SEED_PREFS, SV_SPY]) as s:
+        boot(s)
+        plan_ui(s)
+        s.page.click("#showMap")
+        assert s.page.evaluate("window.__sv")[-1]["a"]["block"] == "nearest", "between 481 and 820 px behaviour is unchanged"
