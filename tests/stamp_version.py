@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Stamp index.html with a content hash so a deploy can never serve a mix of old and new files.
+"""Stamp index.html with a content hash so a deploy is much less likely to serve a mix of old and new files.
 
-GitHub Pages serves js/ and css/ with max-age=600, so right after a deploy a browser can hold an old js file next to a
+GitHub Pages serves js/, css/ and data/ with max-age=600, so right after a deploy a browser can hold an old file next to a
 new one. Every local script and stylesheet URL in index.html therefore carries ?v=<token>, where the token is the first
-10 hex digits of a SHA-256 over every file in js/ and css/ (paths and bytes, sorted). The token changes only when one of
-those files changes, so an untouched site keeps its cache.
+10 hex digits of a SHA-256 over every file in js/, css/ and data/ (paths and bytes, sorted). The token changes only when one
+of those files changes, so an untouched site keeps its cache. js/routing.js copies the token from its own script tag onto
+the URL of data/bus-network.json. This avoids a mix for visitors who load a fresh index.html; a visitor whose browser still
+holds an old index.html (it is not versioned) keeps using the old, matching set until that copy expires.
 
     python3 tests/stamp_version.py            # rewrite the tokens in index.html (idempotent)
     python3 tests/stamp_version.py --check    # exit 1 when index.html is not stamped with the current token
@@ -27,7 +29,9 @@ TOKEN_LEN = 10
 def content_hash(root):
     root = pathlib.Path(root)
     h = hashlib.sha256()
-    files = sorted(p for d in ("js", "css") for p in (root / d).iterdir() if p.is_file() and p.suffix in (".js", ".css"))
+    files = sorted(
+        p for d in ("js", "css", "data") for p in (root / d).iterdir() if p.is_file() and p.suffix in (".js", ".css", ".json")
+    )
     for p in files:
         h.update(p.relative_to(root).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
     return h.hexdigest()[:TOKEN_LEN]

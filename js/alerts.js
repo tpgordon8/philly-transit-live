@@ -262,8 +262,8 @@
   var rulesState = S.util.loadChecked(RULES_KEY, cleanRules, function (r, c) {
     return !S.util.isObj(r) || !Array.isArray(r.rules) || r.rules.length !== c.rules.length;
   });
-  function saveRules() {
-    return store.set(RULES_KEY, rulesState);
+  function saveRules(quiet) {
+    return store.set(RULES_KEY, rulesState, quiet);
   }
   function hasActiveRule() {
     return (
@@ -283,11 +283,28 @@
     }
     return null;
   }
-  function leaveMsg(r, min) {
-    return 'Leave now: the Route ' + r.route + ' bus is about ' + min + ' min from ' + r.stopName + '.';
+  /* "bus" or "trolley" for the rule's route; anything else (which a rule should never have) is just "vehicle". */
+  function modeWord(route) {
+    var k = S.util.kindOf(route);
+    return k === 'bus' || k === 'trolley' ? k : 'vehicle';
   }
-  /* Toasts: role="alert" on each one, so it is announced once when inserted. Never auto-dismissed; max 3 shown. */
-  function notify(msg) {
+  function leaveMsg(r, min) {
+    return (
+      'Leave now: the Route ' +
+      r.route +
+      ' ' +
+      modeWord(r.route) +
+      ' is about ' +
+      min +
+      ' min from ' +
+      r.stopName +
+      '.'
+    );
+  }
+  /* Toasts: role="alert" on each one, so it is announced once when inserted. Never auto-dismissed; max 3 shown.
+   `front` puts the toast before the others. A phone shows only the last toast, so a "Can't save" notice raised right after a
+   leave-now toast goes to the front and the leave-now message stays on top. */
+  function showToast(msg, front) {
     try {
       var box = $('#toasts'),
         t = el('div', 'toast'),
@@ -304,13 +321,19 @@
       });
       t.appendChild(m);
       t.appendChild(b);
-      box.appendChild(t);
-      /* Desktop shows up to 3 and drops the oldest. On a phone only the newest shows and the rest wait (CSS), so keep up to 20. */
+      if (front) box.insertBefore(t, box.firstChild);
+      else box.appendChild(t);
+      /* Desktop shows up to 3 and drops the oldest. On a phone only the newest shows and the rest wait (CSS), so keep up to 20.
+         A front toast is the newest to arrive but the first in line, so the oldest of the others goes instead of it. */
       while (box.children.length > (NARROW.matches ? MAX_TOASTS_PHONE : MAX_TOASTS_DESKTOP))
-        box.firstChild.remove();
+        (front ? box.children[1] : box.firstChild).remove();
     } catch (e) {
       /* a toast is best effort */
     }
+  }
+  /* A leave-now message: a toast, plus a system notification when the tab is hidden. */
+  function notify(msg) {
+    showToast(msg, false);
     try {
       if (window.Notification && Notification.permission === 'granted' && document.hidden)
         new Notification('Septer', { body: msg });
@@ -318,7 +341,12 @@
       /* Notification can throw on some browsers; the toast already shows */
     }
   }
-  S.util.toastHook = notify;
+  /* Notices raised through util.toastOnce (save failures, the places limit): toast only, never a system notification, and
+     before the leave-now toasts. */
+  function noticeToast(msg) {
+    showToast(msg, true);
+  }
+  S.util.toastHook = noticeToast;
   S.util.flushToasts();
   function ruleStatusText(res) {
     switch (res.state) {
@@ -447,7 +475,7 @@
         enabled: true,
         last: null
       });
-      var saved = saveRules();
+      var saved = saveRules(true); /* a failure is spoken once, by the live line below */
       renderRules();
       updateAlertRow();
       live.textContent =
@@ -455,7 +483,7 @@
         s.route +
         ', under ' +
         m +
-        ' min. Keep this page open with the screen on. You will see a banner here.' +
+        ' min. Keep this page open with the screen on. You will see an alert here.' +
         (saved ? '' : " It can't be saved on this device, so it will be gone when you close this page.");
       sel.focus();
     });
@@ -515,6 +543,8 @@
   S.alerts.renderAlerts = renderAlerts;
   S.alerts.hasActiveRule = hasActiveRule;
   S.alerts.evalRules = evalRules;
+  S.alerts.notify = notify;
+  S.alerts.leaveMsg = leaveMsg;
   S.alerts.renderRules = renderRules;
   S.alerts.alertRow = alertRow;
   S.alerts.updateAlertRow = updateAlertRow;

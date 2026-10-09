@@ -339,6 +339,11 @@
   var BACKOFF_BASE_MS = 15000,
     BACKOFF_MAX_MS = 120000,
     HIDDEN_MS = 60000;
+  /* A visible tab nobody has touched for QUIET_MS slows down, unless the rider is relying on it: an enabled leave-now rule or an
+   open stop card needs bus positions as fresh as usual. */
+  function isQuiet() {
+    return Date.now() - lastUse >= QUIET_MS && !hasActiveRule() && !state.stop;
+  }
   function wantedSources() {
     var f = state.filters;
     return { bus: !!(f.bus || f.trolley || f.subway || hasActiveRule() || state.stop), train: !!f.train };
@@ -399,8 +404,7 @@
       return;
     }
     if (!document.hidden) {
-      if (Date.now() - lastUse >= QUIET_MS && Date.now() - lastStart < SLOW_REFRESH_MS - REFRESH_MS / 2)
-        return;
+      if (isQuiet() && Date.now() - lastStart < SLOW_REFRESH_MS - REFRESH_MS / 2) return;
       refresh();
       return;
     }

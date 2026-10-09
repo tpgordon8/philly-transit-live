@@ -11,6 +11,7 @@ FAST = {
     "test_escape_closes_only_one_thing",
     "test_marker_enter_space_select_and_label",
     "test_single_clear_selection_and_all_paths_work",
+    "test_view_stop_shows_a_visible_stop_card_with_focus_at_tablet_widths",
 }
 
 STOPS = json.loads((FIX / "Stops.json").read_text())
@@ -262,6 +263,31 @@ def test_phone_select_pans_marker_above_card(root):
         assert pane(s) == before
 
 
+def test_select_pans_marker_above_card_between_761_and_840(root):
+    """The cards are bottom-anchored up to 840 px (the sheet layout stops at 760), so a selection pans clear of the card there too."""
+    for width in (768, 820):
+        with Session(root, viewport=(width, 900)) as s:
+            boot(s)
+            mp = rect(s, "#map")
+            idx = s.page.evaluate("""() => { const m = document.querySelector('#map').getBoundingClientRect();
+                return [...document.querySelectorAll('.veh-wrap')].map((e, i) => [i, e.getBoundingClientRect()])
+                  .filter(([i, r]) => r.left >= m.left && r.right <= m.right && r.top >= m.top && r.bottom <= m.bottom)
+                  .sort((a, b) => b[1].top - a[1].top).map(a => a[0]); }""")
+            assert len(idx) >= 3, (width, idx)
+            for i in (idx[0], idx[len(idx) // 2]):
+                # drag the view so this marker sits near the bottom of the map, where the card will be
+                s.page.evaluate("""(i) => { const S = window.SEPTA, m = S.map.map, el = document.querySelectorAll('.veh-wrap')[i];
+                    const mr = document.querySelector('#map').getBoundingClientRect(), r = el.getBoundingClientRect();
+                    m.panBy([0, Math.round(r.top + r.height / 2 - (mr.bottom - 60))], {animate: false}); }""", i)
+                s.settle()
+                click_marker(s, i)
+                s.tick(1200)
+                card, mk = rect(s, "#detail"), sel_marker_rect(s)
+                assert mk and card and card["t"] > mp["t"] + 60, (width, card)
+                assert not overlap(mk, card), (width, i, mk, card)
+                s.page.click("#detailClose")
+
+
 def test_desktop_select_does_not_pan(root):
     with Session(root) as s:
         boot(s)
@@ -397,6 +423,20 @@ def test_phone_view_stop_shows_and_focuses_stop_card(root):
         _open_stop_from_vehicle(s)
         assert s.page.evaluate("getComputedStyle(document.querySelector('#stopCard')).display") != "none"
         assert s.page.evaluate("document.activeElement.id") == "stopCard"
+
+
+def test_view_stop_shows_a_visible_stop_card_with_focus_at_tablet_widths(root):
+    """Below 1180 px the stop card is hidden behind an open vehicle card (css/stops.css), so View stop must close the vehicle card."""
+    for width in (768, 820, 1024, 1280):
+        with Session(root, viewport=(width, 800)) as s:
+            boot(s)
+            _open_stop_from_vehicle(s)
+            info = s.page.evaluate("""() => { const c = document.querySelector('#stopCard'), r = c.getBoundingClientRect();
+                return {display: getComputedStyle(c).display, w: r.width, h: r.height, active: document.activeElement === c,
+                        inCard: c.contains(document.activeElement)}; }""")
+            assert info["display"] != "none" and info["w"] > 0 and info["h"] > 0, (width, info)
+            assert info["active"] and info["inCard"], (width, info)
+            assert (width >= 1181) == (not s.page.is_hidden("#detail")), (width, "vehicle card stays open only when both cards fit")
 
 
 def test_escape_closes_stop_card_and_restores_focus(root):

@@ -27,10 +27,10 @@ SEPTA public hackathon API (no key, no CORS headers)
   number appears only when it is computed from measured data. Each successful TransitView refresh appends a
   `{ts,lat,lng}` sample per vehicle (only when the GPS timestamp is new; last 120 s of feed time, at most 6 samples;
   vehicles that leave the feed are deleted, so memory is bounded). Speed is the distance between the oldest and newest
-  sample divided by their time apart, and needs at least 20 s of span. Under 0.9 m/s counts as not moving; above 31 m/s
+  sample divided by their time apart, and needs at least 20 s of span. Under 0.9 m/s counts as stopped; above 31 m/s
   (about 70 mph, so highway buses such as I-76 still get an ETA; or a single step that implies it) is treated as a GPS jump and discarded. Only the bus whose `next_stop_id` is the
   stop gets an ETA: straight-line distance **plus 15 %** (roads are not straight) divided by speed, rounded up to whole
-  minutes, never below 1 min. Unknown speed shows "—" with "measuring speed"; a stopped bus shows "not moving". Buses
+  minutes, never below 1 min. Unknown speed shows "—" with "checking speed"; a stopped bus shows "bus is stopped". Buses
   within 1.5 mi and heading within 60° of the stop are listed as "Heading toward this stop" with distance only. The card
   always says these are estimates, not SEPTA predictions. No new network calls and no new localStorage keys: the board
   is rebuilt from in-memory data on every refresh, and nothing about the viewer is stored or sent.
@@ -145,8 +145,7 @@ non-zero. The train detail card says positions have no timestamp. Headings may b
   missing). Bus, trolley and subway: badge letter and icon facing are `dir`. With no `dir` the badge is a gray "?" and the icon
   faces the heading snapped to N/E/S/W (north if there is no heading either). Trains: badge is the 8-point heading letter and the
   icon faces the heading snapped to N/E/S/W. `vehSig` is `kind|badge|letter|facing`, so GPS jitter or a detour on a directed
-  route never touches the DOM. The accessible name says "Route 57 bus, northbound, 2 min late" (nothing for loop or unknown;
-  trains keep "heading NE"). The vehicle card leads with the route direction and adds "Currently driving E (92°)" only when
+  route never touches the DOM. The accessible name says "Route 57 bus, N, 2 min late": the visible badge letter appears in the name once, so voice control ("click N") and WCAG 2.5.3 (label in name) work, and the direction word is not repeated next to it. The word goes in the marker's `title` ("Route 57 bus, northbound"), which assistive technology reads as the description. Nothing for loop or unknown; trains keep "heading NE". A dimmed marker adds ", position may be out of date" (never the word "stale"). The vehicle card leads with the route direction and adds "Currently driving E (92°)" only when
   the heading disagrees (or there is no route direction). The stop board and Home-heading logic still use the true heading.
 - Glide: CSS `transition: transform 1.6s` on `.veh-wrap`. The map container gets `.noglide` during zoom so
   markers do not drag across the screen when Leaflet repositions them.
@@ -164,7 +163,7 @@ non-zero. The train detail card says positions have no timestamp. Headings may b
   every 30 s (`SLOW_REFRESH_MS`) instead of every 15 s; the next input puts it back on 15 s (at the next tick, at most 15 s
   later). It reuses the idle pause's `lastUse` clock (the listeners for pointerdown, keydown, touchstart, wheel, focus and
   becoming visible, section 2), so there are no extra listeners; the 60 minute pause, the hidden-tab cadence and the backoff
-  are unchanged. An enabled leave-now rule does not exempt a visible tab, so after 10 quiet minutes its bus position is up to 30 s old.
+  are unchanged. A visible tab with an enabled leave-now rule (`hasActiveRule`) or an open stop card (`state.stop`) is exempt and stays on 15 s, because the rider is relying on fresh positions. The footer therefore says "refreshed about every 15 seconds": hidden tabs, quiet tabs and back-off all run slower.
 - **A 200 that is not a feed is a failure.** `normBuses` throws unless the answer is an object with a `bus` array, and
   `normTrains` unless it is an array; an HTML page, `{}`, `null` or `{"bus":"x"}` therefore takes the stale/backoff path below and
   the map keeps its last good positions. An empty array (`{"bus":[]}`, `[]`) is valid and means no vehicles.
@@ -205,16 +204,20 @@ is served. Verify live changes with a cache-busting query string.
 
 ### 7.0 Cache-skew guard (`?v=`)
 
-GitHub Pages serves unversioned `js/` and `css/` with `max-age=600`, so for ten minutes after a deploy a browser can run old files
+GitHub Pages serves unversioned `js/`, `css/` and `data/` with `max-age=600`, so for ten minutes after a deploy a browser can run old files
 next to new ones. Every local script and stylesheet URL in `index.html` therefore ends in `?v=<token>` (the Leaflet CDN tag and
-the Google Fonts link are left alone). The token is the first 10 hex digits of a SHA-256 over every file in `js/` and `css/`,
-so it changes only when one of them changes. Whenever you change a file in `js/` or `css/`, run
+the Google Fonts link are left alone). The token is the first 10 hex digits of a SHA-256 over every file in `js/`, `css/` and `data/`,
+so it changes only when one of them changes. `js/routing.js` reads the token from the `?v=` of its own script tag (`document.currentScript`)
+and appends it to the URL of `data/bus-network.json` (`TP.NET_URL`), so the planner code and the network file it reads travel together;
+a page without a token on that tag requests the bare URL. This makes a mix unlikely for anyone who loads a fresh `index.html`; it is not a
+guarantee, because `index.html` itself is not versioned and a browser that still holds an old copy keeps using the old, matching set until that
+copy expires. Whenever you change a file in `js/`, `css/` or `data/`, run
 
     python3 tests/stamp_version.py            # rewrite the tokens in index.html (idempotent)
     python3 tests/stamp_version.py --check    # exit 1 if they are stale
 
 before you commit. `tests/test_stability.py::test_version_stamp_matches_content` runs the same check in the fast suite, so a forgotten
-stamp fails CI. After a merge that touches `js/` or `css/` on both sides, stamp again (the token is a hash of content, so two
+stamp fails CI. After a merge that touches `js/`, `css/` or `data/` on both sides, stamp again (the token is a hash of content, so two
 branches never agree on it). `index.html` itself is the one file that is not versioned; it is the entry point and holds the tokens.
 
 ### 7.1 Custom domain (set up 2026-10-09)
@@ -453,20 +456,20 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 
 | File | Lines | Holds |
 |------|-------|-------|
-| `js/util.js` | 338 | constants, formatting and geometry, `$`, the `localStorage` wrapper, saved preferences, places, starred routes, the shared `state` object, the Leaflet-missing banner |
-| `js/feed.js` | 418 | `normBuses` (ghost filter), `normTrains`, `septa()` fetch through the Worker, idle pause, `refresh`, and `collect`/`apply`, the pipeline that turns feed data into what is drawn |
-| `js/map.js` | 515 | the Leaflet map, search-point and Home pins, vehicle markers, selection, the vehicle detail card |
+| `js/util.js` | 420 | constants, formatting and geometry, `$`, the `localStorage` wrapper, saved preferences, places, starred routes, the shared `state` object, the Leaflet-missing banner |
+| `js/feed.js` | 430 | `normBuses` (ghost filter), `normTrains`, `septa()` fetch through the Worker, idle pause, `refresh`, and `collect`/`apply`, the pipeline that turns feed data into what is drawn |
+| `js/map.js` | 570 | the Leaflet map, search-point and Home pins, vehicle markers, selection, the vehicle detail card |
 | `js/landmarks.js` | 53 | the built-in list of about 40 well-known Philadelphia places (name, aliases, address, coordinates) as one string per place |
 | `js/suggest.js` | 496 | place and address suggestions: `attach(input, {onPick, biasProvider})` makes an ARIA 1.2 combobox; built-in places first, then Photon (debounce, abort, cache, rate limit) |
-| `js/panel.js` | 666 | the sidebar: status line, My routes, search box and geocoding, Use my location, `setCenter`/`setRadius`, mode chips, saved places, Get me home, the empty-state actions |
-| `js/stops.js` | 444 | speed history and `etaFor`, stop links, stop card and live stop board |
-| `js/alerts.js` | 508 | service alerts and the leave-now rules (`evalRule`, `evalRules`, `notify`) |
-| `js/routing.js` | 442 | trip planner data clients: planner constants `TP`, bus network, Indego, the routing queue, `routeLeg`, `cancelPlan` (no DOM) |
+| `js/panel.js` | 677 | the sidebar: status line, My routes, search box and geocoding, Use my location, `setCenter`/`setRadius`, mode chips, saved places, Get me home, the empty-state actions |
+| `js/stops.js` | 447 | speed history and `etaFor`, stop links, stop card and live stop board |
+| `js/alerts.js` | 552 | service alerts and the leave-now rules (`evalRule`, `evalRules`, `notify`) |
+| `js/routing.js` | 449 | trip planner data clients: planner constants `TP`, bus network, Indego, the routing queue, `routeLeg`, `cancelPlan` (no DOM) |
 | `js/candidates.js` | 217 | trip planner bus candidates: nearby stops and stations, wait estimates, `buildBusCandidates` (pure) |
 | `js/planner.js` | 535 | trip planner: leg assembly, schedule state, `planTrips` (no DOM) |
-| `js/trip.js` | 674 | trip planner interface: form, results, map drawing |
+| `js/trip.js` | 683 | trip planner interface: form, results, map drawing |
 | `js/sheet.js` | 74 | phone bottom sheet (peek or open), keeps the map's size in step, on-screen keyboard handling through `visualViewport` |
-| `js/main.js` | 111 | the `window.__SEPTA_TEST__` hook and the start-up calls |
+| `js/main.js` | 115 | the `window.__SEPTA_TEST__` hook and the start-up calls |
 
 | Stylesheet | Holds |
 |------------|-------|
@@ -534,8 +537,8 @@ Goals from the owner: (1) the N/E/S/W badge and the vehicle's facing show the ro
 
 ### 15.2.1 WP-E as built
 
-- **Layout.** At most 760 px wide (WP-H2: was 820, so a tablet held upright gets the side panel) the grid is map over panel and the panel is a bottom sheet. `js/sheet.js` sets `#app[data-sheet]` to `peek` (panel row 196 px since WP-H2, so the status line may wrap: handle, name and status on one line, search field) or `open` (the panel gets half the screen, so the map keeps at least 50%). It starts in `peek`; the handle (`#sheetHandle`, `aria-expanded`) toggles; focus on any control other than the search field opens it. Without the attribute (no JS) the sheet is open. Phone landscape (width at most 760, height at most 500) puts the panel back as a left column and hides the handle; 844x390 is wider than 760 and uses the sidebar.
-- **Map controls and cards.** The zoom buttons are 44 px and stay bottom-right. Below 820 px wide, or in a window shorter than 500 px, the vehicle card, stop card and empty-state card end 64 px short of the right edge, and the vehicle card sits above the attribution line, so no card covers a Leaflet control. The stop card is hidden while the vehicle card is open up to 1180 px wide (the map is then too narrow for both cards, 372 + 320 px) and returns when the vehicle card closes.
+- **Layout.** At most 760 px wide (WP-H2: was 820, so a tablet held upright gets the side panel) the grid is map over panel and the panel is a bottom sheet. `js/sheet.js` sets `#app[data-sheet]` to `peek` (panel row 196 px since WP-H2, so the status line may wrap: handle, name and status on one line, search field) or `open` (the panel gets half the screen, so the map keeps at least 50%). It starts in `peek`; the handle (`#sheetHandle`, `aria-expanded`) toggles; focus on any control other than the search field opens it. The markup ships `data-sheet="peek"`, so with no JS the sheet starts in `peek` and the handle does nothing; the panel content is still reachable by scrolling it. Phone landscape (width at most 760, height at most 500) puts the panel back as a left column and hides the handle; 844x390 is wider than 760 and uses the sidebar.
+- **Map controls and cards.** The zoom buttons are 44 px and stay bottom-right. Up to 840 px wide (the cards switch at 840, the sheet at 760; the map beside the 392 px side panel is under 450 px wide there), or in a window shorter than 500 px, the vehicle card, stop card and empty-state card end 64 px short of the right edge, and the vehicle card sits above the attribution line, so no card covers a Leaflet control. The stop card is hidden while the vehicle card is open up to 1180 px wide (the map is then too narrow for both cards, 372 + 320 px) and returns when the vehicle card closes. `js/map.js` keeps one `matchMedia` constant per CSS condition: `NARROW` (760, sheet layout), `CARD_NARROW` (840, used by `panAboveCard` so a selected marker is panned clear of the bottom-anchored card from 761 to 840), and `STOP_HIDDEN` (1180, the condition of the CSS rule above). The View stop handler calls `clearSelection()` whenever `STOP_HIDDEN` matches, so focus never moves to a `display:none` stop card.
 - **Touch and text.** Buttons, chips, selects, range inputs, suggestion rows and the panel's links are at least 44 px high (links get padding, not line height); text inputs, selects and the stop card's field are 16 px.
 - **Viewport.** `viewport-fit=cover`; the root keeps `env(safe-area-inset-*)` on all four sides; the page is `100vh` with `100dvh` after it, less `--kb`. `--kb` is the height an on-screen keyboard covers when the browser leaves the layout alone (iOS): `sheet.js` reads it from `visualViewport` and shrinks the page by it, so the sheet and the field being typed in stay above the keyboard. Browsers that resize the layout (Android Chrome) need nothing. The suggestion list (WP-C) already opens above the field when there is more room there; a field outside the visual viewport closes it. After a keyboard settles the field is scrolled into view.
 - **Not changed.** The attribution link inside the Leaflet attribution control is small by design (required credit) and is exempt from the 44 px rule in `tests/test_responsive.py`; inline links in running text get a 44 px hit area through padding.

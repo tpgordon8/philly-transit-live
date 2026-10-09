@@ -155,7 +155,7 @@ def test_markers_not_rebuilt_on_jitter_but_update_on_direction_change(root):
         b["Direction"] = "Southbound"  # the bus finished its trip and now runs the other way
         s.tick(15000)
         r = info(s, ".veh-wrap")
-        assert r["dr"] == "S" and r["angle"] == 180 and "southbound" in r["label"], r
+        assert r["dr"] == "S" and r["angle"] == 180 and ", S," in r["label"], r
         assert s.page.evaluate("document.querySelector('.veh-wrap .vb') !== window.__svg"), "marker did not update when direction changed"
 
 
@@ -166,10 +166,14 @@ def test_accessible_names_use_route_direction(root):
                  bus(5, "33", "Loop", 90, late=1, **grid(4)), bus(6, "42", "", 90, late=1, **grid(5))]
         open_with(s, buses, [train(1, 45, **grid(6))])
         labels = s.page.evaluate("[...document.querySelectorAll('.veh-wrap')].map(w => w.getAttribute('aria-label'))")
-        assert "Route 57 bus, N, northbound, 2 min late" in labels, labels
-        assert any(l.startswith("Route 12 bus, W, westbound, ") for l in labels), labels
-        assert any(l.startswith("Route G1 trolley, S, southbound, ") for l in labels), labels
-        assert any(l.startswith("Route B1 subway, E, eastbound, ") for l in labels), labels
+        # the visible badge letter is in the name once (label in name for voice control); the direction word is the description
+        assert "Route 57 bus, N, 2 min late" in labels, labels
+        assert any(l.startswith("Route 12 bus, W, ") for l in labels), labels
+        assert any(l.startswith("Route G1 trolley, S, ") for l in labels), labels
+        assert any(l.startswith("Route B1 subway, E, ") for l in labels), labels
+        assert not any("bound" in l for l in labels), labels
+        titles = s.page.evaluate("[...document.querySelectorAll('.veh-wrap')].map(w => w.getAttribute('title'))")
+        assert "Route 57 bus, northbound" in titles and "Route 12 bus, westbound" in titles and "Route 33 bus" in titles, titles
         assert "Route 33 bus, 1 min late" in labels and "Route 42 bus, 1 min late" in labels, labels
         assert not any("heading" in l for l in labels if l.startswith("Route")), labels
         assert any(l.startswith("Regional Rail train 7001") and " heading NE, " in l for l in labels), labels

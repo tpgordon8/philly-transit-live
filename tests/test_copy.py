@@ -51,13 +51,15 @@ def test_index_html_wording_and_no_jargon(root):
         ">Use Home</button>", ">Set as Home</button>", ">Near here</button>", ">All of SEPTA</button>",
         "Tap a stop on the map, then tap Add alert.",
         "Walking, Indego, one bus or trolley, or driving. No subway, Regional Rank or transfers yet.".replace("Rank", "Rail"),
-        "Positions from SEPTA's data, refreshed every 15 seconds.",
+        "Positions from SEPTA's data, refreshed about every 15 seconds.",
         "When you type an address, the text and your approximate area (within about 1 km) are sent to Photon, a free place-search service, to suggest places.",
-        "When you plan a trip, the start and end points (within about 10 m) are sent to our server and the free OpenStreetMap routing service.",
+        "An address you type and submit in the main search box that you did not pick from the suggestions is sent to Nominatim (OpenStreetMap's address search) for exact matches and intersections.",
+        "When you plan a trip, the start and end points (within about 10 m, or closer if our server cannot be reached) are sent to our server and the free OpenStreetMap routing service.",
+        "Your saved places, settings, alerts and one backup copy of any damaged saved data are kept only in this browser's storage.",
         "Part of Septer didn't load. Check your connection and reload the page.",
     ):
         assert part in html, part
-    for gone in ("Make Home", "Save as Home", "Near this search", "Whole system", "Suggestions: "):
+    for gone in ("Nothing is stored in this page", "Make Home", "Save as Home", "Near this search", "Whole system", "Suggestions: "):
         assert gone not in html, gone
     assert html.count('class="empty-line tp-priv"') == 1 and html.count("<details") == 1, "the long privacy text appears once"
     assert html.index('id="privacyDetails"') > html.index('id="h-alerts"'), "privacy sits at the end of the panel"
@@ -146,14 +148,15 @@ def test_marker_names_carry_direction_letter_and_stale(root):
         for m in marks:
             assert "stale" not in m["label"], m
             if not m["train"] and m["letter"] in words:
-                assert f", {m['letter']}, {words[m['letter']]}, " in m["label"], m
+                assert f", {m['letter']}, " in m["label"] and words[m["letter"]] not in m["label"], m
                 checked += 1
         assert checked >= 2, marks
-        assert s.page.evaluate("window.__SEPTA_TEST__.vehLabel({kind: 'bus', badge: '12', dir: 'W', late: 5})") == "Route 12 bus, W, westbound, 5 min late"
+        assert s.page.evaluate("window.__SEPTA_TEST__.vehLabel({kind: 'bus', badge: '12', dir: 'W', late: 5})") == "Route 12 bus, W, 5 min late"
+        assert s.page.evaluate("window.__SEPTA_TEST__.vehLabel({kind: 'bus', badge: '12', dir: 'W', late: 5}, true)") == "Route 12 bus, westbound, 5 min late"  # the one-off announcement
         s.worker.data.pop("TransitView")
         run_until(s, "document.querySelectorAll('.veh-wrap.stale').length > 0")
         stale = s.page.evaluate("[...document.querySelectorAll('.veh-wrap.stale')].map(e => e.getAttribute('aria-label'))")
-        assert stale and all(x.endswith(", stale") for x in stale), stale
+        assert stale and all(x.endswith(", position may be out of date") and "stale" not in x for x in stale), stale
 
 
 def test_stop_card_alert_row_and_vehicle_card_wording(root):
@@ -168,7 +171,7 @@ def test_stop_card_alert_row_and_vehicle_card_wording(root):
         s.page.wait_for_selector("#stopUrl")
         assert s.page.get_attribute("#stopUrl", "aria-label") == "Link to this stop"
         s.page.click("#addAlert")
-        assert s.page.inner_text("#alertLive").endswith("Keep this page open with the screen on. You will see a banner here.")
+        assert s.page.inner_text("#alertLive").endswith("Keep this page open with the screen on. You will see an alert here.")
         name = s.page.get_attribute("#rules .rtoggle", "aria-label")
         assert name.startswith("Alert on: route 21 at "), name
         assert s.page.get_attribute("#rules .rrm", "aria-label").startswith("Remove alert for route 21 at ")

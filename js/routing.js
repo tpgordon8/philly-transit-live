@@ -11,6 +11,13 @@
    works even when the page is idle-paused: they deliberately do not go through fetchOnce().
    Third parties receive only leg endpoints (routing service, via the Worker, rounded to 4 decimals there; unrounded 5 decimals in
    the direct fallback) or nothing (Indego, own static file). */
+  /* The ?v= token tests/stamp_version.py puts on this script's own tag. The network file is stamped with the same token, so the
+   planner code and the network it reads change together. Without a token (a page opened from an unstamped file) there is no query. */
+  var STAMP = (function () {
+    var cs = document.currentScript,
+      m = cs && cs.src ? /[?&]v=([0-9a-f]+)/.exec(cs.src) : null;
+    return m ? '?v=' + m[1] : '';
+  })();
   var TP = {
     WALK_MPS: 1.25,
     BIKE_MPS: 3.6,
@@ -41,7 +48,7 @@
     INDEGO_BASE: 'https://septa-proxy.tpgordon8.workers.dev/indego/',
     ROUTE_DIRECT: 'https://routing.openstreetmap.de/routed-',
     INDEGO_DIRECT: 'https://gbfs.bcycle.com/bcycle_indego/',
-    NET_URL: 'data/bus-network.json'
+    NET_URL: 'data/bus-network.json' + STAMP
   };
   var tpNet = null,
     tpInfo = null,

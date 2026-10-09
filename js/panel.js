@@ -246,9 +246,16 @@
     this.removeAttribute('aria-invalid');
     this.removeAttribute('aria-describedby');
   });
-  /* The short Photon line links to the privacy details, which open when it is followed. */
+  /* The short Photon line links to the privacy details, which open when it is followed. The default jump is cancelled:
+   it would replace a #stop=...&route=... share link in the address bar. The href stays for a page without JS. */
   document.addEventListener('click', function (e) {
-    if (e.target.closest && e.target.closest('.priv-link')) $('#privacyDetails').open = true;
+    if (!(e.target.closest && e.target.closest('.priv-link'))) return;
+    e.preventDefault();
+    var d = $('#privacyDetails');
+    d.open = true;
+    d.scrollIntoView({ block: 'nearest', behavior: S.map.animOK() ? 'smooth' : 'auto' });
+    var sm = d.querySelector('summary');
+    if (sm) sm.focus({ preventScroll: true });
   });
   function setCenter(c, fit, noSave) {
     state.center = { lat: c.lat, lng: c.lng, label: c.label || '' };

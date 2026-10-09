@@ -146,12 +146,13 @@
         return d;
       }
     },
-    set: function (k, v) {
+    /* `quiet`: the caller tells the rider about a failure itself, so no "Can't save" toast (and it stays available for a later save). */
+    set: function (k, v, quiet) {
       try {
         localStorage.setItem(k, JSON.stringify(v));
         return true;
       } catch (e) {
-        toastOnce('save', "Can't save on this device, so your settings won't be kept.");
+        if (!quiet) toastOnce('save', "Can't save on this device, so your settings won't be kept.");
         return false;
       }
     }
@@ -166,14 +167,21 @@
     queued.push(msg);
     flushToasts();
   }
+  var flushing = false;
+  /* The hook runs BEFORE the message leaves the queue: a hook that throws leaves it there for the next flush instead of
+   dropping it. (`flushing` stops a hook that raises a toast itself from delivering the same message twice.) */
   function flushToasts() {
-    if (typeof S.util.toastHook !== 'function') return;
-    while (queued.length) {
-      try {
-        S.util.toastHook(queued.shift());
-      } catch (e) {
-        /* a toast is best effort */
+    if (flushing || typeof S.util.toastHook !== 'function') return;
+    flushing = true;
+    try {
+      while (queued.length) {
+        S.util.toastHook(queued[0]);
+        queued.shift();
       }
+    } catch (e) {
+      /* a toast is best effort; the message stays queued */
+    } finally {
+      flushing = false;
     }
   }
   /* Read a saved value for `clean`. When the stored text is corrupt, or `lossy(parsed, cleaned)` says cleaning drops

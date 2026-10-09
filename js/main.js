@@ -17,7 +17,9 @@
     speedHist = S.stops.speedHist,
     speedMps = S.stops.speedMps,
     updateSpeedHist = S.stops.updateSpeedHist;
-  var evalRule = S.alerts.evalRule;
+  var evalRule = S.alerts.evalRule,
+    leaveMsg = S.alerts.leaveMsg,
+    notify = S.alerts.notify;
   var TP = S.routing.TP,
     buildBusCandidates = S.candidates.buildBusCandidates,
     buildNetIndex = S.routing.buildNetIndex,
@@ -53,6 +55,8 @@
       updateSpeedHist: updateSpeedHist,
       speedHist: speedHist,
       evalRule: evalRule,
+      notify: notify,
+      leaveMsg: leaveMsg,
       planTrips: planTrips,
       routeLeg: routeLeg,
       loadNetwork: loadNetwork,

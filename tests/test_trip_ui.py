@@ -866,7 +866,7 @@ def test_k_phone_map_size_and_show_on_map(root):
         boot(s)
         plan_ui(s)
         s.page.click("#showMap")
-        assert s.page.evaluate("window.__sv")[-1]["a"]["block"] == "nearest", "between 481 and 820 px behaviour is unchanged"
+        assert s.page.evaluate("window.__sv")[-1]["a"]["block"] == "nearest", "between 481 and 760 px behaviour is unchanged"
 
 
 # ------------------------------------------------------------------ (s) WP5: region check, geocode pacing, a11y, cancel, rounding

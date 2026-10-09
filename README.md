@@ -144,8 +144,9 @@ Routing requests are spaced at least 250 ms apart with at most two in flight, an
 suite before merging (several minutes). `--only <text>` narrows to matching tests; the Playwright version CI uses is
 pinned in `.github/workflows/ci.yml`.
 
-**Stamp the cache token.** `index.html` links every script and stylesheet as `...?v=<token>` so a deploy cannot serve a mix of old and
-new files. After any change under `js/` or `css/`, run `python3 tests/stamp_version.py` (idempotent; `--check` only reports). The fast
+**Stamp the cache token.** `index.html` links every script and stylesheet as `...?v=<token>` so a deploy is far less likely to serve a mix of old and
+new files (the token also covers `data/`, and `js/routing.js` puts it on the bus network URL; a browser still holding an old `index.html`
+keeps the old matching set until that copy expires). After any change under `js/`, `css/` or `data/`, run `python3 tests/stamp_version.py` (idempotent; `--check` only reports). The fast
 suite fails when the token is stale. ARCHITECTURE.md section 7.0.
 
 **Add a module.** Follow ARCHITECTURE.md section 14.3: a new `js/<name>.js` shaped like `js/main.js`, a `<name>:{}` entry in

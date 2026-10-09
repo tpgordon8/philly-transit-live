@@ -18,6 +18,11 @@ FAST = {
     "test_rule_message_says_when_saving_failed",
     "test_malformed_feed_is_an_error_not_an_empty_feed",
     "test_version_stamp_matches_content",
+    "test_network_url_carries_the_script_token",
+    "test_save_failure_toast_goes_under_the_leave_now_toast",
+    "test_a_throwing_toast_hook_does_not_drop_the_message",
+    "test_privacy_link_opens_details_without_changing_the_hash",
+    "test_leave_now_message_names_the_mode",
     "test_manifest_id_and_theme",
     "test_backup_of_corrupt_saved_data",
 }
@@ -126,6 +131,72 @@ def test_storage_failure_toasts_once(root):
         assert toasts(s) == []
 
 
+GRANTED_HIDDEN = """(function () {
+  window.__notes = [];
+  function N(t, o) { window.__notes.push({ t: t, o: o || null }); }
+  N.permission = 'granted';
+  N.requestPermission = function () { return Promise.resolve('granted'); };
+  window.Notification = N;
+  Object.defineProperty(document, 'hidden', { configurable: true, get: function () { return window.__hidden === true; } });
+})();"""
+
+
+def test_save_failure_toast_goes_under_the_leave_now_toast(root):
+    """A phone shows only the last toast: a first-time "Can't save" notice must not cover a leave-now toast, and a notice never
+    raises a system notification (the leave-now message already did, with the tab hidden)."""
+    with Session(root, init_scripts=["window.__SEPTA_TEST__ = true", QUOTA, GRANTED_HIDDEN], viewport=(390, 844), mobile=True) as s:
+        boot(s)
+        s.page.evaluate("window.__hidden = true")
+        s.page.evaluate("window.__SEPTA_TEST__.notify('Leave now: test message.')")
+        set_radius(s, "1")  # a save that fails: the first-time "Can't save" toast, raised after the leave-now one
+        assert toasts(s) == [SAVE_MSG, "Leave now: test message."], toasts(s)
+        assert s.page.evaluate("window.__notes.map(n => n.o.body)") == ["Leave now: test message."]
+        shown = s.page.evaluate("[...document.querySelectorAll('#toasts .toast')].filter(t => getComputedStyle(t).display !== 'none').map(t => t.textContent)")
+        assert len(shown) == 1 and shown[0].startswith("Leave now: test message."), shown
+    with Session(root, init_scripts=["window.__SEPTA_TEST__ = true", QUOTA]) as s:  # desktop: the oldest of the others is dropped, never the notice
+        boot(s)
+        for i in range(4):
+            s.page.evaluate(f"window.__SEPTA_TEST__.notify('Leave now: {i}.')")
+        set_radius(s, "1")
+        got = toasts(s)
+        assert len(got) == 3 and got[0] == SAVE_MSG and got[-1] == "Leave now: 3.", got
+
+
+def test_a_throwing_toast_hook_does_not_drop_the_message(root):
+    with Session(root) as s:
+        boot(s)
+        r = s.page.evaluate("""() => { const U = window.SEPTA.util, real = U.toastHook; let calls = 0;
+            U.toastHook = () => { calls++; throw new Error('boom'); };
+            U.toastOnce('kept', 'Kept message.');
+            const afterThrow = document.querySelectorAll('#toasts .tmsg').length;
+            U.toastHook = real; U.flushToasts();
+            return {calls, afterThrow, texts: [...document.querySelectorAll('#toasts .tmsg')].map(e => e.textContent)}; }""")
+        assert r["calls"] == 1 and r["afterThrow"] == 0 and r["texts"] == ["Kept message."], r
+
+
+def test_privacy_link_opens_details_without_changing_the_hash(root):
+    with Session(root) as s:
+        boot(s, STOP_HASH)
+        s.page.wait_for_selector("#copyStop")
+        before = s.page.evaluate("location.href")
+        assert s.page.evaluate("document.querySelector('#privacyDetails').open") is False
+        s.page.click("#sugAttrFind .priv-link")
+        assert s.page.evaluate("document.querySelector('#privacyDetails').open") is True
+        assert s.page.evaluate("location.href") == before and s.page.evaluate("location.hash") == STOP_HASH
+        assert s.page.evaluate("document.activeElement.tagName") == "SUMMARY"
+        assert not s.page.is_hidden("#stopCard"), "the open stop card stays open"
+
+
+def test_leave_now_message_names_the_mode(root):
+    with Session(root, init_scripts=["window.__SEPTA_TEST__ = true"]) as s:
+        boot(s)
+        got = s.page.evaluate("""() => { const f = window.__SEPTA_TEST__.leaveMsg;
+            return ['21', 'G1', 'B1'].map(r => f({route: r, stopName: 'Main St'}, 4)); }""")
+        assert got == ["Leave now: the Route 21 bus is about 4 min from Main St.",
+                       "Leave now: the Route G1 trolley is about 4 min from Main St.",
+                       "Leave now: the Route B1 vehicle is about 4 min from Main St."], got
+
+
 def test_toast_raised_before_alerts_js_loads_is_delivered(root):
     over = json.dumps({"home": None, "list": [{"id": f"p{i}", "name": f"Place {i}", "lat": 39.9 + i / 1000, "lng": -75.1} for i in range(52)]})
     with Session(root, init_scripts=[seed("septa.places.v1", over)]) as s:
@@ -144,7 +215,8 @@ def test_rule_message_says_when_saving_failed(root):
             assert live.startswith("Alert set for route 21, under 8 min."), live
             assert (RULE_MSG in live) == expect_bad, live
             assert s.page.locator("#rules li").count() == 1
-            assert (toasts(s) == [SAVE_MSG]) == expect_bad, toasts(s)
+            assert "You will see an alert here." in live and "banner" not in live, live
+            assert toasts(s) == [], toasts(s)  # the live line already says it; the toast would speak a second time
 
 
 # ---------------------------------------------------------------- 4. malformed feed answers
@@ -238,6 +310,28 @@ def test_polling_slows_after_ten_quiet_minutes_and_recovers_on_input(root):
         assert "Paused" not in s.page.inner_text("#statusText")
 
 
+RULE = {"id": "r1", "route": "21", "stopId": "14880", "stopName": "Test stop", "lat": 39.95, "lng": -75.16, "minutes": 8, "enabled": True, "last": None}
+
+
+def test_quiet_slowdown_skips_tabs_with_a_rule_or_an_open_stop(root):
+    """A visible tab with an enabled leave-now rule, or an open stop card, keeps the 15 s cadence after 10 quiet minutes."""
+    cases = (("rule", [seed("septa.rules.v1", json.dumps({"rules": [RULE]}))], ""),
+             ("stop", [], STOP_HASH))
+    for name, scripts, hash_ in cases:
+        with Session(root, init_scripts=scripts) as s:
+            boot(s, hash_)
+            for _ in range(12):
+                s.tick(MIN)
+            n = tv_hits(s, 4)
+            assert n >= 12, (name, n)  # 15 s cadence: 16 in 4 minutes; the slow cadence gives 8
+    with Session(root, init_scripts=[seed("septa.rules.v1", json.dumps({"rules": [dict(RULE, enabled=False)]}))]) as s:
+        boot(s)  # a disabled rule does not count
+        for _ in range(12):
+            s.tick(MIN)
+        n = tv_hits(s, 4)
+        assert n <= 11, n
+
+
 # ---------------------------------------------------------------- 6. cache-skew guard
 def test_version_stamp_matches_content(root):
     root = pathlib.Path(root)
@@ -252,7 +346,7 @@ def test_version_stamp_matches_content(root):
     # the script itself: idempotent, and it notices a changed file
     with tempfile.TemporaryDirectory() as tmp:
         tmp = pathlib.Path(tmp)
-        for d in ("js", "css"):
+        for d in ("js", "css", "data"):
             shutil.copytree(root / d, tmp / d)
         (tmp / "index.html").write_text(re.sub(r"\?v=[0-9a-f]+", "", html))
         assert stamp_version.main(["--root", str(tmp), "--check"]) == 1
@@ -265,6 +359,37 @@ def test_version_stamp_matches_content(root):
         assert stamp_version.main(["--root", str(tmp), "--check"]) == 1
         assert stamp_version.main(["--root", str(tmp)]) == 0 and (tmp / "index.html").read_text() != once
         assert stamp_version.main(["--root", str(tmp), "--check"]) == 0
+        # the network file is covered too: changing it alone changes the token
+        with open(tmp / "data" / "bus-network.json", "a") as f:
+            f.write("\n")
+        assert stamp_version.main(["--root", str(tmp), "--check"]) == 1
+        assert stamp_version.main(["--root", str(tmp)]) == 0 and stamp_version.main(["--root", str(tmp), "--check"]) == 0
+
+
+def test_network_url_carries_the_script_token(root):
+    """routing.js reads ?v= from its own script tag and puts the same token on the network file's URL; no token, no query."""
+    token = stamp_version.content_hash(root)
+    with Session(root) as s:
+        seen = []
+        s.page.on("request", lambda r: seen.append(r.url) if "bus-network.json" in r.url else None)
+        boot(s)
+        s.page.evaluate("window.SEPTA.routing.loadNetwork()")
+        s.page.wait_for_timeout(300)
+        assert seen and all(u.endswith("/data/bus-network.json?v=" + token) for u in seen), seen
+    root = pathlib.Path(root)
+    tmp = pathlib.Path(tempfile.mkdtemp())  # an unstamped copy of the page: the fallback is no query
+    for d in ("js", "css", "data", "icons"):
+        if (root / d).exists():
+            shutil.copytree(root / d, tmp / d)
+    (tmp / "index.html").write_text(re.sub(r"(js/[a-z]+\.js)\?v=[0-9a-f]+", r"\1", (root / "index.html").read_text()))
+    with Session(tmp) as s:
+        seen = []
+        s.page.on("request", lambda r: seen.append(r.url) if "bus-network.json" in r.url else None)
+        boot(s)
+        s.page.evaluate("window.SEPTA.routing.loadNetwork()")
+        s.page.wait_for_timeout(300)
+        assert seen and all(u.endswith("/data/bus-network.json") for u in seen), seen
+    shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_stamped_urls_load(root):

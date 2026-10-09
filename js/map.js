@@ -217,21 +217,30 @@
     return v.kind + '|' + v.badge + '|' + badgeLetter(v) + '|' + facingOf(v);
   }
   var DIR_WORD = { N: 'northbound', E: 'eastbound', S: 'southbound', W: 'westbound' };
-  /* Accessible name for a marker, e.g. "Route 57 bus, northbound, 2 min late" (no direction words for a loop or an
-   unknown direction; Regional Rail trains have no route direction, so they say "heading NE"). lateInfo() turns 999 into words. */
-  function vehLabel(v) {
+  /* Accessible name for a marker, e.g. "Route 57 bus, N, 2 min late". The visible badge letter stays in the name once
+   (WCAG 2.5.3 label in name, so voice control can say "click N"); the direction word is not repeated here but sits in the
+   title, which is the accessible description (vehTitle). A loop or unknown direction has no letter. Regional Rail trains have
+   no route direction, so they say "heading NE". lateInfo() turns 999 into words. `spoken` (the one-off "details opened"
+   announcement, which is not a control's name) says the word instead of the letter: "Route 57 bus, northbound, 2 min late". */
+  function vehLabel(v, spoken) {
     var nm =
       v.kind === 'train'
         ? 'Regional Rail train ' + v.badge + (v.route ? ' ' + v.route : '')
         : 'Route ' + v.badge + ' ' + MODE_NAME[v.kind].toLowerCase();
     var c = badgeLetter(v);
-    var dirTxt = v.kind === 'train' ? (c ? ' heading ' + c : '') : c ? ', ' + c + ', ' + DIR_WORD[c] : '';
-    return nm + dirTxt + ', ' + lateInfo(v.late).txt.toLowerCase() + (v.stale ? ', stale' : '');
+    var dirTxt = v.kind === 'train' ? (c ? ' heading ' + c : '') : c ? ', ' + (spoken ? DIR_WORD[c] : c) : '';
+    return (
+      nm +
+      dirTxt +
+      ', ' +
+      lateInfo(v.late).txt.toLowerCase() +
+      (v.stale ? ', position may be out of date' : '')
+    );
   }
   function vehTitle(v) {
-    return v.kind === 'train'
-      ? 'Train ' + v.badge + ' · ' + v.route
-      : 'Route ' + v.badge + ' ' + MODE_NAME[v.kind].toLowerCase();
+    if (v.kind === 'train') return 'Train ' + v.badge + ' · ' + v.route;
+    var c = badgeLetter(v);
+    return 'Route ' + v.badge + ' ' + MODE_NAME[v.kind].toLowerCase() + (c ? ', ' + DIR_WORD[c] : '');
   }
   var focusKey = null; /* key of the marker that has keyboard focus */
   function zOffset(key) {
@@ -296,6 +305,8 @@
       if (el2) {
         var lbl = vehLabel(v);
         if (el2.getAttribute('aria-label') !== lbl) el2.setAttribute('aria-label', lbl);
+        var ttl = vehTitle(v);
+        if (el2.getAttribute('title') !== ttl) el2.setAttribute('title', ttl);
         el2.classList.toggle('stale', !!v.stale);
         el2.classList.toggle('sel', state.selected === v.key);
       }
@@ -325,6 +336,10 @@
     return null;
   }
   var NARROW = window.matchMedia('(max-width:760px), (max-height:500px)');
+  /* The card layout (bottom-anchored vehicle card) switches at 840 px, not at the sheet's 760 (css/map.css, css/stops.css). */
+  var CARD_NARROW = window.matchMedia('(max-width:840px), (max-height:500px)');
+  /* Same condition as the css/stops.css rule that hides the stop card behind an open vehicle card. */
+  var STOP_HIDDEN = window.matchMedia('(max-width:1180px), (max-height:500px)');
   function select(k, opts) {
     state.selected = k;
     markers.forEach(function (m, key) {
@@ -335,12 +350,12 @@
     renderDetail();
     var v = findVehicle(k);
     /* The card is not a live region (it is rebuilt on every refresh). Opening it is announced once, here. */
-    if (v) $('#detailLive').textContent = vehLabel(v) + '. Vehicle details opened.';
+    if (v) $('#detailLive').textContent = vehLabel(v, true) + '. Vehicle details opened.';
     if (opts && opts.focus) {
       var h = $('#detailHead');
       if (h) h.focus();
     }
-    if (NARROW.matches) panAboveCard(k);
+    if (CARD_NARROW.matches) panAboveCard(k);
   }
   /* On a phone the vehicle card covers most of the short map. Pan (once, on selection only) so the selected marker
    sits in the strip between the top of the map (or the banner) and the top of the card. Zoom is untouched. */
@@ -480,8 +495,8 @@
       vs.type = 'button';
       vs.id = 'viewStop';
       vs.addEventListener('click', function () {
-        /* On a phone the stop card is hidden while the vehicle card is open, so close the vehicle card to show it. */
-        if (NARROW.matches) clearSelection();
+        /* The stop card is hidden while the vehicle card is open (css/stops.css), so close the vehicle card to show it. */
+        if (STOP_HIDDEN.matches) clearSelection();
         openStop(v.route, v.nextId, { focus: true, opener: vs });
       });
       nextNode.appendChild(vs);

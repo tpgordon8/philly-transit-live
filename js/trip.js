@@ -31,9 +31,10 @@
     from: null,
     to: null
   }; /* {kind:'center'} | {pt:{lat,lng,name}}; cleared when the user edits the text */
-  var TRIP_REDUCED = function () {
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  };
+  /* Motion allowed? The map module owns the reduced-motion query; without it (Leaflet missing) assume yes. */
+  function motionOK() {
+    return S.map && S.map.animOK ? S.map.animOK() : true;
+  }
   function tripFieldEl(w) {
     return $(w === 'from' ? '#tripFrom' : '#tripTo');
   }
@@ -254,7 +255,7 @@
     var v = trip.view;
     trip.view = null;
     trip.fit = null;
-    if (v) map.setView(v.center, v.zoom, { animate: !TRIP_REDUCED() });
+    if (v) map.setView(v.center, v.zoom, { animate: motionOK() });
   }
   function tripFail(msg, retry, id) {
     var box = $('#tripResults');
@@ -605,7 +606,7 @@
     try {
       mapEl.scrollIntoView({
         block: PHONE.matches ? 'start' : 'nearest',
-        behavior: TRIP_REDUCED() ? 'auto' : 'smooth'
+        behavior: motionOK() ? 'smooth' : 'auto'
       });
     } catch (e) {
       /* scrollIntoView options are not supported everywhere; skipping the scroll is fine */
@@ -675,7 +676,7 @@
       map.fitBounds(trip.fit, {
         paddingTopLeft: [34, 58],
         paddingBottomRight: [34, 44],
-        animate: !TRIP_REDUCED()
+        animate: motionOK()
       });
   }
   S.trip.tripRenderPlaces = tripRenderPlaces;
