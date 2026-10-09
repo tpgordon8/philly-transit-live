@@ -589,7 +589,9 @@
         block: PHONE.matches ? 'start' : 'nearest',
         behavior: TRIP_REDUCED() ? 'auto' : 'smooth'
       });
-    } catch (e) {}
+    } catch (e) {
+      /* scrollIntoView options are not supported everywhere; skipping the scroll is fine */
+    }
     tripFit();
   }
   /* ----- Map drawing ----- */

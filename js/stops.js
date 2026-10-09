@@ -127,7 +127,9 @@
   function setHash(h) {
     try {
       history.replaceState(null, '', location.pathname + h);
-    } catch (e) {}
+    } catch (e) {
+      /* history can be blocked (sandboxed frames); the link is a convenience */
+    }
   }
   function stopLink(st) {
     return location.origin + location.pathname + '#stop=' + st.id + '&route=' + st.route;
@@ -143,7 +145,9 @@
     $('#stopCard').replaceChildren();
     try {
       history.replaceState(null, '', location.pathname);
-    } catch (e) {}
+    } catch (e) {
+      /* history can be blocked (sandboxed frames); the link is a convenience */
+    }
   }
   var stopOpener = null;
   /* Close the stop card and put focus back where it came from (the opener if it is still on screen, else the map). */

@@ -24,7 +24,7 @@ const LOCAL_RE = /^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/;
 const originAllowed = (o) => o === PAGES || LOCAL_RE.test(o);
 const BASE = 'https://api.septa.org/hackathon/';
 const ROUTE_RE = /^[A-Za-z0-9]{1,6}$/;
-const STATION_RE = /^[A-Za-z0-9 .'&\/-]{2,40}$/;
+const STATION_RE = /^[A-Za-z0-9 .'&/-]{2,40}$/;
 const NUM_RE = /^-?\d{1,3}(\.\d{1,15})?$/;
 const BBOX = { latMin: 39.6, latMax: 40.4, lngMin: -75.9, lngMax: -74.5 };
 const ROUTE_BASE = 'https://routing.openstreetmap.de/routed-';

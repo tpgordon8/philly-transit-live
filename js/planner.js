@@ -108,7 +108,9 @@
       e.status = r.status;
       try {
         e.body = JSON.parse(t);
-      } catch (x) {}
+      } catch (x) {
+        /* the error body is optional detail */
+      }
       throw e;
     });
   }
@@ -321,7 +323,9 @@
     (ctx.ctls || []).slice().forEach(function (c) {
       try {
         c.abort();
-      } catch (e) {}
+      } catch (e) {
+        /* aborting an already finished request is harmless */
+      }
     });
     (ctx.keys || []).forEach(function (k) {
       if (tpRoute[k.key] === k.p) delete tpRoute[k.key];
@@ -895,8 +899,7 @@
         }
       }
       /* Baseline structures: walk, car, walk-bike-walk. */
-      var base = [],
-        walkSpec = { p: 'foot', a: O, b: D },
+      var walkSpec = { p: 'foot', a: O, b: D },
         carSpec = { p: 'car', a: O, b: D },
         bikePair = null,
         bikeSpec = null;

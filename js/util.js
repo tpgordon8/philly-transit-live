@@ -6,7 +6,6 @@
   /* ---------- Pure logic (no DOM) ---------- */
   var REFRESH_MS = 15000,
     GHOST_MAX_S = 150,
-    STALE_AFTER_MS = 22000,
     DROP_AFTER_MS = 120000;
   var TROLLEY = new Set([
     '10',
@@ -245,7 +244,7 @@
   /* One-time migration (key septa.defaults.v2): browsers that saved the old defaults (all modes, 1.5 mi) get the new ones
    (buses only, 0.5 mi) once; center and any other saved fields are kept. Once the key exists saved choices are never touched. */
   (function () {
-    var present = true;
+    var present;
     try {
       present = localStorage.getItem('septa.defaults.v2') !== null;
     } catch (e) {

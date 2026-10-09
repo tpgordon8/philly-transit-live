@@ -291,11 +291,15 @@
       box.appendChild(t);
       /* Desktop shows up to 3 and drops the oldest. On a phone only the newest shows and the rest wait (CSS), so keep up to 20. */
       while (box.children.length > (NARROW.matches ? 20 : 3)) box.firstChild.remove();
-    } catch (e) {}
+    } catch (e) {
+      /* a toast is best effort */
+    }
     try {
       if (window.Notification && Notification.permission === 'granted' && document.hidden)
         new Notification(msg);
-    } catch (e) {}
+    } catch (e) {
+      /* Notification can throw on some browsers; the toast already shows */
+    }
   }
   function ruleStatusText(res) {
     switch (res.state) {
@@ -331,7 +335,7 @@
     });
     if (changed) saveRules();
   }
-  function renderRules(focusAfter) {
+  function renderRules() {
     var ul = $('#rules');
     ul.replaceChildren();
     $('#rulesEmpty').hidden = rulesState.rules.length > 0;
