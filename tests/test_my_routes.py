@@ -3,6 +3,12 @@ import json
 
 from harness import Session
 
+# Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
+FAST = {
+    "test_star_filters_map_and_counts",
+    "test_star_persists_across_reload",
+}
+
 KEY = "septa.routes.v1"
 
 

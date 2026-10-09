@@ -4,6 +4,18 @@ import json
 
 from harness import FIX, Session
 
+# Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
+FAST = {
+    "test_banner_reflects_each_sources_state",
+    "test_bogus_future_record_does_not_empty_map",
+    "test_chips_counts_markers_and_toggles",
+    "test_corrupt_prefs_null",
+    "test_dead_code_removed",
+    "test_null_elements_do_not_throw",
+    "test_places_validated_capped_and_truncated",
+    "test_unit_kinds",
+}
+
 HOOK = "window.__SEPTA_TEST__ = true"
 TV = json.loads((FIX / "TransitView.json").read_text())
 HIDDEN = """(function () {

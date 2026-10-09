@@ -6,6 +6,15 @@ openStop in index.html.
 """
 from harness import load_fixtures
 
+# Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
+FAST = {
+    "test_alerts_schema",
+    "test_fixtures_all_parse",
+    "test_stops_schema",
+    "test_trainview_schema",
+    "test_transitview_bus_schema",
+}
+
 STR, NUM, NULLABLE_STR, NULLABLE_NUM = "str", "num", "str|null", "num|null"
 
 

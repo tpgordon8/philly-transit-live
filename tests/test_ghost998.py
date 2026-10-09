@@ -3,6 +3,11 @@ import json
 
 from harness import FIX, Session
 
+# Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
+FAST = {
+    "test_late_998_records_are_dropped",
+}
+
 HOOK = ["window.__SEPTA_TEST__ = true"]
 TV = json.loads((FIX / "TransitView.json").read_text())
 

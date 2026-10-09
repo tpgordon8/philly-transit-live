@@ -1,0 +1,7 @@
+{
+  "note": "Expected size of data/bus-network.json. tests/test_data_sanity.py allows 10 percent drift. After an intentional change (a regenerated feed that really has more or fewer routes), update these numbers in the same commit.",
+  "routes": 153,
+  "stops": 12936,
+  "patterns": 436,
+  "max_bytes": 1500000
+}

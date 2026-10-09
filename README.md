@@ -14,11 +14,39 @@ caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md). By defau
 
 Needs Python 3 with Playwright (headless Chromium) and, for the Worker unit test, Node.
 
-    python3 tests/run.py                  # whole offline suite, about a few minutes
+    python3 tests/run.py --fast           # fast subset, one or more tests per feature area (CI gate on every push)
+    python3 tests/run.py                  # whole offline suite (runs on main in CI)
     python3 tests/run.py --only stop      # only tests whose file or name contains "stop"
+    python3 tests/run.py --jobs 2         # worker processes (default: CPU count, at most 4)
     python3 tests/live_smoke.py           # optional: checks the deployed Worker (needs network)
 
 The suite mocks the Worker and Leaflet, so it never touches SEPTA or the real Worker.
+
+How it runs: every test executes in its own child process, several at a time. Each gets its own output folder
+`tests/out/<file>/<test>/` (screenshots go there, set through `SEPTA_TEST_OUT`), and the harness binds ephemeral
+ports, so parallel tests never collide. `tests/out/report.txt` is the merged report.
+
+Tagging: each `tests/test_*.py` has a module-level set naming its fast tests, for example
+
+    FAST = {"test_boot_and_refresh", "test_ghost_filter"}
+
+Every other `test_*` function in the file is full-only. Put a test in `FAST` when it covers a feature area the fast
+set would otherwise miss or is the cheapest test of that area; keep the fast run near 90 seconds. `run.py` stops with
+an error if `FAST` is missing or names a test that does not exist. The Worker unit test (`tests/test_worker.mjs`) is
+always in the fast set.
+
+`tests/test_data_sanity.py` guards `data/bus-network.json`: route, stop and pattern counts within 10 percent of
+`tests/data_baseline.json`, file under 1.5 MB, feed end date still in the future. If a regenerated feed really changes
+the counts, update the baseline in the same commit.
+
+## Continuous integration and data refresh
+
+`.github/workflows/ci.yml` runs the Worker test and the fast suite on every push and pull request, and the full suite
+on `main`. `.github/workflows/refresh-bus-network.yml` runs monthly (and on demand from the Actions tab): it rebuilds
+`data/bus-network.json` with `tools/build_network.py` from SEPTA's GTFS zip, and only if the feed's validity dates
+changed opens a pull request with the new file and the data test results. The repository setting "Allow GitHub
+Actions to create and approve pull requests" must be on. Pull requests opened by the workflow do not start CI on
+their own; close and reopen the pull request to run it.
 
 ## Deploy the Worker
 

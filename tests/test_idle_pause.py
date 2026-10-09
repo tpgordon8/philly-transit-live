@@ -3,6 +3,13 @@ import json
 
 from harness import Session
 
+# Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
+FAST = {
+    "test_a_no_requests_after_an_hour_idle",
+    "test_d_keydown_resumes_and_enter_on_button_works",
+    "test_e_returning_to_visible_tab_resumes",
+}
+
 MIN = 60000
 RULE = {"rules": [{"id": "r1", "route": "21", "stopId": "14880", "stopName": "Test stop", "lat": 39.95, "lng": -75.17,
                    "minutes": 2, "enabled": True, "last": None}]}

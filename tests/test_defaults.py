@@ -6,6 +6,13 @@ import json
 
 from harness import Session
 
+# Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
+FAST = {
+    "test_a_fresh_browser_is_buses_only_half_mile_no_trainview",
+    "test_b_legacy_saved_prefs_migrate_once_keep_center",
+    "test_f_empty_state_half_mile_and_widen_button",
+}
+
 PREFS, KEY = "septa.prefs.v1", "septa.defaults.v2"
 NEW = {"bus": True, "trolley": False, "subway": False, "train": False}
 OLD_ALL = {"bus": True, "trolley": True, "subway": True, "train": True}

@@ -3,6 +3,15 @@ import json
 
 from harness import FIX, Session
 
+# Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
+FAST = {
+    "test_alerts_render_as_plain_text",
+    "test_boot_clean_and_live",
+    "test_failure_at_boot_shows_honest_unavailable_state",
+    "test_ghost_filter_rules",
+    "test_mobile_viewport_has_no_horizontal_scroll",
+}
+
 HOOK = ["window.__SEPTA_TEST__ = true"]  # exposes the app's pure functions (see index.html)
 TV = json.loads((FIX / "TransitView.json").read_text())
 TR = json.loads((FIX / "TrainView.json").read_text())

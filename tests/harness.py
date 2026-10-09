@@ -15,6 +15,7 @@ import functools
 import http.server
 import json
 import math
+import os
 import pathlib
 import re
 import threading
@@ -306,7 +307,7 @@ class Session:
         return self.page.evaluate("document.querySelectorAll('.veh-wrap').length")
 
     def shot(self, name):
-        out = HERE / "out"
-        out.mkdir(exist_ok=True)
+        out = pathlib.Path(os.environ.get("SEPTA_TEST_OUT") or HERE / "out")  # run.py gives each test its own folder
+        out.mkdir(parents=True, exist_ok=True)
         self.page.screenshot(path=str(out / f"{name}.png"))
         return str(out / f"{name}.png")

@@ -3,6 +3,13 @@ import json
 
 from harness import FIX, Session
 
+# Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
+FAST = {
+    "test_copy_link",
+    "test_deep_link_opens_and_does_not_persist_center",
+    "test_stop_opens_when_transitview_fails",
+}
+
 STOPS = json.loads((FIX / "Stops.json").read_text())
 TV = json.loads((FIX / "TransitView.json").read_text())
 PREFS = "septa.prefs.v1"

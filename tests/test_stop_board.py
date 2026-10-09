@@ -5,6 +5,13 @@ import re
 
 from harness import FIX, Session
 
+# Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
+FAST = {
+    "test_board_measuring_then_numeric_and_decreasing",
+    "test_heading_toward_and_away_and_other_route",
+    "test_unit_speed_and_eta",
+}
+
 STOPS = json.loads((FIX / "Stops.json").read_text())
 SID, SROUTE = "14880", "21"
 STOP = next(x for x in STOPS[SROUTE] if x["stopid"] == SID)

@@ -5,6 +5,11 @@ Pure Python, offline. Fails with the offending pattern/stop ids when the generat
 import json
 import pathlib
 
+# Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
+FAST = {
+    "test_network_data",
+}
+
 MAX_BYTES = 2_500_000
 LAT, LNG = (39.6, 40.4), (-75.8, -74.7)
 
