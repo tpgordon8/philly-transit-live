@@ -299,11 +299,13 @@ class _Quiet(http.server.SimpleHTTPRequestHandler):
 
 
 class Session:
-    def __init__(self, root=None, viewport=(1280, 800), geolocation=None, extra_routes=None, init_scripts=(), legacy_defaults=True, touch=False):
+    def __init__(self, root=None, viewport=(1280, 800), geolocation=None, extra_routes=None, init_scripts=(), legacy_defaults=True, touch=False, mobile=False, scale=1):
         self.root = pathlib.Path(root or HERE.parent)
         self.viewport = {"width": viewport[0], "height": viewport[1]}
         self.geolocation = geolocation
         self.touch = touch  # True: a touch screen (page.touchscreen.tap works)
+        self.mobile = mobile  # True: Chromium's mobile emulation (meta viewport honoured, coarse pointer, overlay scrollbars)
+        self.scale = scale  # device pixel ratio
         self.extra_routes = extra_routes or {}  # substring -> (status, content_type, body)
         self.init_scripts = ([LEGACY_DEFAULTS_JS] if legacy_defaults else []) + list(init_scripts)
         self.worker = Worker()
@@ -320,7 +322,7 @@ class Session:
         threading.Thread(target=self._srv.serve_forever, daemon=True).start()
         self._pw = sync_playwright().start()
         self.browser = self._pw.chromium.launch()
-        self.ctx = self.browser.new_context(viewport=self.viewport, has_touch=self.touch)
+        self.ctx = self.browser.new_context(viewport=self.viewport, has_touch=self.touch, is_mobile=self.mobile, device_scale_factor=self.scale)
         if self.geolocation:
             self.ctx.grant_permissions(["geolocation"])
             self.ctx.set_geolocation(self.geolocation)

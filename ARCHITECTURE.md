@@ -406,7 +406,7 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 
 ## 14. Code layout (WP3 split, reshaped by WP-F)
 
-`index.html` keeps the markup, the Leaflet script tag (with its SRI hash, unchanged), nine `<link rel="stylesheet">` tags and 18 lines of inline script. The application code is thirteen classic scripts under `js/` and the styles are nine stylesheets under `css/`. There is no bundler, no ES modules and no build step; GitHub Pages serves the files as they are. Prettier and ESLint (section 15.1) are dev tools only.
+`index.html` keeps the markup, the Leaflet script tag (with its SRI hash, unchanged), nine `<link rel="stylesheet">` tags and 18 lines of inline script. The application code is fourteen classic scripts under `js/` and the styles are nine stylesheets under `css/`. There is no bundler, no ES modules and no build step; GitHub Pages serves the files as they are. Prettier and ESLint (section 15.1) are dev tools only.
 
 ### 14.1 Files and load order
 
@@ -424,13 +424,14 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 | `js/candidates.js` | 217 | trip planner bus candidates: nearby stops and stations, wait estimates, `buildBusCandidates` (pure) |
 | `js/planner.js` | 535 | trip planner: leg assembly, schedule state, `planTrips` (no DOM) |
 | `js/trip.js` | 671 | trip planner interface: form, results, map drawing |
+| `js/sheet.js` | 70 | phone bottom sheet (peek or open), keeps the map's size in step, on-screen keyboard handling through `visualViewport` |
 | `js/main.js` | 111 | the `window.__SEPTA_TEST__` hook and the start-up calls |
 
 | Stylesheet | Holds |
 |------------|-------|
 | `css/leaflet.css` | the Leaflet stylesheet (was inlined; the Leaflet script tag and its SRI hash are untouched) |
 | `css/base.css` | design tokens and dark theme, reset, typography, header and brand, the status dot |
-| `css/layout.css` | app shell, sidebar, map stage and their responsive rules (820 px and 480 px) |
+| `css/layout.css` | app shell, sidebar, map stage, the phone bottom sheet and their responsive rules (820 px, phone landscape) |
 | `css/map.css` | Leaflet overrides and controls, vehicle markers, pins, the vehicle card, the empty-state card |
 | `css/panel.css` | sidebar sections, search, buttons, chips, saved places, My routes |
 | `css/trip.css` | trip planner form, results and map drawing |
@@ -440,7 +441,7 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 
 The stylesheets load in the order of that table, and the rules inside each file keep the relative order they had in the old inline block. WP-F checked that no pair of rules with the same specificity and a shared property swapped order, and that computed styles of every element and screenshots at 390 and 1280 px, light and dark, were identical before and after.
 
-The inline script before the app scripts creates `window.SEPTA` (one object per file except `main`, which adds none, plus `failed` and `loadFailed`) and the load-error listener. `index.html` then loads `util`, `feed`, `map`, `landmarks`, `suggest`, `panel`, `stops`, `alerts`, `routing`, `candidates`, `planner`, `trip`, `main` in that order, then a one-line check that `main.js` ran.
+The inline script before the app scripts creates `window.SEPTA` (one object per file except `main`, which adds none, plus `failed` and `loadFailed`) and the load-error listener. `index.html` then loads `util`, `feed`, `map`, `landmarks`, `suggest`, `panel`, `stops`, `alerts`, `routing`, `candidates`, `planner`, `trip`, `sheet`, `main` in that order, then a one-line check that `main.js` ran.
 
 ### 14.2 How the files share code
 
@@ -489,6 +490,15 @@ Goals from the owner: (1) the N/E/S/W badge and the vehicle's facing show the ro
 4. **WP-D Septer brand** (owns `index.html` head and header, `css/base.css` brand rules, manifest and icons, README and ARCHITECTURE naming, test strings). Parallel with B and C.
 5. **WP-E Mobile and responsive** (after B, C and D are merged). Audit 320, 360, 390, 414, 600, 768, 820, 1024, 1280 and 1440 px wide plus phone landscape (844x390), with touch emulation. Requirements: no horizontal scroll, tap targets at least 44 px, inputs at least 16 px so iOS does not zoom, safe-area insets (`viewport-fit=cover`, `env(safe-area-inset-*)`), `dvh` heights, the autocomplete list and the on-screen keyboard never hide the field being typed in, a map-first phone layout with the panel reachable by thumb, visible focus, and no overlap of map controls with the panel. Parametrised viewport tests plus a screenshot matrix reviewed by the lead.
 6. **WP-G Review and release.** An independent reviewer on the merged result (correctness, request budget, privacy text, XSS in suggestion labels, accessibility of the combobox, clean-code audit, debt register). Fix round. Full suite, CI green, push, live check in Chrome at several widths. Mark this section closed.
+
+### 15.2.1 WP-E as built
+
+- **Layout.** At most 820 px wide the grid is map over panel and the panel is a bottom sheet. `js/sheet.js` sets `#app[data-sheet]` to `peek` (panel row 176 px: handle, name and status on one line, search field) or `open` (the panel gets half the screen, so the map keeps at least 50%). It starts in `peek`; the handle (`#sheetHandle`, `aria-expanded`) toggles; focus on any control other than the search field opens it. Without the attribute (no JS) the sheet is open. Phone landscape (width at most 820, height at most 500) puts the panel back as a left column and hides the handle; 844x390 is wider than 820 and uses the sidebar.
+- **Map controls and cards.** The zoom buttons are 44 px and stay bottom-right. Below 820 px wide, or in a window shorter than 500 px, the vehicle card, stop card and empty-state card end 64 px short of the right edge, and the vehicle card sits above the attribution line, so no card covers a Leaflet control. The stop card is hidden while the vehicle card is open up to 1180 px wide (the map is then too narrow for both cards, 372 + 320 px) and returns when the vehicle card closes.
+- **Touch and text.** Buttons, chips, selects, range inputs, suggestion rows and the panel's links are at least 44 px high (links get padding, not line height); text inputs, selects and the stop card's field are 16 px.
+- **Viewport.** `viewport-fit=cover`; the root keeps `env(safe-area-inset-*)` on all four sides; the page is `100vh` with `100dvh` after it, less `--kb`. `--kb` is the height an on-screen keyboard covers when the browser leaves the layout alone (iOS): `sheet.js` reads it from `visualViewport` and shrinks the page by it, so the sheet and the field being typed in stay above the keyboard. Browsers that resize the layout (Android Chrome) need nothing. The suggestion list (WP-C) already opens above the field when there is more room there; a field outside the visual viewport closes it. After a keyboard settles the field is scrolled into view.
+- **Not changed.** The attribution link inside the Leaflet attribution control is small by design (required credit) and is exempt from the 44 px rule in `tests/test_responsive.py`; inline links in running text get a 44 px hit area through padding.
+- **Tests.** `tests/test_responsive.py` has one test per viewport (320, 360, 390, 414, 600, 768, 820, 1024, 1280, 1440 and 844x390 landscape; phones and landscape use Chromium mobile emulation) checking overflow, tap targets, font sizes, the shell, suggestions, vehicle and stop cards, focus rings and a planned trip, plus tests for the sheet, the keyboard (resized viewport and a faked `visualViewport`), safe areas, and a populated panel. `tests/shots_responsive.py` is the screenshot matrix and is not part of the suite. `tests/harness.py` `Session` gained `mobile` and `scale`.
 
 ### 15.3 Definition of done
 

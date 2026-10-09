@@ -36,6 +36,7 @@
 <body>
 <div id="app">
   <aside id="panel" aria-label="Controls">
+    <button class="sheet-handle" id="sheetHandle" type="button" aria-expanded="true" aria-controls="panel"><span class="sheet-label">Controls</span></button>
     <div class="brand">
       <h1>Septer</h1>
       <div class="status" id="status"><span class="dot" id="dot"></span><span id="statusText" aria-hidden="true">Connecting to SEPTA…</span><span class="sr-only" id="statusLive" role="status" aria-live="polite">Connecting to SEPTA</span></div>
@@ -136,7 +137,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script>
 /* Module namespace and load-failure banner (ARCHITECTURE.md section 14). Every js/*.js file adds only window.SEPTA.<name>. */
-window.SEPTA={util:{},feed:{},map:{},panel:{},stops:{},alerts:{},routing:{},candidates:{},planner:{},trip:{},landmarks:{},suggest:{},failed:[]};
+window.SEPTA={util:{},feed:{},map:{},panel:{},stops:{},alerts:{},routing:{},candidates:{},planner:{},trip:{},landmarks:{},suggest:{},sheet:{},failed:[]};
 window.SEPTA.loadFailed=function(file){
   var S=window.SEPTA,box=document.getElementById('loadError');
   if(S.failed.indexOf(file)<0)S.failed.push(file);
@@ -165,6 +166,7 @@ window.addEventListener('error',function(e){
 <script src="js/candidates.js"></script>
 <script src="js/planner.js"></script>
 <script src="js/trip.js"></script>
+<script src="js/sheet.js"></script>
 <script src="js/main.js"></script>
 <script>if(!window.SEPTA.started&&window.SEPTA.failed.indexOf('main.js')<0)window.SEPTA.loadFailed('main.js (the app did not start)');</script>
 

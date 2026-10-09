@@ -283,7 +283,7 @@
     for (var i = 0; i < l.length; i++) if (l[i].key === k) return l[i];
     return null;
   }
-  var NARROW = window.matchMedia('(max-width:820px)');
+  var NARROW = window.matchMedia('(max-width:820px), (max-height:500px)');
   function select(k, opts) {
     state.selected = k;
     markers.forEach(function (m, key) {

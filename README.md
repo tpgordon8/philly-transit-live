@@ -17,12 +17,12 @@ caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md). By defau
 `index.html` holds the markup and a short loader. The styles are nine plain stylesheets in `css/`, linked in this
 order: `leaflet` (the Leaflet stylesheet), `base` (tokens, reset, header), `layout` (app shell, responsive rules), `map`
 (markers, pins, vehicle card), `panel` (sidebar sections), `trip` (trip planner), `suggest` (place and address suggestions), `stops` (stop card and board) and
-`alerts` (service alerts, leave-now rules, toasts, banners). The application code is thirteen classic scripts in `js/`,
+`alerts` (service alerts, leave-now rules, toasts, banners). The application code is fourteen classic scripts in `js/`,
 loaded with ordinary `<script src>` tags in dependency order: `util` (helpers, storage, shared state), `feed` (vehicle
 feed, ghost filter, idle pause, refresh), `map` (Leaflet map, markers, vehicle card), `landmarks` (about 40 well-known Philadelphia places), `suggest` (place and address suggestions as you type), `panel` (sidebar: status, search,
 saved places, Home, radius, filters), `stops` (stop links, stop board, ETA), `alerts` (service alerts, leave-now rules),
 `routing` (trip planner data clients), `candidates` (bus candidates), `planner` (trip planner), `trip` (trip planner
-interface) and `main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else
+interface), `sheet` (phone bottom sheet, on-screen keyboard) and `main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else
 is global. If a file fails to load, a red banner at the top of the page names it. How the files fit together and how to
 add one: [ARCHITECTURE.md](ARCHITECTURE.md) section 14. There is no build step; GitHub Pages serves the files as they are.
 
@@ -40,6 +40,14 @@ pinned in `package-lock.json`). Needs Node 20.19 or newer.
 
 CI runs `npx prettier --check` and `npx eslint .` as its own job on every pull request and on `main`. The style is
 ES5 on purpose (`var`, classic scripts); Prettier only changes layout, so format before you commit.
+
+## Phones and small screens
+
+Up to 820 px wide the map takes the screen and the controls are a bottom sheet under it: the closed sheet shows the Septer name, the
+status line and the search field; the Controls handle (or reaching any control below the search field) opens it. Wide screens keep the
+sidebar, and so does a phone held sideways. Every button, chip, field and link is at least 44 px, text fields are 16 px so iOS does not
+zoom, and the page keeps clear of notches. `python3 tests/shots_responsive.py` saves a matrix of screenshots to `/tmp/claude-0/shots/`
+(ten widths plus phone landscape; panel closed and open, trip planner, suggestions, vehicle and stop cards) for a visual check.
 
 ## Run the tests
 

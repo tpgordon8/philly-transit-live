@@ -5,17 +5,18 @@
 .leaflet-control-attribution a{color:var(--mute)!important}
 .leaflet-bar a{background:var(--panel);color:var(--ink);border-color:var(--line)}
 .leaflet-bar a:hover{background:var(--paper)}
-.leaflet-bar a,.leaflet-touch .leaflet-bar a{width:40px;height:40px;line-height:40px}
+.leaflet-bar a,.leaflet-touch .leaflet-bar a{width:44px;height:44px;line-height:44px}
+.leaflet-touch .leaflet-bar a:first-child,.leaflet-touch .leaflet-bar a:last-child{width:44px;height:44px;line-height:44px}
 #empty{position:absolute;z-index:1050;left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,calc(100% - 32px));text-align:center;padding:18px 18px 16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow)}
 #empty h3{margin:0 0 4px;font:700 22px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.04em}
 #empty p{margin:0 0 12px;color:var(--mute)}
 .pin .stp{display:block;box-sizing:border-box;width:24px;height:24px;border-radius:50%;background:var(--accent);border:5px solid var(--panel);box-shadow:0 0 0 2px var(--ink),var(--shadow)}
 #detail .dh #starBtn[aria-pressed="true"]{border-color:var(--accent);color:var(--ink)}
 #detail{position:absolute;z-index:1100;left:12px;bottom:12px;width:min(372px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow)}
-#detail .dh{display:flex;gap:10px;align-items:center;padding:12px 12px 10px;border-bottom:1px solid var(--line)}
+#detail .dh{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 12px 10px;border-bottom:1px solid var(--line)}
 #detail .rbadge{grid-row:auto;font-size:20px;min-width:46px;padding:5px 8px}
-#detail .dt{flex:1;min-width:0}
-#detail .dt b{display:block;font:700 20px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.03em;overflow-wrap:anywhere}
+#detail .dt{flex:1 1 8em;min-width:0}
+#detail .dt b{display:block;font:700 20px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.03em;overflow-wrap:break-word}
 #detail .dt span{color:var(--mute);font-size:12.5px}
 #detail dl{margin:0;padding:8px 12px 12px;display:grid;grid-template-columns:auto 1fr;gap:6px 14px}
 #detail dt{color:var(--mute);font-size:12.5px}
@@ -57,12 +58,14 @@
 path.rad{stroke:var(--accent);fill:var(--accent);fill-opacity:.06;stroke-width:1.5}
 path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-linecap:round;fill:none}
 @media (prefers-reduced-motion:reduce){.veh-wrap{transition:none!important}}
-@media (max-width:820px){
+/* Narrow or short screens: the cards leave the right-hand column free for the zoom buttons (44px wide, 10px in) and sit above the
+   attribution strip, so no card ever covers a Leaflet control. */
+@media (max-width:820px),(max-height:500px){
   /* The card never grows past the strip that select() reserves above it for the selected marker. */
-  #detail{left:8px;right:8px;width:auto;bottom:8px;max-height:calc(100% - 72px)}
+  #detail{left:8px;right:64px;width:auto;bottom:26px;max-height:calc(100% - 90px)}
   #detail .dh{padding:8px 10px 8px;gap:8px}
   #detail dl{padding:6px 10px 8px;gap:3px 12px}
-  #stage:has(#banner:not([hidden])) #detail,#stage:has(#idleBar:not([hidden])) #detail{max-height:calc(100% - 104px)}
+  #stage:has(#banner:not([hidden])) #detail,#stage:has(#idleBar:not([hidden])) #detail{max-height:calc(100% - 122px)}
   /* The zoom buttons live bottom-right; keep the empty-state card clear of them. */
-  #empty{left:8px;right:60px;width:auto;transform:translateY(-50%)}
+  #empty{left:8px;right:64px;width:auto;transform:translateY(-50%)}
 }

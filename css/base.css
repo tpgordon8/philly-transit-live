@@ -1,5 +1,5 @@
 /* base.css: design tokens, reset, typography, header and brand. */
-:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}
+:root{color-scheme:light;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}body{margin:0}[hidden]{display:none!important}
 /* Layout concept: signage-style control panel on the left, full-bleed map on the right.
    Under 820px the map sits on top and the panel becomes a scrolling lower sheet. */
 :root{
@@ -34,7 +34,10 @@
   --map-bg:#0e1620; --tile-filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.7);
   --shadow:0 6px 22px rgba(0,0,0,.5); color-scheme:dark;
 }
-html,body{height:100%}
+/* The page is exactly one screen tall. dvh follows a phone browser's collapsing toolbar (vh is the fallback); --kb is the height an
+   on-screen keyboard covers when the browser does not shrink the layout for it (set by js/sheet.js, 0 otherwise). */
+html{height:100vh;height:calc(100dvh - var(--kb,0px))}
+body{height:100%}
 body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.4;overflow:hidden}
 *{box-sizing:border-box}
 button,input,select{font:inherit;color:inherit}

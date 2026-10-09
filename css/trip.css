@@ -7,7 +7,7 @@
 #tripForm .tp-lab:first-child{margin-top:0}
 .tp-err{margin-top:4px;min-height:0}
 .tp-mid{margin-top:8px}
-.tp-mid .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.tp-mid .btn{min-width:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
 .tp-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .tp-chips .btn{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .tp-go{width:100%;margin-top:12px}
