@@ -1,4 +1,4 @@
-"""Hermetic browser harness for Philly Transit Live.
+"""Hermetic browser harness for Septer.
 
 Serves a checkout of the repo over http://127.0.0.1:<port>, mocks the Cloudflare Worker from tests/fixtures,
 serves Leaflet from tests/vendor, answers tile and font requests with stubs, and records every request that
