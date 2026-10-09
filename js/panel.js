@@ -90,7 +90,7 @@
     st.forEach(function (k) {
       var c = el('span', 'chip on'),
         n = starName(k);
-      c.appendChild(el('span', null, k.indexOf('train:') === 0 ? n + ' line' : n));
+      c.appendChild(el('span', null, k.indexOf('train:') === 0 ? n + ' route' : n));
       var rm = el('button', 'btn small ghost', '\u00d7');
       rm.type = 'button';
       rm.dataset.remove = k;
@@ -127,7 +127,7 @@
       t;
     if (state.paused) t = 'Paused';
     else if (d.indexOf('live') >= 0) t = 'Live, ' + n + ' vehicle' + (n === 1 ? '' : 's') + ' shown';
-    else if (d.indexOf('stale') >= 0) t = 'Stale, showing last known positions';
+    else if (d.indexOf('stale') >= 0) t = 'Delayed, showing older positions';
     else if (d.indexOf('err') >= 0) t = 'Live data unavailable';
     else t = 'Connecting to SEPTA';
     var o = $('#statusLive');
@@ -178,7 +178,7 @@
       txt.innerHTML = '<b>Live data unavailable</b>';
       showBanner(
         '',
-        "<b>Live data unavailable.</b> Couldn't reach SEPTA's API through the proxy. No vehicle positions are shown, and none are guessed. Retrying automatically."
+        "<b>Live data unavailable.</b> We can't reach SEPTA right now, so no vehicles are shown. We'll keep trying."
       );
       return;
     }
@@ -191,28 +191,18 @@
           })
           .join(' and ');
         parts.push(
-          '<b>Showing last known positions for ' +
+          '<b>Showing older positions for ' +
             esc(which) +
-            '.</b> The latest refresh failed, so those markers are dimmed and will clear after 2 minutes.'
+            '.</b> The latest update failed. Dimmed markers disappear after 2 minutes.'
         );
       }
       if (down.length) {
         var gone = down
           .map(function (k) {
-            return k === 'bus' ? 'Bus and trolley' : 'Regional Rail';
+            return k === 'bus' ? 'Bus, trolley and subway' : 'Regional Rail';
           })
           .join(' and ');
-        parts.push(
-          '<b>' +
-            esc(gone) +
-            ' positions are unavailable.</b> No updates for over 2 minutes, so nothing is drawn for ' +
-            (down.length > 1
-              ? 'them'
-              : down[0] === 'bus'
-                ? 'them (subway lines come from the same feed)'
-                : 'it') +
-            '.'
-        );
+        parts.push('<b>' + esc(gone) + ' positions are unavailable.</b> No update for over 2 minutes.');
       }
       if (stale.length) {
         var newest = Math.max.apply(
@@ -223,10 +213,10 @@
           ),
           ago0 = Math.max(0, Math.round((now - newest) / 1000));
         dot.className = 'dot stale';
-        txt.innerHTML = '<b>Stale</b> · last good update ' + ago0 + 's ago';
+        txt.innerHTML = '<b>Delayed</b> · last update ' + ago0 + ' s ago';
       } else {
         dot.className = 'dot stale';
-        txt.innerHTML = '<b>Partial</b> · ' + n + ' vehicle' + (n === 1 ? '' : 's') + ' shown';
+        txt.innerHTML = '<b>Some data missing</b> · ' + n + ' shown';
       }
       showBanner('warn', parts.join(' '));
       return;
@@ -235,14 +225,31 @@
     hideBanner();
     dot.className = 'dot live';
     txt.innerHTML =
-      '<b>Live</b> · updated ' + ago + 's ago · ' + n + ' vehicle' + (n === 1 ? '' : 's') + ' shown';
+      '<b>Live</b> · updated ' + ago + ' s ago · ' + n + ' vehicle' + (n === 1 ? '' : 's') + ' shown';
   }
   /* ----- Search, location, radius, modes ----- */
   function setNote(msg, bad) {
     var n = $('#note');
     n.textContent = msg || '';
     n.className = 'note' + (bad ? ' bad' : '');
+    /* An error is tied to the search box until its value changes. */
+    var inp = $('#addr');
+    if (bad && msg) {
+      inp.setAttribute('aria-invalid', 'true');
+      inp.setAttribute('aria-describedby', 'note');
+    } else {
+      inp.removeAttribute('aria-invalid');
+      inp.removeAttribute('aria-describedby');
+    }
   }
+  $('#addr').addEventListener('input', function () {
+    this.removeAttribute('aria-invalid');
+    this.removeAttribute('aria-describedby');
+  });
+  /* The short Photon line links to the privacy details, which open when it is followed. */
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.priv-link')) $('#privacyDetails').open = true;
+  });
   function setCenter(c, fit, noSave) {
     state.center = { lat: c.lat, lng: c.lng, label: c.label || '' };
     if (!noSave) {
@@ -475,8 +482,9 @@
       go.addEventListener('click', function () {
         goTo(p);
       });
-      var mk = el('button', 'btn small ghost', 'Make Home');
+      var mk = el('button', 'btn small ghost', 'Set as Home');
       mk.type = 'button';
+      mk.setAttribute('aria-label', 'Set as Home: ' + p.name);
       mk.addEventListener('click', function () {
         state.places.home = { name: p.name, lat: p.lat, lng: p.lng };
         persistPlaces();
@@ -523,7 +531,7 @@
         origin = {
           lat: state.center.lat,
           lng: state.center.lng,
-          label: state.center.label || 'the current search point'
+          label: state.center.label || 'this location'
         };
       })
       .then(function () {
@@ -629,7 +637,7 @@
         el(
           'div',
           'fine',
-          "These are vehicles near you whose heading points toward Home. SEPTA's feed has no route shapes, so check the destination before you board."
+          "These are vehicles near you whose heading points toward Home. SEPTA's data has no route shapes, so check the destination before you board."
         )
       );
     } else {
@@ -645,11 +653,7 @@
     }
     if (!usedGps)
       wrap.appendChild(
-        el(
-          'div',
-          'fine',
-          "Location wasn't available, so this used the current search point as your starting spot."
-        )
+        el('div', 'fine', "Your location wasn't available, so this started from the place you last searched.")
       );
     box.appendChild(wrap);
   }

@@ -26,15 +26,15 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="css/leaflet.css?v=e89303f89c">
-<link rel="stylesheet" href="css/base.css?v=e89303f89c">
-<link rel="stylesheet" href="css/layout.css?v=e89303f89c">
-<link rel="stylesheet" href="css/map.css?v=e89303f89c">
-<link rel="stylesheet" href="css/panel.css?v=e89303f89c">
-<link rel="stylesheet" href="css/trip.css?v=e89303f89c">
-<link rel="stylesheet" href="css/suggest.css?v=e89303f89c">
-<link rel="stylesheet" href="css/stops.css?v=e89303f89c">
-<link rel="stylesheet" href="css/alerts.css?v=e89303f89c">
+<link rel="stylesheet" href="css/leaflet.css?v=e37ee0e54a">
+<link rel="stylesheet" href="css/base.css?v=e37ee0e54a">
+<link rel="stylesheet" href="css/layout.css?v=e37ee0e54a">
+<link rel="stylesheet" href="css/map.css?v=e37ee0e54a">
+<link rel="stylesheet" href="css/panel.css?v=e37ee0e54a">
+<link rel="stylesheet" href="css/trip.css?v=e37ee0e54a">
+<link rel="stylesheet" href="css/suggest.css?v=e37ee0e54a">
+<link rel="stylesheet" href="css/stops.css?v=e37ee0e54a">
+<link rel="stylesheet" href="css/alerts.css?v=e37ee0e54a">
 </head>
 <body>
 <div id="app" data-sheet="peek">
@@ -48,11 +48,10 @@
     <section class="sec" aria-labelledby="h-find">
       <h2 id="h-find">Find vehicles near</h2>
       <form class="row" id="searchForm" autocomplete="off">
-        <input type="text" id="addr" placeholder="Street address or intersection" aria-label="Street address">
+        <input type="text" id="addr" placeholder="Street address or intersection" aria-label="Street address or intersection">
         <button class="btn primary" type="submit" id="btnSearch">Search</button>
       </form>
-      <p class="empty-line sug-priv" id="sugPrivFind">Text you type here goes to Photon while you type, to suggest places.</p>
-      <p class="empty-line sug-attr" id="sugAttrFind">Suggestions: <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></p>
+      <p class="empty-line sug-attr" id="sugAttrFind">Suggestions by <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, map data <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>. <a href="#privacyDetails" class="priv-link">Privacy details</a></p>
       <div class="row" style="margin-top:8px">
         <button class="btn" type="button" id="btnLocate" style="flex:1">Use my location</button>
       </div>
@@ -75,19 +74,19 @@
       <h2 id="h-trip">Plan a trip</h2>
       <form id="tripForm" autocomplete="off" novalidate>
         <label class="tp-lab" for="tripFrom">From</label>
-        <div class="row"><input type="text" id="tripFrom" placeholder="Start: address or intersection"><button class="btn small" type="button" id="tripFromHome" hidden>Home</button></div>
+        <div class="row"><input type="text" id="tripFrom" placeholder="Start: address or intersection"><button class="btn small" type="button" id="tripFromHome" aria-label="Use Home as start" hidden>Use Home</button></div>
         <p class="note bad tp-err" id="tripFromErr" role="alert" hidden></p>
         <div class="row tp-mid"><button class="btn small" type="button" id="tripLocate" style="flex:1">Use my location</button><button class="btn small" type="button" id="tripSwap" aria-label="Swap From and To"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12V2M1.5 4.5 4 2l2.5 2.5M10 2v10M7.5 9.5 10 12l2.5-2.5"/></svg> Swap</button></div>
         <label class="tp-lab" for="tripTo">To</label>
-        <div class="row"><input type="text" id="tripTo" placeholder="Destination: address or intersection"><button class="btn small" type="button" id="tripToHome" hidden>Home</button></div>
+        <div class="row"><input type="text" id="tripTo" placeholder="Destination: address or intersection"><button class="btn small" type="button" id="tripToHome" aria-label="Use Home as destination" hidden>Use Home</button></div>
         <p class="note bad tp-err" id="tripToErr" role="alert" hidden></p>
         <div class="tp-chips" id="tripChips" role="group" aria-label="Saved places for the destination" hidden></div>
         <button class="btn primary tp-go" type="submit" id="tripGo">Plan trip</button>
-        <p class="empty-line sug-attr" id="sugAttrTrip">Suggestions: <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></p>
+        <p class="empty-line tp-scope" id="tripScope">Walking, Indego, one bus or trolley, or driving. No subway, Regional Rail or transfers yet.</p>
+        <p class="empty-line sug-attr" id="sugAttrTrip">Suggestions by <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, map data <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>. <a href="#privacyDetails" class="priv-link">Privacy details</a></p>
       </form>
       <div id="tripResults" aria-busy="false" hidden></div>
       <div id="tripLive" class="sr-only" role="status" aria-live="polite"></div>
-      <p class="empty-line tp-priv">What is sent where. While you type in the search box or in From or To, the typed text and a search point, rounded to 2 decimals (about 1 km), go to Photon (photon.komoot.io, OpenStreetMap data) to suggest places and addresses. The search point is your current search location (your located position after Use my location); in From and To it is your saved Home, or the search point when no Home is saved. Places on the built-in list of well-known Philadelphia places are suggested without any request. A typed From or To address you did not pick from the suggestions, and intersections such as 10th and Race, go to Nominatim (OpenStreetMap) to be looked up, as in search. Every leg's start and end coordinates then go to this site's Worker, which rounds them to 4 decimals (about 10 m), forwards them to the OpenStreetMap-based routing service (routing.openstreetmap.de), and keeps nothing beyond a short-lived cache of each answer. Your saved Home and place buttons, Use my location and the map center are not looked up, but their coordinates are sent as route legs in exactly the same way as a typed address. Indego's public station feed is read through the Worker. If the Worker cannot be reached, is an older version, or reports a server error (502, 503 or 504), the page asks the routing service and Indego directly instead, and then the routing service receives the leg coordinates unrounded, to 5 decimals (about 1 m). An answer such as "no route" is not a failure and is never re-sent. Nothing is stored in this page.</p>
       <p class="empty-line tp-attr" id="tripAttr">Routing by <a href="https://routing.openstreetmap.de/" target="_blank" rel="noopener">OSRM</a> / data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></p>
     </section>
 
@@ -96,12 +95,12 @@
       <button class="home" id="btnHome" type="button" hidden><span>Get me home</span><small id="homeName"></small></button>
       <div id="gmh"></div>
       <ul class="places" id="places"></ul>
-      <p class="empty-line" id="placesEmpty">Search an address or use your location, then save it here. Saving a place as Home turns on the Get me home button.</p>
+      <p class="empty-line" id="placesEmpty">Search an address or use your location, then save it here. Setting a place as Home turns on the Get me home button.</p>
       <div class="saveform" id="saveForm" hidden>
         <input type="text" id="placeName" placeholder="Name this place" aria-label="Place name" maxlength="40">
         <div class="row">
           <button class="btn" type="button" id="btnSave" style="flex:1">Save place</button>
-          <button class="btn" type="button" id="btnSaveHome" style="flex:1">Save as Home</button>
+          <button class="btn" type="button" id="btnSaveHome" style="flex:1">Set as Home</button>
         </div>
       </div>
     </section>
@@ -110,20 +109,29 @@
       <h2 id="h-leave" tabindex="-1">Leave-now alerts</h2>
       <p class="empty-line" style="margin-top:0">Alerts only work while this page is open. Phones may pause background tabs.</p>
       <div id="notifyBox"></div>
-      <p class="empty-line" id="rulesEmpty">Open a stop, then tap Add alert.</p>
+      <p class="empty-line" id="rulesEmpty">Tap a stop on the map, then tap Add alert.</p>
       <ul class="rules" id="rules"></ul>
     </section>
 
     <section class="sec" aria-labelledby="h-alerts">
       <h2 id="h-alerts">Service alerts <span id="alertCount"></span></h2>
       <div class="seg" role="group" aria-label="Alert scope">
-        <button type="button" id="scopeNear" aria-pressed="true">Near this search</button>
-        <button type="button" id="scopeAll" aria-pressed="false">Whole system</button>
+        <button type="button" id="scopeNear" aria-pressed="true">Near here</button>
+        <button type="button" id="scopeAll" aria-pressed="false">All of SEPTA</button>
       </div>
       <ul class="alerts" id="alerts"></ul>
     </section>
 
-    <div class="foot">Positions from SEPTA's public API, refreshed every 15 seconds. Only vehicles with a fresh GPS report are shown. Rail positions carry no timestamp in SEPTA's feed.</div>
+    <section class="sec" aria-labelledby="h-priv">
+      <h2 id="h-priv">Privacy</h2>
+      <p class="empty-line" id="privLead" style="margin-top:0">When you type an address, the text and your approximate area (within about 1 km) are sent to Photon, a free place-search service, to suggest places. When you plan a trip, the start and end points (within about 10 m) are sent to our server and the free OpenStreetMap routing service. Your saved places and alerts stay in this browser, and our server keeps nothing except a short-lived cache of each route answer.</p>
+      <details id="privacyDetails">
+        <summary>Privacy details</summary>
+        <p class="empty-line tp-priv">What is sent where. While you type in the search box or in From or To, the typed text and a search point, rounded to 2 decimals (about 1 km), go to Photon (photon.komoot.io, OpenStreetMap data) to suggest places and addresses. The search point is your current search location (your located position after Use my location); in From and To it is your saved Home, or the search point when no Home is saved. Places on the built-in list of well-known Philadelphia places are suggested without any request. A typed From or To address you did not pick from the suggestions, and intersections such as 10th and Race, go to Nominatim (OpenStreetMap) to be looked up, as in search. Every leg's start and end coordinates then go to this site's Worker, which rounds them to 4 decimals (about 10 m), forwards them to the OpenStreetMap-based routing service (routing.openstreetmap.de), and keeps nothing beyond a short-lived cache of each answer. Your saved Home and place buttons, Use my location and the map center are not looked up, but their coordinates are sent as route legs in exactly the same way as a typed address. Indego's public station feed is read through the Worker. If the Worker cannot be reached, is an older version, or reports a server error (502, 503 or 504), the page asks the routing service and Indego directly instead, and then the routing service receives the leg coordinates unrounded, to 5 decimals (about 1 m). An answer such as "no route" is not a failure and is never re-sent. Nothing is stored in this page.</p>
+      </details>
+    </section>
+
+    <div class="foot">Positions from SEPTA's data, refreshed every 15 seconds. Only vehicles with a recent position report are shown. Rail positions carry no timestamp in SEPTA's data.</div>
   </aside>
 
   <main id="stage">
@@ -152,27 +160,28 @@ window.SEPTA.loadFailed=function(file){
     box.style.cssText='position:fixed;z-index:99999;left:0;right:0;top:0;padding:12px 16px;background:#7a1020;color:#fff;font:600 15px/1.4 system-ui,sans-serif;text-align:center';
     document.body.appendChild(box);
   }
-  box.textContent='Part of the app did not load ('+S.failed.join(', ')+'). Check your connection and reload.';
+  box.textContent="Part of Septer didn't load. Check your connection and reload the page.";
+  try{console.warn('Septer: did not load: '+S.failed.join(', '));}catch(e){}
 };
 window.addEventListener('error',function(e){
   var t=e.target;
   if(t&&t.tagName==='SCRIPT'&&/\/js\/[^\/]+\.js/.test(t.src||''))window.SEPTA.loadFailed(t.src.split('/').pop().split('?')[0]);
 },true);
 </script>
-<script src="js/util.js?v=e89303f89c"></script>
-<script src="js/feed.js?v=e89303f89c"></script>
-<script src="js/map.js?v=e89303f89c"></script>
-<script src="js/landmarks.js?v=e89303f89c"></script>
-<script src="js/suggest.js?v=e89303f89c"></script>
-<script src="js/panel.js?v=e89303f89c"></script>
-<script src="js/stops.js?v=e89303f89c"></script>
-<script src="js/alerts.js?v=e89303f89c"></script>
-<script src="js/routing.js?v=e89303f89c"></script>
-<script src="js/candidates.js?v=e89303f89c"></script>
-<script src="js/planner.js?v=e89303f89c"></script>
-<script src="js/trip.js?v=e89303f89c"></script>
-<script src="js/sheet.js?v=e89303f89c"></script>
-<script src="js/main.js?v=e89303f89c"></script>
+<script src="js/util.js?v=e37ee0e54a"></script>
+<script src="js/feed.js?v=e37ee0e54a"></script>
+<script src="js/map.js?v=e37ee0e54a"></script>
+<script src="js/landmarks.js?v=e37ee0e54a"></script>
+<script src="js/suggest.js?v=e37ee0e54a"></script>
+<script src="js/panel.js?v=e37ee0e54a"></script>
+<script src="js/stops.js?v=e37ee0e54a"></script>
+<script src="js/alerts.js?v=e37ee0e54a"></script>
+<script src="js/routing.js?v=e37ee0e54a"></script>
+<script src="js/candidates.js?v=e37ee0e54a"></script>
+<script src="js/planner.js?v=e37ee0e54a"></script>
+<script src="js/trip.js?v=e37ee0e54a"></script>
+<script src="js/sheet.js?v=e37ee0e54a"></script>
+<script src="js/main.js?v=e37ee0e54a"></script>
 <script>if(!window.SEPTA.started&&window.SEPTA.failed.indexOf('main.js')<0)window.SEPTA.loadFailed('main.js (the app did not start)');</script>
 
 </body>

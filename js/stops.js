@@ -68,7 +68,7 @@
   /* The bus whose very next stop is this stop gets a plain estimate. A bus heading toward the stop (within 45 degrees,
    1.5 mi, its own next stop known and different) gets a ROUGH one, flagged rough:true. Both need a measured speed. */
   function etaFor(v, stop) {
-    if (!v || !stop) return { min: null, note: 'not its next stop yet', rough: false };
+    if (!v || !stop) return { min: null, note: 'bus has other stops first', rough: false };
     var isNext = v.nextId === stop.id,
       rough = false;
     if (!isNext) {
@@ -78,14 +78,14 @@
         d <= ROUGH_MAX_MI &&
         v.heading != null &&
         angDiff(v.heading, bearing(v, stop)) <= ROUGH_DEG;
-      if (!rough) return { min: null, note: 'not its next stop yet', rough: false };
+      if (!rough) return { min: null, note: 'bus has other stops first', rough: false };
     }
     var sp = speedMps(v.key);
-    if (sp == null) return { min: null, note: 'measuring speed', rough: false };
-    if (sp === 0) return { min: null, note: 'not moving', rough: false };
+    if (sp == null) return { min: null, note: 'checking speed', rough: false };
+    if (sp === 0) return { min: null, note: 'bus is stopped', rough: false };
     return {
       min: Math.max(1, Math.ceil((distM(v, stop) * ROAD_PAD) / sp / 60)),
-      note: rough ? 'rough: not its next stop yet' : '',
+      note: rough ? 'estimate; bus has other stops first' : '',
       rough: rough
     };
   }
@@ -174,7 +174,7 @@
     var close = el('button', 'btn small ghost', 'Close');
     close.type = 'button';
     close.id = 'stopClose';
-    close.setAttribute('aria-label', 'Close stop');
+    close.setAttribute('aria-label', 'Close stop details');
     close.addEventListener('click', closeStop);
     if (err) {
       box.appendChild(el('div', 'err', err));
@@ -209,7 +209,7 @@
         inp.id = 'stopUrl';
         inp.readOnly = true;
         inp.value = url;
-        inp.setAttribute('aria-label', 'Stop link');
+        inp.setAttribute('aria-label', 'Link to this stop');
         box.insertBefore(inp, live);
         inp.focus();
         inp.select();
@@ -301,7 +301,7 @@
       el(
         'b',
         r.eta.rough ? 'rough' : r.eta.min == null ? 'none' : null,
-        r.eta.min == null ? '—' : (r.eta.rough ? '~' : '') + r.eta.min + ' min'
+        r.eta.min == null ? '—' : (r.eta.rough ? 'about ' : '') + r.eta.min + ' min'
       )
     );
     if (r.eta.note) eta.appendChild(el('small', null, r.eta.note));
@@ -342,7 +342,9 @@
       });
     }
     if (b.stale) box.appendChild(el('div', 'sbstale', 'Positions may be out of date'));
-    box.appendChild(el('div', 'sbfine', 'Estimates from distance and recent speed, not SEPTA predictions.'));
+    box.appendChild(
+      el('div', 'sbfine', "Estimates from the bus's distance and speed, not official SEPTA predictions.")
+    );
     var age = el('div', 'sbfine');
     age.id = 'boardAge';
     box.appendChild(age);
@@ -359,7 +361,8 @@
   function updateBoardAge() {
     var n = $('#boardAge'),
       b = state.src.bus;
-    if (n && b.ok) n.textContent = 'Updated ' + Math.max(0, Math.round((Date.now() - b.ok) / 1000)) + 's ago';
+    if (n && b.ok)
+      n.textContent = 'Updated ' + Math.max(0, Math.round((Date.now() - b.ok) / 1000)) + ' s ago';
   }
   $('#stopCard').addEventListener('click', function (e) {
     var r = e.target.closest('.sbrow');

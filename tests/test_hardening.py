@@ -127,12 +127,12 @@ def test_banner_reflects_each_sources_state(root):
         s.tick(15000)
         s.tick(2000)
         b = banner(s)
-        assert "last known positions" in b and "unavailable" not in b, f"stale-but-shown wording wrong: {b!r}"
+        assert "older positions" in b and "unavailable" not in b, f"stale-but-shown wording wrong: {b!r}"
         for _ in range(9):
             s.tick(15000)
         b = banner(s)
-        assert "Bus and trolley positions are unavailable" in b, b
-        assert "last known positions" not in b, b
+        assert "Bus, trolley and subway positions are unavailable" in b, b
+        assert "older positions" not in b, b
         assert s.markers() > 0, "rail markers should still be drawn"
 
 

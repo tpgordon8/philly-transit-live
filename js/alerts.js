@@ -37,7 +37,7 @@
       any = true;
       var e = etaFor(v, stop);
       if (e.min != null && !e.rough) cands.push({ key: v.key, min: e.min });
-      else if (e.note === 'not moving') still = true;
+      else if (e.note === 'bus is stopped') still = true;
     });
     if (!cands.length) return { state: any ? (still ? 'still' : 'measuring') : 'none' };
     cands.sort(function (a, b) {
@@ -159,7 +159,7 @@
           'empty-line',
           A.scope === 'all'
             ? 'No active alerts system-wide.'
-            : 'No active alerts for the routes running near this search.'
+            : 'No active alerts for the routes running near here.'
         )
       );
       return;
@@ -284,7 +284,7 @@
     return null;
   }
   function leaveMsg(r, min) {
-    return 'Leave now — the ' + r.route + ' is about ' + min + ' min from ' + r.stopName;
+    return 'Leave now: the Route ' + r.route + ' bus is about ' + min + ' min from ' + r.stopName + '.';
   }
   /* Toasts: role="alert" on each one, so it is announced once when inserted. Never auto-dismissed; max 3 shown. */
   function notify(msg) {
@@ -327,13 +327,13 @@
       case 'unavailable':
         return 'Live data unavailable';
       case 'measuring':
-        return 'Measuring speed…';
+        return 'Checking speed…';
       case 'still':
-        return 'Watching — a bus is heading here but not moving';
+        return 'Watching: a bus is heading here but is stopped';
       case 'watching':
-        return 'Watching — nearest bus about ' + res.min + ' min';
+        return 'Watching: nearest bus about ' + res.min + ' min';
       default:
-        return 'Watching — no bus heading here yet';
+        return 'Watching: no bus heading here yet';
     }
   }
   function evalRules() {
@@ -370,7 +370,7 @@
         cb = el('input', 'rtoggle');
       cb.type = 'checkbox';
       cb.checked = r.enabled;
-      cb.setAttribute('aria-label', 'Alert on for route ' + r.route + ' at ' + r.stopName);
+      cb.setAttribute('aria-label', 'Alert on: route ' + r.route + ' at ' + r.stopName);
       cb.addEventListener('change', function () {
         r.enabled = cb.checked;
         saveRules();
@@ -404,7 +404,7 @@
     row.appendChild(el('span', null, 'Alert me when route ' + st.route + ' is under'));
     var sel = el('select');
     sel.id = 'alertMin';
-    sel.setAttribute('aria-label', 'Minutes away to alert at');
+    sel.setAttribute('aria-label', 'Alert when the bus is this many minutes away');
     ALERT_MINS.forEach(function (m) {
       var o = el('option', null, String(m));
       o.value = String(m);
@@ -455,7 +455,7 @@
         s.route +
         ', under ' +
         m +
-        ' min.' +
+        ' min. Keep this page open with the screen on. You will see a banner here.' +
         (saved ? '' : " It can't be saved on this device, so it will be gone when you close this page.");
       sel.focus();
     });
@@ -481,7 +481,7 @@
     if (!window.Notification) return;
     var p = Notification.permission;
     if (p === 'default') {
-      var b = el('button', 'btn small', 'Turn on browser notifications');
+      var b = el('button', 'btn small', 'Get alerts in the background');
       b.type = 'button';
       b.id = 'enableNotify';
       b.addEventListener('click', function () {
@@ -506,7 +506,9 @@
     } else if (p === 'granted') {
       box.appendChild(el('p', null, 'Notifications on'));
     } else {
-      box.appendChild(el('p', null, 'Notifications blocked in your browser settings'));
+      box.appendChild(
+        el('p', null, 'Notifications are blocked. Allow them for this site in your browser settings.')
+      );
     }
   }
   S.alerts.loadAlerts = loadAlerts;

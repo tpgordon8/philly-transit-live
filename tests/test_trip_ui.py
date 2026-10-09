@@ -128,7 +128,7 @@ def test_a_form_labels_placement_and_geocoding(root):
                 from: document.querySelector('label[for=tripFrom]').textContent, to: document.querySelector('label[for=tripTo]').textContent,
                 ph: [tripFrom.placeholder, tripTo.placeholder], vals: [tripFrom.value, tripTo.value],
                 btn: tripGo.textContent, hasLoc: !!document.querySelector('#tripLocate'), hasSwap: !!document.querySelector('#tripSwap'),
-                homeBtns: [tripFromHome.hidden, tripToHome.hidden], priv: sec.querySelector('.tp-priv').textContent, attr: document.querySelector('#tripAttr').textContent}; }""")
+                homeBtns: [tripFromHome.hidden, tripToHome.hidden], priv: document.querySelector('#privacyDetails .tp-priv').textContent, attr: document.querySelector('#tripAttr').textContent}; }""")
         assert info["labelled"] == "h-trip" and info["h"] == "Plan a trip"
         assert info["prev"] == "h-find" and info["next"] == "h-places"
         assert (info["from"], info["to"]) == ("From", "To") and info["vals"] == ["", ""]
@@ -151,7 +151,8 @@ def test_a_cards_headline_summary_selection_and_badges(root):
         boot(s)
         plan_ui(s)
         res = oracle(s)
-        main = [o for o in res["options"] if not o["dominated"]]
+        main_raw = [o for o in res["options"] if not o["dominated"]]
+        main = [o for o in main_raw if o["structure"] != "car"] + [o for o in main_raw if o["structure"] == "car"]  # the car comparison is listed last
         got = [c for c in cards(s) if c["visible"]]
         assert [c["min"] for c in got] == [f"{o['minutes']} min" for o in main], (got, [o["minutes"] for o in main])
         assert [c["sum"] for c in got] == [expected_sum(o) for o in main]
@@ -159,14 +160,14 @@ def test_a_cards_headline_summary_selection_and_badges(root):
         assert "car" in structures and len(structures) >= 3
         # first non-car option is selected, one at a time
         first = next(i for i, o in enumerate(main) if o["structure"] != "car")
-        assert main[0]["structure"] == "car" and first == 1, "the car is the quickest here and is not auto-selected"
+        assert main_raw[0]["structure"] == "car" and main[-1]["structure"] == "car" and first == 0, "the car is the quickest here, is listed last and is not auto-selected"
         assert [c["pressed"] for c in got].count("true") == 1 and got[first]["pressed"] == "true"
         # Fastest sits on the lowest non-car, non-dominated option (first on a tie); Drive on the car
         best = min(o["minutes"] for o in main if o["structure"] != "car")
         fast_i = next(i for i, o in enumerate(main) if o["structure"] != "car" and o["minutes"] == best)
         for i, (c, o) in enumerate(zip(got, main)):
             assert ("Fastest" in c["badges"]) == (i == fast_i), (c, o["structure"])
-            assert ("Drive" in c["badges"]) == (o["structure"] == "car")
+            assert ("By car" in c["badges"]) == (o["structure"] == "car")
             if o["structure"] == "car":
                 assert "no traffic or parking data" in c["text"]
         assert sum("Fastest" in c["badges"] for c in got) == 1
@@ -176,7 +177,7 @@ def test_a_cards_headline_summary_selection_and_badges(root):
         # semantics: a labelled group of real buttons, steps in an ordered list, one li per leg
         sem = s.page.evaluate("""() => { const g = document.querySelector('#tripList');
             return {role: g.getAttribute('role'), label: g.getAttribute('aria-label'), tags: [...g.querySelectorAll('.tp-card')].map(b => b.tagName),
-                steps: [...document.querySelectorAll('#tripResults ol.tp-steps')].map(o => [o.hidden, [...o.children].filter(c => !c.classList.contains('tp-round')).length])}; }""")
+                steps: [...document.querySelectorAll('#tripResults ol.tp-steps')].sort((a, b) => a.id.slice(9) - b.id.slice(9)).map(o => [o.hidden, [...o.children].filter(c => !c.classList.contains('tp-round')).length])}; }""")
         assert sem["role"] == "group" and sem["label"] == "Trip options" and set(sem["tags"]) == {"BUTTON"}
         legs = [len(o["legs"]) for o in res["options"]]
         assert [n for h, n in sem["steps"]] == legs
@@ -206,7 +207,7 @@ def test_a_step_wording_for_walk_bike_and_bus(root):
         card_for(s, "Bus X47").click()
         txt = s.page.inner_text("#tripResults ol.tp-steps:not([hidden])")
         assert "Bus X47 toward North Terminal" in txt and "stops" in txt
-        assert "next bus tracked live, about" in txt and "Ride: " in txt and "scheduled" in txt
+        assert re.search(r"Wait: (about \d+|under 1) min \(next bus tracked live\)", txt) and re.search(r"Ride: \d+ min \(scheduled\)", txt), txt
     with session() as s:
         boot(s, bikes=0)
         s.worker.data["TransitView"]["bus"][-1]["next_stop_id"] = "S13"   # downstream of the boarding stop
@@ -214,7 +215,7 @@ def test_a_step_wording_for_walk_bike_and_bus(root):
         plan_ui(s)
         card_for(s, "Bus X47").click()
         txt = s.page.inner_text("#tripResults ol.tp-steps:not([hidden])")
-        assert "waits about 5 min on average (schedule frequency, no bus tracked)" in txt, txt
+        assert "Wait: about 5 min (typical, no bus tracked)" in txt, txt
 
 
 # ------------------------------------------------------------------ (b) map drawing
@@ -343,12 +344,12 @@ def test_e_empty_from_uses_map_center_without_touching_prefs(root):
         s.page.fill("#tripTo", "Dest Ave")
         s.page.click("#tripGo")
         wait_cards(s)
-        assert s.page.input_value("#tripFrom") == "Map center"
+        assert s.page.input_value("#tripFrom") == "This location"
         walk = next(h for h in s.mocks.routing_hits if h["profile"] == "foot")
         assert abs(walk["from"][0] - CENTER["lat"]) < 1e-4 and abs(walk["from"][1] - CENTER["lng"]) < 1e-4, walk
         assert s.page.evaluate("localStorage.getItem('septa.prefs.v1')") == prefs_before
         assert s.page.evaluate("JSON.stringify(Object.entries(localStorage))") == keys_before
-        assert "Map center" in s.page.inner_text("#tripResults ol.tp-steps:not([hidden])")
+        assert "this location" in s.page.inner_text("#tripResults ol.tp-steps:not([hidden])")
         # typing replaces the marker: the text is geocoded again
         s.page.fill("#tripFrom", "Origin St")
         s.page.click("#tripGo")
@@ -364,7 +365,7 @@ def test_f_geocode_miss_message_next_to_field(root):
         s.page.click("#tripGo")
         s.page.wait_for_selector("#tripToErr:not([hidden])")
         err = s.page.locator("#tripToErr")
-        assert err.inner_text() == "Couldn't find that address." and err.get_attribute("role") == "alert"
+        assert err.inner_text() == "Couldn't find that address. Add a cross street or ZIP code." and err.get_attribute("role") == "alert"
         assert s.page.get_attribute("#tripTo", "aria-describedby") == "tripToErr"
         assert s.page.locator("#tripFromErr").is_hidden() and s.page.get_attribute("#tripFrom", "aria-describedby") is None
         assert not s.page.locator("#tripGo").is_disabled() and s.page.locator("#tripResults .tp-card").count() == 0
@@ -664,7 +665,7 @@ def test_l_real_network_smoke_center_city(root):
         plan_ui(s, "City Hall", "Independence Hall")
         got = cards(s)
         txt = " ".join(c["sum"] for c in got)
-        assert any("Drive" in c["badges"] for c in got)
+        assert any("By car" in c["badges"] for c in got)
         assert "Walk" in txt or "Bike" in txt
         assert s.mocks.network_hits == 1
         assert lines(s) and "Start" in pins(s)
@@ -725,18 +726,18 @@ def test_k_each_planner_note_has_its_own_sentence(root):
         got["schedule_stale"] = note_texts(s)
         no_errors(s)
     want = {
-        "routing_limit": "To stay within the free routing service's limits, the planner checked only the most promising bus options, so a slower-looking bus trip may be missing.",
-        "routing_failed": "Directions for one bus option could not be loaded, so it was left out. Re-plan to try again.",
+        "routing_limit": "We checked only the most promising bus options, so a slower-looking bus trip may be missing.",
+        "routing_failed": "1 bus option couldn't be loaded and is left out. Tap Re-plan to try again.",
         "no_live_bus": "No bus is being tracked right now on route",
         "no_bus_beats_baseline": "Buses run between these points, but none is faster than walking the whole way.",
-        "schedule_stale": "The bus schedule data ended on Dec 31, 2026, so bus ride times may be out of date.",
+        "schedule_stale": "Bus schedules on file ended Dec 31, 2026, so ride times may be off.",
     }
     texts = []
     for code, w in want.items():
         t = got[code].get(code)
         assert t is not None, (code, got[code])
         if code == "routing_failed":
-            assert t.startswith("Directions for ") and t.endswith(" left out. Re-plan to try again.") and "could not be loaded" in t, t
+            assert t.endswith(" left out. Tap Re-plan to try again.") and "couldn't be loaded" in t, t
         elif code == "no_live_bus":
             assert t.startswith(w) and t.endswith(", so there is no live wait to show for them.") and "X47" in t, t
         else:
@@ -764,7 +765,7 @@ def test_k_schedule_line_under_options_and_validity_warning(root):
             else:
                 assert warn.count() == 1 and warn.is_visible(), today
                 txt = warn.inner_text()
-                assert "Dec 31, 2026" in txt and ("ended on" in txt if state == "ended" else "ends on" in txt), txt
+                assert "Dec 31, 2026" in txt and ("ended Dec" in txt if state == "ended" else "end Dec" in txt), txt
                 if today == "20261217":
                     assert "(in 14 days)" in txt, txt
                 if today == "20261231":
@@ -826,7 +827,7 @@ def test_k_no_trip_found_state(root):
         s.page.click("#tripGo")
         s.page.wait_for_selector("#tripNone", timeout=15000)
         msg = s.page.locator("#tripNone")
-        assert msg.inner_text() == "No trip found. Try different points." and msg.get_attribute("role") == "alert"
+        assert msg.inner_text() == "No trip found. Try a different start or destination." and msg.get_attribute("role") == "alert"
         assert not s.page.evaluate("window.__direct"), "the Worker's 422 NoRoute answer is final: nothing is re-sent to the provider"
         assert s.page.evaluate("document.activeElement.id") == "tripNone"
         assert s.page.locator("#tripResults .tp-card").count() == 0 and s.page.locator("#tripRetry").count() == 0
@@ -988,14 +989,14 @@ def test_s_leg_rounding_note_and_total_from_exact_sum(root):
         assert raws == sorted(raws), "options are ranked on the exact sum"
         assert res["bestMinutes"] == math.ceil(min(o["raw"] for o in opts if o["structure"] != "car") - 1e-9)
         assert any(sum(l["minutes"] for l in o["legs"]) != o["minutes"] for o in opts), "scenario must contain a rounding mismatch"
-        notes = s.page.evaluate("[...document.querySelectorAll('#tripResults .tp-card')].map(b => { const ol = document.querySelector('#' + b.getAttribute('aria-controls')); const n = ol.querySelector('li.tp-round'); return n ? n.textContent : null; })")
-        cards_ = s.page.evaluate("[...document.querySelectorAll('#tripResults .tp-card .tp-min')].map(x => x.textContent)")
+        notes = s.page.evaluate("[...document.querySelectorAll('#tripResults .tp-card')].sort((x, y) => x.dataset.i - y.dataset.i).map(b => { const ol = document.querySelector('#' + b.getAttribute('aria-controls')); const n = ol.querySelector('li.tp-round'); return n ? n.textContent : null; })")
+        cards_ = s.page.evaluate("[...document.querySelectorAll('#tripResults .tp-card')].sort((x, y) => x.dataset.i - y.dataset.i).map(b => b.querySelector('.tp-min').textContent)")  # the car card is listed last, so go by index
         assert len(notes) == len(opts)
         for o, note, shown in zip(opts, notes, cards_):
             leg_sum = sum(l["minutes"] for l in o["legs"])
             assert shown == f"{o['minutes']} min"
             if leg_sum != o["minutes"]:
-                assert note and f"add up to {leg_sum} min" in note and f"total of {o['minutes']} min" in note, (o["structure"], note)
+                assert note == "Steps are rounded, so they may not add up exactly to the total.", (o["structure"], note)
             else:
                 assert note is None, (o["structure"], note)
         no_errors(s)

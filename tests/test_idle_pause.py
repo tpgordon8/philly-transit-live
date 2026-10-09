@@ -85,7 +85,7 @@ def test_a_no_requests_after_an_hour_idle(root):
         assert window_hits(s, 2) == []
         assert notice_visible(s)
         assert "Paused" in status(s), status(s)
-        assert "Paused to save requests after an hour without use. Tap anywhere or press Resume to continue." in s.page.inner_text("#idleBar")
+        assert "Paused after an hour of no activity. Tap Resume to keep tracking." in s.page.inner_text("#idleBar")
         assert "Leave-now" not in s.page.inner_text("#idleBar")
         assert s.page.inner_text("#resumeBtn") == "Resume"
         assert s.page.evaluate("document.querySelector('#statusLive').textContent") == "Paused"

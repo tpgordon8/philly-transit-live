@@ -134,8 +134,8 @@ def test_unit_speed_and_eta(root):
         # 2000 m * 1.15 / 10 m/s = 230 s -> 3.83 -> 4 min (the padding-sensitive case is the next test)
         assert out["eta"]["min"] == 4, out
         assert out["other"]["min"] is None and out["eta"]["rough"] is False
-        assert out["nospeed"] == {"min": None, "note": "measuring speed", "rough": False}
-        assert out["notmoving"] == {"min": None, "note": "not moving", "rough": False}
+        assert out["nospeed"] == {"min": None, "note": "checking speed", "rough": False}
+        assert out["notmoving"] == {"min": None, "note": "bus is stopped", "rough": False}
 
 
 def test_unit_padding_changes_the_minute(root):
@@ -161,10 +161,10 @@ def test_board_measuring_then_numeric_and_decreasing(root):
         row = s.page.locator('#stopBoard button[data-key="b3678"]')
         assert row.count() == 1
         txt = row.inner_text()
-        assert "—" in txt and "measuring speed" in txt, txt
-        assert "Estimates from distance and recent speed, not SEPTA predictions." in board(s)
+        assert "—" in txt and "checking speed" in txt, txt
+        assert "Estimates from the bus's distance and speed, not official SEPTA predictions." in board(s)
         step(s, "3678", 120)
-        assert eta_of(s) is None and "measuring speed" in row.inner_text()
+        assert eta_of(s) is None and "checking speed" in row.inner_text()
         step(s, "3678", 120)  # 3 samples, 30 s span
         e = eta_of(s)
         assert e is not None, row.inner_text()
@@ -206,7 +206,7 @@ def test_heading_toward_and_away_and_other_route(root):
         heads = board(s)
         assert "Heading toward this stop" in heads
         r = s.page.locator('#stopBoard button[data-key="b3689"]')
-        assert "—" in r.inner_text() and "measuring speed" in r.inner_text()
+        assert "—" in r.inner_text() and "checking speed" in r.inner_text()
         assert re.search(r"0\.\d mi", r.inner_text()), r.inner_text()
         assert s.page.locator(f'#stopBoard .rbadge:text-is("12")').count() == 0
 
@@ -320,15 +320,15 @@ def test_rough_eta_for_heading_toward_bus(root):
         place(bus(s, "3391"), la, ln, bearing_to_stop(la, ln))
         open_board(s)
         r = s.page.locator('#stopBoard button[data-key="b3689"]')
-        assert "~" not in r.inner_text() and "measuring speed" in r.inner_text()
+        assert "about" not in r.inner_text() and "checking speed" in r.inner_text()
         for _ in range(3):
             step(s, "3689", 120)
             step_others = None
-        # 3050 and 3391 never move: 3050 is 50 deg off so plain note; 3391 is "not moving"
+        # 3050 and 3391 never move: 3050 is 50 deg off so plain note; 3391 is "bus is stopped"
         e = s.page.locator('#stopBoard button[data-key="b3689"] .sbeta')
         txt = e.inner_text()
-        assert "rough: not its next stop yet" in txt, txt
-        m = re.search(r"~(\d+) min", txt)
+        assert "estimate; bus has other stops first" in txt, txt
+        m = re.search(r"about (\d+) min", txt)
         assert m, txt
         b = bus(s, "3689")
         want = math.ceil(dist_m(float(b["lat"]), float(b["lng"])) * 1.15 / 8 / 60)
@@ -337,11 +337,11 @@ def test_rough_eta_for_heading_toward_bus(root):
         assert s.page.evaluate("getComputedStyle(document.querySelector('#stopBoard .sbeta b.rough')).fontStyle") == "italic"
         far = s.page.locator('#stopBoard button[data-key="b3050"]')
         if far.count():
-            assert "~" not in far.inner_text() and "not its next stop yet" in far.inner_text()
+            assert "about" not in far.inner_text() and "bus has other stops first" in far.inner_text()
         still = s.page.locator('#stopBoard button[data-key="b3391"]')
-        assert still.count() == 1 and "not moving" in still.inner_text() and "~" not in still.inner_text()
+        assert still.count() == 1 and "bus is stopped" in still.inner_text() and "about" not in still.inner_text()
         # the plain (a) estimate for 3678 is unchanged: no tilde
-        assert "~" not in s.page.inner_text('#stopBoard button[data-key="b3678"] .sbeta')
+        assert "about" not in s.page.inner_text('#stopBoard button[data-key="b3678"] .sbeta')
 
 
 def test_rough_eta_fifty_degrees_off_has_no_number(root):
@@ -353,4 +353,4 @@ def test_rough_eta_fifty_degrees_off_has_no_number(root):
             step(s, "3689", 120)
         r = s.page.locator('#stopBoard button[data-key="b3689"]')
         assert r.count() == 1, "45-60 degree rows stay listed"
-        assert "~" not in r.inner_text() and "\u2014" in r.inner_text() and "not its next stop yet" in r.inner_text()
+        assert "about" not in r.inner_text() and "\u2014" in r.inner_text() and "bus has other stops first" in r.inner_text()

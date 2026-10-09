@@ -166,10 +166,10 @@ def test_accessible_names_use_route_direction(root):
                  bus(5, "33", "Loop", 90, late=1, **grid(4)), bus(6, "42", "", 90, late=1, **grid(5))]
         open_with(s, buses, [train(1, 45, **grid(6))])
         labels = s.page.evaluate("[...document.querySelectorAll('.veh-wrap')].map(w => w.getAttribute('aria-label'))")
-        assert "Route 57 bus, northbound, 2 min late" in labels, labels
-        assert any(l.startswith("Route 12 bus, westbound, ") for l in labels), labels
-        assert any(l.startswith("Route G1 trolley, southbound, ") for l in labels), labels
-        assert any(l.startswith("Route B1 subway, eastbound, ") for l in labels), labels
+        assert "Route 57 bus, N, northbound, 2 min late" in labels, labels
+        assert any(l.startswith("Route 12 bus, W, westbound, ") for l in labels), labels
+        assert any(l.startswith("Route G1 trolley, S, southbound, ") for l in labels), labels
+        assert any(l.startswith("Route B1 subway, E, eastbound, ") for l in labels), labels
         assert "Route 33 bus, 1 min late" in labels and "Route 42 bus, 1 min late" in labels, labels
         assert not any("heading" in l for l in labels if l.startswith("Route")), labels
         assert any(l.startswith("Regional Rail train 7001") and " heading NE, " in l for l in labels), labels
