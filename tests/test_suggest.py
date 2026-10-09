@@ -650,13 +650,13 @@ def test_privacy_text_and_attribution_in_page_and_docs(root):
     html = (root / "index.html").read_text()
     readme = (root / "README.md").read_text()
     arch = (root / "ARCHITECTURE.md").read_text()
-    assert html.count("Suggestions: ") == 2 and html.count('https://photon.komoot.io/"') == 2
+    assert html.count("Suggestions by ") == 2 and html.count('https://photon.komoot.io/"') == 2
     with session() as s:
         s.open()
         s.wait_live()
         for sel in ("#sugAttrFind", "#sugAttrTrip"):
-            assert s.page.inner_text(sel) == "Suggestions: Photon, © OpenStreetMap contributors", s.page.inner_text(sel)
-        priv = s.page.inner_text(".tp-priv")
+            assert s.page.inner_text(sel) == "Suggestions by Photon, map data OpenStreetMap. Privacy details", s.page.inner_text(sel)
+        priv = s.page.text_content(".tp-priv")  # inside the closed "Privacy details" disclosure
     for text in (priv, readme, arch[arch.index("### 12.4"):arch.index("## 13.")]):
         for part in ("photon.komoot.io", "2 decimals", "Nominatim"):
             assert part in text, part
@@ -767,9 +767,9 @@ def test_privacy_names_the_search_point_not_the_map_center(root):
     with session() as s:
         s.open()
         s.wait_live()
-        priv = s.page.inner_text(".tp-priv")
-        note = s.page.inner_text("#sugPrivFind")
-    assert "Photon" in note and "while you type" in note, note
+        priv = s.page.text_content(".tp-priv")
+        note = s.page.inner_text("#privLead")
+    assert "Photon" in note and "When you type an address" in note, note
     for text in (priv, readme, arch[arch.index("### 12.4"):arch.index("## 13.")]):
         assert "search point" in text and "Use my location" in text and "saved Home" in text, text[:200]
         assert not re.search(r"typed text and the (bias point, which is the )?map cent", text)

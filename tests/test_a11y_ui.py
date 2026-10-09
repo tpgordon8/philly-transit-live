@@ -117,7 +117,7 @@ def test_status_text_not_live_and_state_changes_announced(root):
         s.worker.mode = "http502"
         for _ in range(3):
             s.tick(16000)
-        assert s.page.inner_text("#statusLive") in ("Stale, showing last known positions", "Live data unavailable"), s.page.inner_text("#statusLive")
+        assert s.page.inner_text("#statusLive") in ("Delayed, showing older positions", "Live data unavailable"), s.page.inner_text("#statusLive")
 
 
 def test_no_live_region_mutations_on_plain_refresh(root):
@@ -282,7 +282,7 @@ def test_phone_banner_above_cards_text_unchanged(root):
         for _ in range(3):
             s.tick(16000)
         s.page.wait_for_function("!document.querySelector('#banner').hidden")
-        assert "Showing last known positions for Regional Rail." in s.page.inner_text("#banner")
+        assert "Showing older positions for Regional Rail." in s.page.inner_text("#banner")
         assert s.page.is_visible("#detail")
         b = rect(s, "#banner")
         top = s.page.evaluate("""() => { const b = document.querySelector('#banner').getBoundingClientRect();
@@ -307,8 +307,8 @@ def test_phone_banner_over_stop_card_when_feed_down(root):
         s.page.wait_for_function("!document.querySelector('#banner').hidden", timeout=15000)
         s.page.wait_for_selector("#stopCard:not([hidden]) #copyStop", timeout=15000)
         txt = s.page.inner_text("#banner")
-        assert txt.startswith("Live data unavailable. Couldn't reach SEPTA"), txt
-        assert "Retrying automatically." in txt
+        assert txt.startswith("Live data unavailable. We can't reach SEPTA right now"), txt
+        assert "We'll keep trying." in txt
         b = rect(s, "#banner")
         z = s.page.evaluate("['#banner', '#detail', '#stopCard'].map(s => Number(getComputedStyle(document.querySelector(s)).zIndex))")
         assert z[0] > z[1] and z[0] > z[2], z

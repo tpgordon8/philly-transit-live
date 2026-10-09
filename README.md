@@ -1,10 +1,11 @@
 # Septer: live Philadelphia transit
 
+Septer shows where SEPTA buses, trolleys and Regional Rail trains are right now around any Philadelphia address. Search an address or use your location, tap a vehicle to see its route, direction and delay, open a stop to see which buses are heading there, get a "leave now" alert when your bus is close, or plan a trip by walking, Indego bike share, one bus or trolley, or car. Live at
+https://septer.tarapaigegordon.com/ (also reachable at https://tpgordon8.github.io/philly-transit-live/, which forwards there)
+
 Septer is the new name of this project. The repository and the GitHub Pages address (`philly-transit-live`) keep their old names so existing links keep working.
 
-A live map of SEPTA buses, trolleys and Regional Rail trains around any address in Philadelphia, with route alerts,
-shareable stop links, stop boards with computed ETAs, and "leave now" alerts. Live at
-https://septer.tarapaigegordon.com/ (also reachable at https://tpgordon8.github.io/philly-transit-live/, which forwards there)
+For developers: a live map with route alerts, shareable stop links, stop boards with computed arrival estimates and "leave now" alerts, as a static page with no build step.
 
 ## How data flows
 
@@ -23,7 +24,7 @@ feed, ghost filter, idle pause, refresh), `map` (Leaflet map, markers, vehicle c
 saved places, Home, radius, filters), `stops` (stop links, stop board, ETA), `alerts` (service alerts, leave-now rules),
 `routing` (trip planner data clients), `candidates` (bus candidates), `planner` (trip planner), `trip` (trip planner
 interface), `sheet` (phone bottom sheet, on-screen keyboard) and `main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else
-is global. If a file fails to load, a red banner at the top of the page names it. How the files fit together and how to
+is global. If a file fails to load, a red banner at the top of the page tells the visitor to reload (the file names go to the browser console and `SEPTA.failed`). How the files fit together and how to
 add one: [ARCHITECTURE.md](ARCHITECTURE.md) section 14. There is no build step; GitHub Pages serves the files as they are.
 
 The app manifest is `manifest.webmanifest` and the logo mark and its PNG exports are in `icons/` (`favicon.svg` is the source; there is no service worker). The title is set in the Helvetica-style system font stack, so no font file for it is shipped.

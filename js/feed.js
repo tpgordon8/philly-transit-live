@@ -180,7 +180,7 @@
     if (state.paused) return;
     state.paused = true;
     $('#idleMsg').textContent =
-      'Paused to save requests after an hour without use. Tap anywhere or press Resume to continue.' +
+      'Paused after an hour of no activity. Tap Resume to keep tracking.' +
       (hasActiveRule() ? ' Leave-now alerts are paused as well.' : '');
     $('#idleBar').hidden = false;
     renderStatus();
@@ -308,7 +308,7 @@
     var msg =
       totalNear > 0
         ? 'Everything nearby is hidden by your mode filters.'
-        : 'No SEPTA vehicles have a fresh GPS report within ' + r + ' mi of here right now.';
+        : 'No vehicles reporting within ' + r + ' mi of here right now.';
     box.innerHTML =
       '<h3>Quiet around here</h3><p>' +
       esc(msg) +

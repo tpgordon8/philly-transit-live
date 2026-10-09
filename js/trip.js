@@ -132,18 +132,19 @@
       return inRegion(pt) ? { pt: pt } : { err: OUT_MSG };
     }
     if (fp && fp.kind === 'center')
-      return Promise.resolve(chk({ lat: state.center.lat, lng: state.center.lng, name: 'Map center' }));
+      return Promise.resolve(chk({ lat: state.center.lat, lng: state.center.lng, name: 'this location' }));
     if (fp && fp.pt) return Promise.resolve(chk(fp.pt));
     if (!text) {
       if (w === 'from') {
-        tripSetField('from', 'Map center', { kind: 'center' });
-        return Promise.resolve(chk({ lat: state.center.lat, lng: state.center.lng, name: 'Map center' }));
+        tripSetField('from', 'This location', { kind: 'center' });
+        return Promise.resolve(chk({ lat: state.center.lat, lng: state.center.lng, name: 'this location' }));
       }
-      return Promise.resolve({ err: 'Enter a destination.' });
+      return Promise.resolve({ err: "Enter where you're going." });
     }
     return geocode(text, { philly: true }).then(
       function (r) {
-        if (!r || !isNum(r.lat) || !isNum(r.lng)) return { err: "Couldn't find that address." };
+        if (!r || !isNum(r.lat) || !isNum(r.lng))
+          return { err: "Couldn't find that address. Add a cross street or ZIP code." };
         return chk({ lat: r.lat, lng: r.lng, name: text.slice(0, 40) });
       },
       function () {
@@ -222,7 +223,7 @@
           if (seq !== trip.seq) return;
           tripBusy(false);
           if (!res.options.length) {
-            tripFail('No trip found. Try different points.', false, 'tripNone');
+            tripFail('No trip found. Try a different start or destination.', false, 'tripNone');
             return;
           }
           trip.res = res;
@@ -243,7 +244,7 @@
           if (err && err.code === 'out_of_area') tripFail(OUT_MSG, false, 'tripOut');
           else if (err && err.code === 'routing_unavailable')
             tripFail("Couldn't reach the routing service. Try again.", true);
-          else tripFail("Couldn't plan that trip. Try again.", true);
+          else tripFail("Couldn't plan that trip right now. Try again in a moment.", true);
         }
       );
     });
@@ -302,7 +303,14 @@
     o.legs.forEach(function (l) {
       m[l.mode] = 1;
     });
-    if (m.bus) return m.bike ? 'bike and bus' : 'bus';
+    if (m.bus) {
+      var w = o.legs.some(function (l) {
+        return l.mode === 'bus' && l.kind === 'trolley';
+      })
+        ? 'trolley'
+        : 'bus';
+      return m.bike ? 'bike and ' + w : w;
+    }
     return m.bike ? 'bike' : 'walk';
   }
   function tripLegWord(l) {
@@ -335,13 +343,12 @@
     var rs = (n.routes || []).join(', ');
     switch (n.code) {
       case 'routing_limit':
-        return "To stay within the free routing service's limits, the planner checked only the most promising bus options, so a slower-looking bus trip may be missing.";
+        return 'We checked only the most promising bus options, so a slower-looking bus trip may be missing.';
       case 'routing_failed':
         return (
-          (n.count === 1 ? 'Directions for one bus option' : 'Directions for ' + n.count + ' bus options') +
-          ' could not be loaded, so ' +
-          (n.count === 1 ? 'it was' : 'they were') +
-          ' left out. Re-plan to try again.'
+          (n.count === 1 ? '1 bus option' : n.count + ' bus options') +
+          (n.count === 1 ? " couldn't be loaded and is" : " couldn't be loaded and are") +
+          ' left out. Tap Re-plan to try again.'
         );
       case 'no_live_bus':
         return (
@@ -357,14 +364,12 @@
         );
       case 'schedule_stale':
         return n.state === 'expired'
-          ? 'The bus schedule data ended on ' +
-              tripDateText(n.end) +
-              ', so bus ride times may be out of date.'
-          : 'The bus schedule data ends on ' +
+          ? 'Bus schedules on file ended ' + tripDateText(n.end) + ', so ride times may be off.'
+          : 'Bus schedules on file end ' +
               tripDateText(n.end) +
               ' (' +
               (n.days === 0 ? 'today' : n.days === 1 ? 'tomorrow' : 'in ' + n.days + ' days') +
-              '); bus ride times may soon be out of date.';
+              '), so ride times may soon be off.';
       default:
         return n.text || '';
     }
@@ -399,10 +404,10 @@
       );
       sub(
         l.waitBasis === 'live'
-          ? 'Wait: next bus tracked live, ' + ws + '.'
-          : 'Wait: waits ' + ws + ' on average (schedule frequency, no bus tracked).'
+          ? 'Wait: ' + ws + ' (next bus tracked live)'
+          : 'Wait: ' + ws + ' (typical, no bus tracked)'
       );
-      sub('Ride: ' + Math.round(l.rideMin) + ' min, ' + (l.rideBasis || 'scheduled') + '.');
+      sub('Ride: ' + Math.round(l.rideMin) + ' min (' + (l.rideBasis || 'scheduled') + ')');
       return li;
     }
     li.appendChild(
@@ -423,6 +428,7 @@
     if (st) {
       var ts = [st.from.asOf, st.to.asOf].filter(Boolean),
         at = ts.length ? Math.min.apply(null, ts) : asOf,
+        old = !at || Date.now() - at > 600000,
         pl = function (n, w) {
           return n + ' ' + w + (n === 1 ? '' : 's');
         };
@@ -439,7 +445,8 @@
           pl(st.to.docks, 'free dock') +
           ' at ' +
           st.to.name +
-          '.'
+          '.' +
+          (old ? ' Indego bike availability may be out of date.' : '')
       );
     }
     return li;
@@ -503,8 +510,17 @@
     more.hidden = true;
     var asOf = res.asOf && res.asOf.indego,
       nMore = 0;
-    res.options.forEach(function (o, i) {
-      var wrap = el('div', 'tp-opt'),
+    /* Transit options first, the car comparison last; i stays the index into res.options. */
+    var order = res.options
+      .map(function (o, i) {
+        return i;
+      })
+      .sort(function (x, y) {
+        return (res.options[x].structure === 'car') - (res.options[y].structure === 'car') || x - y;
+      });
+    order.forEach(function (i) {
+      var o = res.options[i],
+        wrap = el('div', 'tp-opt'),
         b = el('button', 'tp-card');
       b.type = 'button';
       b.dataset.i = i;
@@ -512,7 +528,7 @@
       var l1 = el('span', 'tp-l1');
       l1.appendChild(el('span', 'tp-min', o.minutes + ' min'));
       if (i === fast) l1.appendChild(el('span', 'tp-badge', 'Fastest'));
-      if (o.structure === 'car') l1.appendChild(el('span', 'tp-badge drive', 'Drive'));
+      if (o.structure === 'car') l1.appendChild(el('span', 'tp-badge drive', 'By car'));
       b.appendChild(l1);
       b.appendChild(el('span', 'tp-l2', o.legs.map(tripLegWord).join(' · ')));
       if (o.structure === 'car') b.appendChild(el('span', 'tp-l3', 'no traffic or parking data'));
@@ -529,15 +545,7 @@
       });
       if (legSum !== o.minutes)
         ol.appendChild(
-          el(
-            'li',
-            'tp-sub tp-round',
-            'The steps are rounded one by one and add up to ' +
-              legSum +
-              ' min; the trip total of ' +
-              o.minutes +
-              ' min is rounded once from the exact times.'
-          )
+          el('li', 'tp-sub tp-round', 'Steps are rounded, so they may not add up exactly to the total.')
         );
       b.setAttribute('aria-controls', ol.id);
       b.addEventListener('click', function () {

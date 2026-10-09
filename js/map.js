@@ -197,8 +197,8 @@
         ? 'Regional Rail train ' + v.badge + (v.route ? ' ' + v.route : '')
         : 'Route ' + v.badge + ' ' + MODE_NAME[v.kind].toLowerCase();
     var c = badgeLetter(v);
-    var dirTxt = v.kind === 'train' ? (c ? ' heading ' + c : '') : c ? ', ' + DIR_WORD[c] : '';
-    return nm + dirTxt + ', ' + lateInfo(v.late).txt.toLowerCase();
+    var dirTxt = v.kind === 'train' ? (c ? ' heading ' + c : '') : c ? ', ' + c + ', ' + DIR_WORD[c] : '';
+    return nm + dirTxt + ', ' + lateInfo(v.late).txt.toLowerCase() + (v.stale ? ', stale' : '');
   }
   function vehTitle(v) {
     return v.kind === 'train'
@@ -386,7 +386,7 @@
       h0.id = 'detailHead';
       h0.tabIndex = -1;
       t0.appendChild(h0);
-      t0.appendChild(el('span', null, 'It has no recent GPS report.'));
+      t0.appendChild(el('span', null, 'It has not reported a position recently.'));
       head.appendChild(t0);
       head.appendChild(close);
       box.appendChild(head);
@@ -431,7 +431,7 @@
     var dl = el('dl');
     addRow(dl, 'Direction', directionNode(v));
     addRow(dl, 'Destination', v.dest || 'Not reported');
-    if (v.kind === 'train' && v.cur) addRow(dl, 'Last station', v.cur);
+    if (v.kind === 'train' && v.cur) addRow(dl, 'Last stop', v.cur);
     var nextNode = v.next || 'Not reported';
     if ((v.kind === 'bus' || v.kind === 'trolley') && v.nextId && /^[0-9]{1,8}$/.test(v.nextId)) {
       nextNode = el('span');
@@ -458,13 +458,13 @@
     }
     if (v.kind !== 'train') {
       var live = state.src.bus.stale
-        ? 'Last report is stale'
-        : 'GPS fix about ' +
+        ? 'Position may be out of date'
+        : 'Position updated ' +
           Math.max(0, Math.round(v.age + (Date.now() - state.src.bus.ok) / 1000)) +
-          ' s old';
+          ' s ago';
       addRow(dl, 'Position', live);
     } else {
-      addRow(dl, 'Position', 'Live from SEPTA TrainView (no timestamp provided)');
+      addRow(dl, 'Position', 'Live from SEPTA TrainView. Train positions carry no timestamp.');
     }
     box.appendChild(dl);
   }

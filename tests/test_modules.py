@@ -24,7 +24,9 @@ def test_missing_script_file_shows_error_banner(root):
             s.page.wait_for_selector("#loadError", timeout=5000)
             assert s.page.is_visible("#loadError")
             text = s.page.inner_text("#loadError")
-            assert f"{name}.js" in text and "did not load" in text, text
+            assert text == "Part of Septer didn't load. Check your connection and reload the page.", text
+            assert not re.search(r"\.js|\(", text), text  # no file names in rider text; they go to the console and S.failed
+            assert any(f"{name}.js" in f for f in s.page.evaluate("window.SEPTA.failed")), name
             assert s.page.get_attribute("#loadError", "role") == "alert"
             box = s.page.evaluate("(() => { const r = document.querySelector('#loadError').getBoundingClientRect(); return [r.top, r.width, innerWidth]; })()")
             assert box[0] <= 1 and box[1] >= box[2] - 1, box  # pinned to the top, full width

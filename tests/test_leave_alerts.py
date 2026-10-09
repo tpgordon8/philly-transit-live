@@ -111,7 +111,7 @@ def toasts(s):
 
 
 def msg(route, minutes):
-    return f"Leave now — the {route} is about {minutes} min from {SNAME}"
+    return f"Leave now: the Route {route} bus is about {minutes} min from {SNAME}."
 
 
 def stored_rules(s):
@@ -247,10 +247,10 @@ def test_status_lines(root):
         setup_moving(s, 3000)
         boot(s)
         add_alert(s, 5)
-        assert status(s) == "Measuring speed…", status(s)
+        assert status(s) == "Checking speed…", status(s)
         step(s)
         step(s)
-        assert re.fullmatch(r"Watching — nearest bus about \d+ min", status(s)), status(s)
+        assert re.fullmatch(r"Watching: nearest bus about \d+ min", status(s)), status(s)
         # paused
         s.page.locator("#rules .rtoggle").uncheck()
         assert status(s) == "Paused"
@@ -264,7 +264,7 @@ def test_status_lines(root):
         s.worker.data["TransitView"]["bus"] = [b for b in buses(s) if b["VehicleID"] != "3678"]
         bump_all(s, 15)
         s.tick(15000)
-        assert status(s) == "Watching — no bus heading here yet", status(s)
+        assert status(s) == "Watching: no bus heading here yet", status(s)
         # unavailable (stale first, then dropped)
         s.worker.mode = "abort"
         s.tick(15000)
@@ -307,7 +307,7 @@ def test_corrupt_storage_is_ignored(root):
             s.open()
             s.wait_live()
             assert s.page.locator("#rules li").count() == 0, js
-            assert "Open a stop, then tap Add alert." in s.page.inner_text("#h-leave ~ #rulesEmpty")
+            assert "Tap a stop on the map, then tap Add alert." in s.page.inner_text("#h-leave ~ #rulesEmpty")
             assert not s.console_errors, (js, s.console_errors)
 
 
@@ -345,7 +345,7 @@ def test_permission_denied_message(root):
         s.wait_live()
         s.page.click("#enableNotify")
         assert s.page.locator("#enableNotify").count() == 0
-        assert "Notifications blocked in your browser settings" in s.page.inner_text("#notifyBox")
+        assert "Notifications are blocked. Allow them for this site in your browser settings." in s.page.inner_text("#notifyBox")
 
 
 def test_no_button_when_granted_or_unsupported(root):
@@ -378,7 +378,7 @@ def run_hidden_alert(root, perm):
 
 def test_hidden_alert_notification_only_when_granted(root):
     text, notes = run_hidden_alert(root, "granted")
-    assert len(notes) == 1 and notes[0]["t"] == "Septer" and notes[0]["o"] == {"body": text} and text.startswith("Leave now — the 21 is about "), (notes, text)
+    assert len(notes) == 1 and notes[0]["t"] == "Septer" and notes[0]["o"] == {"body": text} and text.startswith("Leave now: the Route 21 bus is about "), (notes, text)
     text, notes = run_hidden_alert(root, "default")
     assert notes == []
     text, notes = run_hidden_alert(root, "denied")
@@ -459,7 +459,7 @@ def test_duplicates_are_not_created(root):
         # removing the rule re-enables the button
         s.page.locator("#rules .rrm").click()
         assert btn.is_enabled() and stored_rules(s) == []
-        assert "Open a stop, then tap Add alert." in s.page.inner_text("#rulesEmpty")
+        assert "Tap a stop on the map, then tap Add alert." in s.page.inner_text("#rulesEmpty")
 
 
 def test_ten_rule_cap(root):
@@ -553,7 +553,7 @@ def test_hostile_vehicle_id_does_not_break_rendering_or_rules(root):
                 fired = toasts(s)
                 break
         assert fired, status(s)
-        assert len(fired) == 1 and fired[0].startswith("Leave now — the 21 is about"), fired
+        assert len(fired) == 1 and fired[0].startswith("Leave now: the Route 21 bus is about"), fired
         assert stored_rules(s)[0]["last"]["key"] == key
         assert s.page.locator("#stopBoard .sbrow").count() >= 1
         assert s.markers() > 0

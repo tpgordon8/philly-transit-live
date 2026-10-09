@@ -78,3 +78,6 @@ select{min-height:44px;font-size:16px}
 }
 /* Rings drawn inside clipping boxes (the segmented control hides overflow). */
 .seg button:focus-visible{outline-offset:-3px}
+/* Privacy details: a native disclosure after a short lead (copy pass). */
+#privacyDetails{margin-top:8px}
+#privacyDetails summary{cursor:pointer;font-size:13px;font-weight:600;min-height:44px;display:flex;align-items:center}
