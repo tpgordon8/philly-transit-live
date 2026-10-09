@@ -3,7 +3,7 @@
 Paste the **Mission brief** into Claude to start. Everything below it is the
 plan Claude's agents must follow. Human owner: repo owner (@tpgordon8).
 Repo: `tpgordon8/philly-transit-live` (GitHub Pages, `main` branch, root).
-Live URL: https://tpgordon8.github.io/philly-transit-live/
+Live URL: https://septer.tarapaigegordon.com/ (the old github.io address forwards to it)
 
 ---
 

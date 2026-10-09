@@ -189,8 +189,24 @@ non-zero. The train detail card says positions have no timestamp. Headings may b
 ## 7. Deployment
 
 `git push origin main` → GitHub Pages builds from `main` at the repo root → live at
-https://tpgordon8.github.io/philly-transit-live/. **Measured: about 45 seconds** from push until a newly added file
+https://septer.tarapaigegordon.com/. **Measured: about 45 seconds** from push until a newly added file
 is served. Verify live changes with a cache-busting query string.
+
+### 7.1 Custom domain (set up 2026-10-09)
+
+- Public address: `septer.tarapaigegordon.com`. The old `https://tpgordon8.github.io/philly-transit-live/` answers with a 301
+  to it, so earlier links keep working. The repository keeps its old name on purpose (a rename would break other links).
+- DNS (GoDaddy, domain `tarapaigegordon.com`): one added record, `CNAME septer -> tpgordon8.github.io`, TTL 1/2 hour. The
+  root domain, `www`, email and the other existing records were left as they were. Keep that record or the site goes dark.
+- GitHub: the `CNAME` file at the repository root (written by GitHub when the domain was saved under Settings, Pages) names
+  the domain. Do not delete it; deleting it unlinks the domain on the next deploy. "Enforce HTTPS" is on, with a Let's
+  Encrypt certificate that GitHub renews itself.
+- The Worker allows this origin (`CUSTOM` in `worker/worker.js`), next to the old Pages origin and localhost. A new
+  address means pasting the updated Worker into Cloudflare first, or the feeds answer 403.
+- Saved data lives in `localStorage`, which belongs to one web address: anything saved at the old address does not
+  appear at the new one.
+- Check after any DNS or Pages change: `curl -sI https://septer.tarapaigegordon.com/` (200), the same with `http://` (301),
+  and `python3 tests/live_smoke.py` (the Worker accepts the origin).
 
 ## 8. Test and review tooling
 

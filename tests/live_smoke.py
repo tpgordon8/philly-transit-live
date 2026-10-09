@@ -13,6 +13,7 @@ import urllib.request
 
 WORKER = "https://septa-proxy.tpgordon8.workers.dev"
 ORIGIN = "https://tpgordon8.github.io"
+CUSTOM_ORIGIN = "https://septer.tarapaigegordon.com"
 
 BUS_KEYS = ["lat", "lng", "VehicleID", "label", "route_id", "timestamp", "heading", "late", "next_stop_id",
             "Direction", "destination", "next_stop_name", "estimated_seat_availability"]
@@ -136,6 +137,15 @@ def run(base):
                 code = e.code
             assert code == 403, f"Origin {o!r} gave HTTP {code}, want 403"
 
+    def custom_origin():
+        st, h, _ = get(base, "/Alerts", origin=CUSTOM_ORIGIN)
+        assert st == 200, f"HTTP {st}"
+        assert h.get("access-control-allow-origin") == CUSTOM_ORIGIN, "CORS header does not echo the custom domain"
+        st, _, _ = get(base, "/route/foot?from=39.95,-75.16&to=39.96,-75.17", origin=CUSTOM_ORIGIN)
+        assert st == 200, f"/route HTTP {st}"
+        st, _, _ = get(base, "/Alerts", origin=CUSTOM_ORIGIN + ".evil.example")
+        assert st == 403, f"look-alike origin got HTTP {st}"
+
     def localhost_origin():
         st, h, _ = get(base, "/Alerts", origin="http://localhost:8765")
         assert st == 200 and h.get("Access-Control-Allow-Origin") == "http://localhost:8765", f"HTTP {st}, ACAO {h.get('Access-Control-Allow-Origin')!r}"
@@ -167,6 +177,7 @@ def run(base):
     check("/route and /indego without an allowed Origin get 403", no_origin_refused)
     check("Origin 'null' and empty Origin get 403", null_origin)
     check("localhost origin on any port is allowed", localhost_origin)
+    check("Custom domain origin is allowed (and a look-alike is not)", custom_origin)
     return results
 
 
