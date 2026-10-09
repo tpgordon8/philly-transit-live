@@ -52,8 +52,16 @@ SEPTA public hackathon API (no key, no CORS headers)
   (id matches `^[A-Za-z0-9]{1,6}$`, edge-cached a day) and `Arrivals?station=<name>` (name matches
   `^[A-Za-z0-9 .'&/-]{2,40}$`, upstream `results=10`, cached 15 s). Bad parameters get 400 without reaching SEPTA.
   Anything else is a 404. Unit test: `node tests/test_worker.mjs`.
-- CORS: allows `https://tpgordon8.github.io` and `null` (a locally opened file). A browser sending any other
-  `Origin` gets 403. This is a soft guard, since non-browser clients can spoof `Origin`; the data is public anyway.
+- New in v3: `/route/<foot|bike|car>?from=lat,lng&to=lat,lng` (both points finite numbers inside lat 39.6 to 40.4,
+  lng -75.9 to -74.5, rounded to 4 decimals before the upstream call; anything else is 400; edge-cached 60 s) and
+  `/indego/<information|status>` (GBFS, cached 1 h / 30 s). Upstream errors are never cached (`cacheTtlByStatus` makes
+  non-2xx uncacheable) and an answer that is not a valid route or station feed is a 502. `Stops` answers that are empty or
+  not an array live 60 s; a real list lives a day through the Cache API, which only works on a custom domain, so on
+  `*.workers.dev` Stops are cached 60 s (safe, unverified offline).
+- CORS and origins: allows `https://tpgordon8.github.io` plus `http://localhost` and `http://127.0.0.1` on any port. Any
+  other `Origin` header, including `null` and the empty string, gets 403. A request with no `Origin` is allowed (curl,
+  the smoke test) unless it carries a `Sec-Fetch-Site` of cross-site or same-site. This is a soft guard, since non-browser
+  clients can spoof `Origin`; the data is public anyway. (`null`, a locally opened file, used to be allowed.)
 - Caching: Cloudflare edge cache with `cacheTtl` 10 s (Alerts 60 s). Responses carry `Cache-Control: public,
   max-age=5`; the page fetches with `cache: 'no-store'`. Upstream timeout is 10 s; failures return 502 JSON.
 - Deploy: no CLI or API token is available. Paste `worker/worker.js` into the Cloudflare dashboard editor
@@ -312,10 +320,17 @@ Inputs: origin O, destination D, `now`, the network JSON, Indego info and status
    and are shown with their age; no costs are shown; car has no traffic or parking data and says so.
 
 ### 12.4 Privacy and budget
-Planning never touches the Worker. Third parties receive only what a leg needs: Indego (nothing), the routing service
-(coordinates of leg endpoints), Nominatim (typed addresses, already the case). The UI says: "Planning sends the start and
-end points of each leg to an OpenStreetMap-based routing service and reads Indego's public station feed. Nothing is
-stored." (same wording in README.md). Nothing is stored in v1: no localStorage key for trips, the From and To text is
+Since WP1, routing and Indego go through the Worker (`/route/<foot|bike|car>`, `/indego/<information|status>`, section 2);
+the Worker forwards coordinates (rounded to 4 decimals) to the routing service and stores nothing of its own beyond the
+short-lived edge cache of each answer (routes 60 s, Indego status 30 s, information 1 h). The page tries the Worker once
+and, on a Worker 5xx, a network error or unparseable answer, falls back once to the direct provider URL (a 4xx from the
+Worker, for example a point outside the Philadelphia box, is final). Each planner call therefore costs Worker requests
+(at most about a dozen route calls plus one Indego status per plan). Third parties receive only what a leg needs: Indego
+(nothing), the routing service (coordinates of leg endpoints, via the Worker, or directly in the fallback), Nominatim
+(typed addresses, already the case). The UI says: "Planning sends the start and end points of each leg to this site's
+Worker, which forwards them to an OpenStreetMap-based routing service, and reads Indego's public station feed through
+the Worker. The Worker stores nothing beyond a short-lived cache of each answer, and nothing is stored in this page."
+(same substance in README.md). Nothing is stored in v1: no localStorage key for trips, the From and To text is
 not saved, and a "last plan" is NOT stored. The 15 s refresh loop and idle pause are unchanged; planning does not count
 as a user interaction and never resumes a paused page.
 

@@ -32,6 +32,9 @@ Personal state (search center, saved places, starred routes, alert rules) lives 
 It is never sent to the Worker or anywhere else. The one exception is an address you type into search, which goes to
 Nominatim (OpenStreetMap) to be geocoded.
 
-Planning a trip sends the start and end points of each leg to an OpenStreetMap-based routing service and reads Indego's
-public station feed. Nothing is stored: the From and To text, the options and the drawn plan live only in the open page.
+Planning a trip sends the start and end points of each leg to this project's Worker, which forwards them (rounded to
+4 decimals, about 10 m) to an OpenStreetMap-based routing service, and reads Indego's public station feed through the
+Worker. The Worker stores nothing of its own beyond a short-lived edge cache of each answer (routes one minute). Nothing
+is stored in the page: the From and To text, the options and the drawn plan live only in the open page. If the Worker is
+down, the page falls back once to asking those two services directly.
 Typed addresses are geocoded by Nominatim, as in search.
