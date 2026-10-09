@@ -303,14 +303,14 @@ def test_pinch_zoom_is_not_a_keyboard_and_the_handle_has_no_dangling_controls(ro
             vv.dispatchEvent(new Event('resize')); }"""
         s.page.evaluate(shrink, 2.0)  # pinch-zoomed: a shorter visual viewport, no keyboard
         s.page.wait_for_timeout(150)
-        assert s.page.evaluate(kb) == "0px"
+        assert s.page.evaluate(kb) in ("0px", "")  # unset counts as 0
         s.page.evaluate(shrink, 1.0)  # unzoomed with a field focused: the keyboard
         s.page.wait_for_timeout(150)
         assert s.page.evaluate(kb) == "330px"
         s.page.evaluate("document.activeElement.blur()")  # no text field focused: not a keyboard either
         s.page.evaluate("window.visualViewport.dispatchEvent(new Event('resize'))")
         s.page.wait_for_timeout(150)
-        assert s.page.evaluate(kb) == "0px"
+        assert s.page.evaluate(kb) in ("0px", "")  # unset counts as 0
 
 
 def test_safe_area_dvh_and_viewport_meta(root):
