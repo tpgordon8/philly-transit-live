@@ -98,7 +98,7 @@ class Mocks:
         self.network_hits = 0
         # Worker-first routing (ARCHITECTURE.md 13.2 WP1). indego_hits / routing_hits keep meaning "a request that reached
         # the provider and was served": direct calls, plus Worker calls while the provider mode is ok. The lists below add
-        # the path taken. worker_mode is the Worker's own state for /route and /indego: ok | http500 | abort | http400.
+        # the path taken. worker_mode is the Worker's own state for /route and /indego: ok | http500 | http404 | abort | http400.
         self.worker_mode = "ok"
         self.worker_route_hits = []   # every /route/<profile> request seen by the mock Worker: {'profile','from','to','raw'}
         self.worker_indego_hits = []  # every /indego/<name> request: 'information' | 'status'
@@ -189,6 +189,8 @@ class Mocks:
                 return route.abort("failed")
             if self.worker_mode == "http500":
                 return route.fulfill(status=500, headers=CORS, content_type="application/json", body='{"error":"mock"}')
+            if self.worker_mode == "http404":  # an older Worker that does not know /route yet
+                return route.fulfill(status=404, headers=CORS, content_type="application/json", body='{"error":"not found"}')
             if self.worker_mode == "http400" or hit["from"] is None or profile not in SPEED_MPS:
                 return route.fulfill(status=400, headers=CORS, content_type="application/json", body='{"error":"bad parameter"}')
             if self.routing_mode != "ok":  # the provider is down behind a healthy Worker: the Worker answers 502
@@ -201,6 +203,8 @@ class Mocks:
             return route.abort("failed")
         if self.worker_mode == "http500":
             return route.fulfill(status=500, headers=CORS, content_type="application/json", body='{"error":"mock"}')
+        if self.worker_mode == "http404":
+            return route.fulfill(status=404, headers=CORS, content_type="application/json", body='{"error":"not found"}')
         if self.worker_mode == "http400" or kind not in ("information", "status"):
             return route.fulfill(status=400, headers=CORS, content_type="application/json", body='{"error":"bad parameter"}')
         if self.indego_mode != "ok":

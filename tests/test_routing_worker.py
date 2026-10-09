@@ -1,6 +1,12 @@
 """Planner routing and Indego go through the Worker first, with ONE fallback to the direct provider
 (ARCHITECTURE.md 13.2 WP1). The mock Worker and the mock providers live in tests/harness.py (Mocks.worker_mode etc.)."""
 from harness import Session
+
+FAST = {
+    "test_w_worker_first_no_direct_calls",
+    "test_w_route_falls_back_once_on_worker_5xx_or_network_error",
+    "test_w_worker_404_older_worker_falls_back",
+}
 from test_planner_core import HOOK, open_session
 
 A = {"lat": 39.94, "lng": -75.16}
@@ -103,3 +109,15 @@ def test_w_plan_still_works_with_worker_down(root):
         res = ok(plan(s, O, D, []))
         assert any(o["structure"] == "walk" for o in res["options"]), [o["structure"] for o in res["options"]]
         assert s.mocks.direct_routing_hits, "fallback carried the routing"
+
+
+def test_w_worker_404_older_worker_falls_back(root):
+    """A Worker that predates /route and /indego answers 404; the page must still plan through the direct provider."""
+    with Session(root, init_scripts=[HOOK]) as s:
+        open_session(s)
+        s.mocks.worker_mode = "http404"
+        r = s.page.evaluate(ROUTE_JS, [A, B])
+        assert "meters" in r, r
+        i = s.page.evaluate(INDEGO_JS)
+        assert i.get("n", 0) > 0, i
+        assert len(s.mocks.direct_routing_hits) == 1 and len(s.mocks.direct_indego_hits) >= 1
