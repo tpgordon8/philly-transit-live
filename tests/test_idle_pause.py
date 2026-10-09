@@ -25,9 +25,24 @@ def adv(s, minutes, chunk=5):
         left -= n
 
 
+def fake_now(s):
+    return s.page.evaluate("Date.now()")
+
+
 def jump(s, minutes):
-    """Skip the clock ahead in one step (timers fire once, not 240 times), then let one 15 s tick run."""
+    """Skip the clock ahead in one step (timers fire once, not 240 times), then let one 15 s tick run.
+
+    The page clock is installed running (it follows real time). Playwright's real-time driver can finish a run it started
+    before a fast_forward and then set the clock back to where that run began, which silently undoes the jump (timers
+    then stay dead for the next `minutes`). So stop the real-time driver first (pause_at also fast-forwards by 1 s), take
+    the jump on a paused clock, and check the clock really moved.
+    """
+    before = fake_now(s)
+    s.page.clock.pause_at((before + 1000) / 1000)  # seconds since the epoch
+    mid = fake_now(s)
     s.page.clock.fast_forward(minutes * MIN)
+    after = fake_now(s)
+    assert after - mid >= minutes * MIN, ("clock jump was undone", before, mid, after)
     s.tick(15000)
 
 
@@ -44,6 +59,12 @@ def notice_visible(s):
 
 def status(s):
     return s.page.inner_text("#statusText")
+
+
+def diag(s):
+    """Page state for assertion messages."""
+    return s.page.evaluate("() => ({status: document.querySelector('#statusText').textContent, idleBar: !document.querySelector('#idleBar').hidden, "
+                           "empty: !document.querySelector('#empty').hidden, markers: document.querySelectorAll('.veh-wrap').length, now: Date.now(), busAge: Date.now() - window.SEPTA.util.state.src.bus.ok, fetchedAgo: Date.now() - window.SEPTA.util.state.fetchedAt})")
 
 
 def boot(s, hash_=""):
@@ -100,7 +121,7 @@ def test_c_resume_button_clears_notice_and_refetches(root):
         assert "TransitView" in s.worker.hits and "Alerts" in s.worker.hits, s.worker.hits
         assert "Paused" not in status(s)
         n = len(window_hits(s, 2))
-        assert n >= 4, "normal cadence continues after resume"
+        assert n >= 4, ("normal cadence continues after resume", n, diag(s))
 
 
 def test_d_keydown_resumes_and_enter_on_button_works(root):
@@ -170,10 +191,10 @@ def test_h_paused_and_resumed_have_no_console_errors(root):
     with Session(root) as s:
         paused_session(s)
         adv(s, 5)  # lets the data age out and apply() redraw while paused
-        assert s.markers() == 0
-        assert not s.page.locator("#empty").is_visible()
+        assert s.markers() == 0, ("markers while paused", s.markers(), diag(s))
+        assert not s.page.locator("#empty").is_visible(), ("empty box while paused", diag(s))
         s.page.click("#resumeBtn")
         s.tick(1000)
-        assert s.markers() > 0
-        assert not s.console_errors, s.console_errors
+        assert s.markers() > 0, ("markers after resume", s.markers(), diag(s))
+        assert not s.console_errors, (s.console_errors, diag(s))
         assert not s.unexpected and not s.septa_direct
