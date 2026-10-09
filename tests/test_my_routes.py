@@ -1,4 +1,4 @@
-"""Task 1.1: "My routes" preset (septa.routes.v1) — star routes, map shows only starred by default, toggle shows all."""
+"""Task 1.1: "My routes" preset (septa.routes.v1) — star routes, show only starred (the star toast offers it; the filter is off by default), toggle shows all."""
 import json
 
 from harness import Session
@@ -20,10 +20,13 @@ def counts(s):
     return s.page.evaluate("[...document.querySelectorAll('[data-n]')].map(e => +e.textContent)")
 
 
-def star_first_marker(s):
+def star_first_marker(s, filter_on=True):
+    """Star the first vehicle's route. The filter is off by default, so by default also take the toast's "Show only my routes"."""
     route = s.page.evaluate("""() => { const w = document.querySelector('.veh-wrap'); w.click();
         return w.querySelector('.rt').textContent.trim(); }""")
     s.page.click("#starBtn")
+    if filter_on:
+        s.page.click("#toasts .tact")
     return route
 
 

@@ -11,7 +11,7 @@ For developers: a live map with route alerts, shareable stop links, stop boards 
 
 The page is a static `index.html` plus plain script files under `js/` (no build step), served by GitHub Pages. It asks a small Cloudflare Worker (`worker/worker.js`)
 for SEPTA's public feeds, because SEPTA's API sends no CORS headers; the Worker allowlists a handful of endpoints and
-caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md). By default the page shows only buses within 0.5 mi, which also skips the Regional Rail request and roughly halves Worker traffic.
+caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md). By default the page shows buses, trolleys and subway within 0.5 mi (all routes, not only starred ones), which skips the Regional Rail request and roughly halves Worker traffic.
 
 ## Code layout
 
@@ -27,7 +27,7 @@ interface), `sheet` (phone bottom sheet, on-screen keyboard) and `main` (test ho
 is global. If a file fails to load, a red banner at the top of the page tells the visitor to reload (the file names go to the browser console and `SEPTA.failed`). How the files fit together and how to
 add one: [ARCHITECTURE.md](ARCHITECTURE.md) section 14. There is no build step; GitHub Pages serves the files as they are.
 
-The app manifest is `manifest.webmanifest` and the logo mark and its PNG exports are in `icons/` (`favicon.svg` is the source; there is no service worker). The title is set in the Helvetica-style system font stack, so no font file for it is shipped.
+The app manifest is `manifest.webmanifest` and the logo mark and its PNG exports are in `icons/` (`favicon.svg` is the source; there is no service worker). The wordmark is set in Barlow Condensed 700 (the heading font, already loaded from Google Fonts) beside a small CSS route-badge mark in the header; the favicon and icons are unchanged.
 
 ## Lint and format
 
@@ -45,7 +45,7 @@ ES5 on purpose (`var`, classic scripts); Prettier only changes layout, so format
 ## Phones and small screens
 
 Up to 760 px wide the map takes the screen and the controls are a bottom sheet under it: the closed sheet shows the Septer name, the
-status line and the search field; the Controls handle (or reaching any control below the search field) opens it. Wide screens keep the
+status line and the search field; the More handle (or reaching any control below the peek row) opens it. A search or location error opens it so the message shows. Wide screens keep the
 sidebar, and so does a phone held sideways. Every button, chip, field and link is at least 44 px, text fields are 16 px so iOS does not
 zoom, and the page keeps clear of notches. `python3 tests/shots_responsive.py` saves a matrix of screenshots to `/tmp/claude-0/shots/`
 (ten widths plus phone landscape; panel closed and open, trip planner, suggestions, vehicle and stop cards) for a visual check.

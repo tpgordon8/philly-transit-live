@@ -273,7 +273,7 @@
   }
   var PHILLY = { lat: 39.9526, lng: -75.1652, label: 'Center City (default view)' };
   /* Stored values are untrusted: anything malformed is ignored silently (and never rewritten on load). */
-  var DEFAULT_FILTERS = { bus: true, trolley: false, subway: false, train: false },
+  var DEFAULT_FILTERS = { bus: true, trolley: true, subway: true, train: false },
     DEFAULT_RADIUS = 0.5;
   function cleanPrefs(p) {
     var o = p && typeof p === 'object' && !Array.isArray(p) ? p : {},
@@ -317,6 +317,15 @@
       });
     return { home: cleanPlace(o.home, false), list: list };
   }
+  /* A first visit: nothing saved yet (no prefs; the welcome flag is checked separately) and the page was not opened from a #stop= share link.
+     Captured before the migrations below, which must not make a fresh browser look like a returning one. */
+  var firstVisit = (function () {
+    try {
+      return localStorage.getItem('septa.prefs.v1') === null && !/[#&]stop=/.test(location.hash);
+    } catch (e) {
+      return false;
+    }
+  })();
   var prefs = loadChecked('septa.prefs.v1', cleanPrefs, function (p, c) {
     return (
       !isObj(p) ||
@@ -325,8 +334,8 @@
       (p.filters != null && !isObj(p.filters))
     );
   });
-  /* One-time migration (key septa.defaults.v2): browsers that saved the old defaults (all modes, 1.5 mi) get the new ones
-   (buses only, 0.5 mi) once; center and any other saved fields are kept. Once the key exists saved choices are never touched. */
+  /* One-time migration (key septa.defaults.v2): browsers that saved the old defaults (all modes, 1.5 mi) get the defaults
+   (0.5 mi, Regional Rail off) once; center and any other saved fields are kept. Once the key exists saved choices are never touched. */
   (function () {
     var present;
     try {
@@ -335,6 +344,11 @@
       return;
     }
     if (present) return;
+    if (firstVisit) {
+      /* nothing saved: the defaults already apply, so only the flag is written (a fresh browser stays "first visit" until it chooses something) */
+      store.set('septa.defaults.v2', '1');
+      return;
+    }
     var raw = store.get('septa.prefs.v1', null),
       o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {},
       k;
@@ -367,13 +381,50 @@
           stars.push(k);
         }
       });
-    return { stars: stars, onlyMine: !(r && typeof r === 'object') || r.onlyMine !== false };
+    return { stars: stars, onlyMine: !!r && typeof r === 'object' && r.onlyMine === true };
   }
   var routesStore = loadChecked('septa.routes.v1', cleanRoutes, function (r, c) {
     return !isObj(r) || !Array.isArray(r.stars) || r.stars.length !== c.stars.length;
   });
   function saveRoutes() {
     store.set('septa.routes.v1', routesStore);
+  }
+  /* One-time migration (key septa.defaults.v3): every browser, new or old, shows all buses and has Trolley and Subway on, because
+   those were defaults, not choices. Radius, center, stars, places, rules and the Bus and
+   Regional Rail choices are kept. A missing or corrupt prefs file still loads (cleanPrefs already ran) and is rewritten clean. */
+  (function () {
+    var present;
+    try {
+      present = localStorage.getItem('septa.defaults.v3') !== null;
+    } catch (e) {
+      return;
+    }
+    if (present) return;
+    if (firstVisit) {
+      store.set('septa.defaults.v3', '1');
+      return;
+    }
+    var raw = store.get('septa.prefs.v1', null),
+      o = isObj(raw) ? raw : { center: prefs.center, radius: prefs.radius };
+    prefs.filters.trolley = true;
+    prefs.filters.subway = true;
+    o.filters = prefs.filters;
+    store.set('septa.prefs.v1', o);
+    if (routesStore.onlyMine) {
+      routesStore.onlyMine = false;
+      saveRoutes();
+    }
+    store.set('septa.defaults.v3', '1');
+  })();
+  /* septa.seen.v1: which one-time hints were shown ({welcome, vehicleTip}); anything else reads as not seen yet. */
+  var seen = (function () {
+    var raw = store.get('septa.seen.v1', null),
+      o = isObj(raw) ? raw : {};
+    return { welcome: o.welcome === true, vehicleTip: o.vehicleTip === true };
+  })();
+  function markSeen(k) {
+    seen[k] = true;
+    store.set('septa.seen.v1', seen, true);
   }
   function starKey(v) {
     return v.kind === 'train'
@@ -411,6 +462,9 @@
   }
   S.util.PHILLY = PHILLY;
   S.util.routesStore = routesStore;
+  S.util.seen = seen;
+  S.util.firstVisit = firstVisit;
+  S.util.markSeen = markSeen;
   S.util.saveRoutes = saveRoutes;
   S.util.starKey = starKey;
   S.util.isStarred = isStarred;

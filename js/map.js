@@ -24,6 +24,8 @@
     esc = S.util.esc,
     isStarred = S.util.isStarred,
     lateInfo = S.util.lateInfo,
+    markSeen = S.util.markSeen,
+    seen = S.util.seen,
     starKey = S.util.starKey,
     state = S.util.state;
   /* ----- Map ----- */
@@ -319,8 +321,11 @@
       }
     });
   }
+  var tipFor =
+    null; /* the vehicle whose open card shows the one-time tip (the card is rebuilt on every refresh) */
   function clearSelection() {
     state.selected = null;
+    tipFor = null;
     markers.forEach(function (m) {
       var e = m.getElement();
       if (e) e.classList.remove('sel');
@@ -522,6 +527,12 @@
       addRow(dl, 'Position', 'Live from SEPTA TrainView. Train positions carry no timestamp.');
     }
     box.appendChild(dl);
+    /* The first vehicle card ever opened explains its buttons once; it stays while that card stays open. */
+    if (!seen.vehicleTip || tipFor === state.selected) {
+      tipFor = state.selected;
+      markSeen('vehicleTip');
+      box.appendChild(el('p', 'tip', 'Star to save this route. View stop for arrivals and alerts.'));
+    }
   }
   /* Closing from the keyboard returns focus to the marker, so it does not fall back to the top of the page. */
   function closeDetailFocus() {

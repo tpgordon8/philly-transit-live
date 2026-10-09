@@ -86,3 +86,26 @@ select{min-height:44px;font-size:16px}
 /* Privacy details: a native disclosure after a short lead (copy pass). */
 #privacyDetails{margin-top:8px}
 #privacyDetails summary{cursor:pointer;font-size:13px;font-weight:600;min-height:44px;display:flex;align-items:center}
+
+/* First run and hints (js/sheet.js). The icon button sits in the phone peek row next to Search; wide screens have the full-width
+   Use my location button just below, so it is only drawn up to 760 px (and not in phone landscape, where the panel is a column). */
+.iconbtn{display:none;padding:0;place-items:center;flex:none;width:44px}
+.iconbtn:disabled{opacity:.5}
+@media (max-width:760px){.iconbtn{display:grid}}
+@media (max-width:760px) and (max-height:500px) and (orientation:landscape){.iconbtn{display:none}}
+.pillrow{margin-top:2px}
+.mypill{display:flex;align-items:center;flex:none;min-height:44px;min-width:44px;padding:0;border:0;background:none;color:var(--accent);font:600 12.5px/1.2 var(--f-body);text-align:left}
+.mypill span{padding:3px 10px;border:1px solid var(--accent);border-radius:999px;background:color-mix(in srgb,var(--accent) 10%,var(--panel))}
+.legend{margin:0;padding:0 18px 10px}
+/* The panel sits above the map panes on a phone (z-index in layout.css) so this card is not painted under them. The welcome card sits in the panel under the header on wide screens. On a phone it floats just above the closed sheet (over the
+   map's bottom edge, clear of the search row) and steps aside when the sheet opens or a vehicle or stop card shows. */
+#welcome{display:flex;gap:10px;align-items:center;margin:10px 18px 0;padding:10px 12px;background:var(--panel);border:1px solid var(--accent);border-radius:10px}
+#welcome[hidden]{display:none}
+#welcome p{flex:1;margin:0;font-weight:600}
+@media (max-width:760px){
+  #welcome{position:fixed;z-index:1090;left:8px;right:64px;bottom:calc(var(--peek) + 8px);margin:0;border-color:var(--line);box-shadow:var(--shadow)}
+  #app[data-sheet=open] #welcome,#app:has(#detail:not([hidden])) #welcome,#app:has(#stopCard:not([hidden])) #welcome{display:none}
+}
+@media (max-width:760px) and (max-height:500px) and (orientation:landscape){
+  #welcome{position:static;margin:10px 18px 0;box-shadow:none}
+}

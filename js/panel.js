@@ -61,13 +61,16 @@
     }
   });
   function toggleStar(k) {
-    var i = routesStore.stars.indexOf(k);
+    var i = routesStore.stars.indexOf(k),
+      st = routesStore.stars;
     if (i >= 0) routesStore.stars.splice(i, 1);
     else routesStore.stars.push(k);
     saveRoutes();
     /* Unstarring the open vehicle's route while the filter is on hides it; close the card instead of calling it "not reporting". */
     if (i >= 0 && routeFilterOn() && state.selected) clearSelection();
     apply();
+    if (i < 0 && st.length === 1)
+      S.sheet.starTip(k); /* the first star offers "Show only my routes" (js/sheet.js) */
   }
   function starName(k) {
     return k.indexOf('train:') === 0 ? k.slice(6) : k.indexOf('subway:') === 0 ? k.slice(7) : k;
@@ -75,6 +78,7 @@
   function renderMyRoutes() {
     var box = $('#myRoutes'),
       st = routesStore.stars;
+    S.sheet.syncPill(); /* the "My routes only" pill in the header follows the filter */
     box.replaceChildren();
     if (!st.length) {
       box.appendChild(el('p', 'hint', 'Tap a vehicle, then star its route to build your own view.'));
