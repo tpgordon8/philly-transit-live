@@ -108,31 +108,74 @@
   }
   /* ----- Markers ----- */
   var markers = new Map();
-  function shapeSVG(kind) {
-    if (kind === 'train' || kind === 'subway') {
-      return (
-        '<svg class="vb" width="64" height="40" viewBox="0 0 64 40" aria-hidden="true">' +
-        '<line class="ln" x1="2" y1="37" x2="62" y2="37"/>' +
-        '<path class="bd" d="M10 8H44Q56 8 60 22V31H6V12Q6 8 10 8Z"/>' +
-        '<rect class="wn" x="10" y="11" width="7" height="5" rx="1"/><rect class="wn" x="20" y="11" width="7" height="5" rx="1"/><rect class="wn" x="30" y="11" width="7" height="5" rx="1"/><rect class="wn" x="40" y="11" width="7" height="5" rx="1"/>' +
-        '<circle class="hl" cx="57" cy="25" r="2"/>' +
-        '<circle class="wh" cx="15" cy="33" r="3"/><circle class="wh" cx="26" cy="33" r="3"/><circle class="wh" cx="43" cy="33" r="3"/><circle class="wh" cx="54" cy="33" r="3"/></svg>'
-      );
-    }
+  /* Top-down vehicle drawings in a square 40x40 box, all pointing UP (the front is at the top). The box is
+   rotated as a whole by CSS (.f-N .f-E .f-S .f-W), so every shape turns cleanly about the marker centre. */
+  var SHAPES = {
+    bus:
+      '<rect class="bd" x="10" y="2" width="20" height="36" rx="5"/>' +
+      '<rect class="wn" x="12" y="4.2" width="16" height="3.8" rx="1.4"/>' +
+      '<rect class="rf" x="12" y="10" width="16" height="22" rx="2"/><rect class="rf" x="15" y="13" width="10" height="5" rx="1"/><rect class="rf" x="15" y="21" width="10" height="5" rx="1"/>' +
+      '<rect class="wn" x="12.6" y="34" width="14.8" height="2" rx=".8"/>' +
+      '<rect class="wh" x="8.4" y="8" width="1.8" height="5.5" rx=".8"/><rect class="wh" x="29.8" y="8" width="1.8" height="5.5" rx=".8"/>' +
+      '<rect class="wh" x="8.4" y="26.5" width="1.8" height="5.5" rx=".8"/><rect class="wh" x="29.8" y="26.5" width="1.8" height="5.5" rx=".8"/>' +
+      '<circle class="hl" cx="13.6" cy="2.9" r="1.2"/><circle class="hl" cx="26.4" cy="2.9" r="1.2"/>',
+    trolley:
+      '<path class="pole" d="M18 26L14 39M22 26L26 39"/>' +
+      '<rect class="bd" x="10" y="2" width="20" height="30" rx="5"/>' +
+      '<rect class="wn" x="12" y="4.2" width="16" height="3.8" rx="1.4"/>' +
+      '<rect class="rf" x="12" y="10" width="16" height="17" rx="2"/><rect class="rf" x="15" y="12.5" width="10" height="4.5" rx="1"/>' +
+      '<rect class="wn" x="12.6" y="29" width="14.8" height="1.8" rx=".8"/>' +
+      '<rect class="wh" x="8.4" y="8" width="1.8" height="5" rx=".8"/><rect class="wh" x="29.8" y="8" width="1.8" height="5" rx=".8"/>' +
+      '<rect class="wh" x="8.4" y="21" width="1.8" height="5" rx=".8"/><rect class="wh" x="29.8" y="21" width="1.8" height="5" rx=".8"/>' +
+      '<circle class="hl" cx="13.6" cy="2.9" r="1.2"/><circle class="hl" cx="26.4" cy="2.9" r="1.2"/>',
+    subway:
+      '<rect class="bd" x="11" y="1" width="18" height="38" rx="3.5"/>' +
+      '<rect class="wn" x="12.6" y="2.8" width="14.8" height="3.4" rx="1"/>' +
+      '<rect class="rf" x="13" y="8" width="14" height="24" rx="1.5"/>' +
+      '<path class="ln" d="M11 14H29M11 20H29M11 26H29M11 32H29"/>' +
+      '<rect class="wn" x="12.6" y="34" width="14.8" height="2.6" rx="1"/>' +
+      '<rect class="wh" x="9.4" y="6" width="1.6" height="6" rx=".7"/><rect class="wh" x="29" y="6" width="1.6" height="6" rx=".7"/>' +
+      '<rect class="wh" x="9.4" y="28" width="1.6" height="6" rx=".7"/><rect class="wh" x="29" y="28" width="1.6" height="6" rx=".7"/>' +
+      '<circle class="hl" cx="14.4" cy="2" r="1.1"/><circle class="hl" cx="25.6" cy="2" r="1.1"/>',
+    train:
+      '<path class="bd" d="M11.5 41V9Q11.5 -1 20 -1Q28.5 -1 28.5 9V41Z"/>' +
+      '<path class="wn" d="M13 9Q13 2.2 20 2.2Q27 2.2 27 9Z"/>' +
+      '<rect class="rf" x="13" y="11.5" width="14" height="25" rx="1.5"/>' +
+      '<path class="ln" d="M20 11.5V36.5M11.5 18H28.5M11.5 24H28.5M11.5 30H28.5"/>' +
+      '<rect class="wn" x="12.6" y="38" width="14.8" height="1.8" rx=".8"/>' +
+      '<rect class="wh" x="9.8" y="7" width="1.7" height="6" rx=".7"/><rect class="wh" x="28.5" y="7" width="1.7" height="6" rx=".7"/>' +
+      '<rect class="wh" x="9.8" y="29" width="1.7" height="6" rx=".7"/><rect class="wh" x="28.5" y="29" width="1.7" height="6" rx=".7"/>' +
+      '<circle class="hl" cx="20" cy="0.8" r="1.2"/>'
+  };
+  var FACES = ['N', 'E', 'S', 'W']; /* up, right, down, left: 0, 90, 180, 270 degrees */
+  function snapFacing(h) {
+    return h == null || !isFinite(h) ? 'N' : FACES[Math.round((((h % 360) + 360) % 360) / 90) % 4];
+  }
+  /* Which way the icon points. A bus or trolley with a route direction faces it (a detour or GPS jitter never turns it).
+   Loop, no direction, and trains face the actual heading snapped to N/E/S/W; with no heading either, north. */
+  function facingOf(v) {
+    return v.dir || snapFacing(v.heading);
+  }
+  /* The letter in the badge: the route direction, or for trains (no direction in the feed) the heading's 8-point letter. */
+  function badgeLetter(v) {
+    return v.kind === 'train' ? cardinal(v.heading) || '' : v.dir || '';
+  }
+  function shapeSVG(kind, face) {
     return (
-      '<svg class="vb" width="64" height="40" viewBox="0 0 64 40" aria-hidden="true">' +
-      (kind === 'trolley' ? '<path class="pole" d="M22 8L40 0"/>' : '') +
-      '<rect class="bd" x="8" y="8" width="48" height="24" rx="7"/>' +
-      '<rect class="wn" x="12" y="10.5" width="8" height="4" rx="1"/><rect class="wn" x="23" y="10.5" width="8" height="4" rx="1"/><rect class="wn" x="34" y="10.5" width="8" height="4" rx="1"/><rect class="wn" x="45" y="10.5" width="8" height="4" rx="1"/>' +
-      '<rect class="hl" x="54" y="24" width="3" height="4" rx="1"/>' +
-      '<circle class="wh" cx="19" cy="33" r="3.6"/><circle class="wh" cx="45" cy="33" r="3.6"/></svg>'
+      '<svg class="vb f-' +
+      face +
+      '" width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">' +
+      (SHAPES[kind] || SHAPES.bus) +
+      '</svg>'
     );
   }
   function vehInner(v) {
-    var c = cardinal(v.heading);
+    var c = badgeLetter(v);
     return (
-      shapeSVG(v.kind) +
-      '<span class="rt">' +
+      shapeSVG(v.kind, facingOf(v)) +
+      '<span class="rt' +
+      (String(v.badge).length > 3 ? ' long' : '') +
+      '">' +
       esc(v.badge) +
       '</span><span class="dr' +
       (c ? '' : ' none') +
@@ -141,17 +184,21 @@
       '</span>'
     );
   }
+  /* What the marker element shows. Heading jitter that changes neither the badge letter nor the facing leaves it alone. */
   function vehSig(v) {
-    return v.kind + '|' + v.badge + '|' + (cardinal(v.heading) || '');
+    return v.kind + '|' + v.badge + '|' + badgeLetter(v) + '|' + facingOf(v);
   }
-  /* Accessible name for a marker, e.g. "Route 12 bus heading S, 2 min late". lateInfo() already turns 999 into words. */
+  var DIR_WORD = { N: 'northbound', E: 'eastbound', S: 'southbound', W: 'westbound' };
+  /* Accessible name for a marker, e.g. "Route 57 bus, northbound, 2 min late" (no direction words for a loop or an
+   unknown direction; Regional Rail trains have no route direction, so they say "heading NE"). lateInfo() turns 999 into words. */
   function vehLabel(v) {
-    var c = cardinal(v.heading);
     var nm =
       v.kind === 'train'
         ? 'Regional Rail train ' + v.badge + (v.route ? ' ' + v.route : '')
         : 'Route ' + v.badge + ' ' + MODE_NAME[v.kind].toLowerCase();
-    return nm + (c ? ' heading ' + c : '') + ', ' + lateInfo(v.late).txt.toLowerCase();
+    var c = badgeLetter(v);
+    var dirTxt = v.kind === 'train' ? (c ? ' heading ' + c : '') : c ? ', ' + DIR_WORD[c] : '';
+    return nm + dirTxt + ', ' + lateInfo(v.late).txt.toLowerCase();
   }
   function vehTitle(v) {
     return v.kind === 'train'
@@ -168,8 +215,8 @@
           icon: L.divIcon({
             className: 'veh-wrap k-' + v.kind,
             html: vehInner(v),
-            iconSize: [80, 44],
-            iconAnchor: [40, 22]
+            iconSize: [44, 44],
+            iconAnchor: [22, 22]
           }),
           title: vehTitle(v),
           keyboard: true,
@@ -297,6 +344,27 @@
       if (n && n !== document.activeElement) n.focus({ preventScroll: true });
     }
   }
+  /* Card line for the direction. The route's direction is the main fact; the live compass heading is secondary detail,
+   shown only when it differs from the route (a detour) or when there is no route direction to state. */
+  function directionNode(v) {
+    var node = el('span'),
+      c = cardinal(v.heading),
+      deg = c ? c + ' (' + Math.round(v.heading) + '°)' : '';
+    function sub(t) {
+      node.appendChild(el('span', 'dsub', t));
+    }
+    if (v.kind === 'train') {
+      node.appendChild(document.createTextNode(c ? 'Heading ' + deg : 'Heading unavailable'));
+      sub('Regional Rail reports no route direction, so the badge shows the train’s heading.');
+    } else if (v.dir) {
+      node.appendChild(document.createTextNode(v.direction));
+      if (c && snapFacing(v.heading) !== v.dir) sub('Currently driving ' + deg);
+    } else {
+      node.appendChild(document.createTextNode(v.direction || 'Direction not reported'));
+      sub(c ? 'Currently driving ' + deg : 'Heading unavailable');
+    }
+    return node;
+  }
   function buildDetail() {
     var box = $('#detail');
     if (!state.selected) {
@@ -360,12 +428,8 @@
     head.appendChild(star);
     head.appendChild(close);
     box.appendChild(head);
-    var dl = el('dl'),
-      c = cardinal(v.heading);
-    var dirTxt =
-      (v.direction ? v.direction : 'Direction not reported') +
-      (c ? ' · heading ' + c + ' (' + Math.round(v.heading) + '°)' : ' · heading unavailable');
-    addRow(dl, 'Direction', dirTxt);
+    var dl = el('dl');
+    addRow(dl, 'Direction', directionNode(v));
     addRow(dl, 'Destination', v.dest || 'Not reported');
     if (v.kind === 'train' && v.cur) addRow(dl, 'Last station', v.cur);
     var nextNode = v.next || 'Not reported';
@@ -439,6 +503,9 @@
   S.map.drawHome = drawHome;
   S.map.fitRadius = fitRadius;
   S.map.syncMarkers = syncMarkers;
+  S.map.vehSig = vehSig;
+  S.map.vehLabel = vehLabel;
+  S.map.vehInner = vehInner;
   S.map.select = select;
   S.map.clearSelection = clearSelection;
   S.map.renderDetail = renderDetail;

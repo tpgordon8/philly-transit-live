@@ -20,6 +20,7 @@
 #detail dl{margin:0;padding:8px 12px 12px;display:grid;grid-template-columns:auto 1fr;gap:6px 14px}
 #detail dt{color:var(--mute);font-size:12.5px}
 #detail dd{margin:0;min-width:0;overflow-wrap:anywhere;font-weight:500}
+#detail .dsub{display:block;color:var(--mute);font-size:12.5px;font-weight:400}
 #detail .mono{font-family:var(--f-mono);font-size:12.5px}
 .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-weight:600;font-size:13px}
 .pill.good{background:var(--good-bg);color:var(--good)} .pill.warn{background:var(--warn-bg);color:var(--warn)}
@@ -30,16 +31,23 @@
 /* Vehicle markers. Leaflet moves .veh-wrap with transform, so a transform transition glides it. */
 .veh-wrap{background:none;border:0;transition:transform 1.6s cubic-bezier(.25,.1,.25,1)}
 #map.noglide .veh-wrap{transition:none!important}
-.veh-wrap{width:80px;height:44px}
-.veh-wrap .vb{position:absolute;left:8px;top:2px;overflow:visible;z-index:0} /* Leaflet gives map-pane svgs z-index:200, which would hide the badges */
-.veh-wrap .vb .bd{fill:var(--c)}
+.veh-wrap{width:44px;height:44px}
+/* The icon box is 40x40 and centred in the 44x44 marker; only this box rotates (.f-N 0, .f-E 90, .f-S 180, .f-W 270). */
+.veh-wrap .vb{position:absolute;left:2px;top:2px;overflow:visible;z-index:0;transform-origin:50% 50%} /* Leaflet gives map-pane svgs z-index:200, which would hide the badges */
+.veh-wrap .vb.f-N{transform:rotate(0deg)} .veh-wrap .vb.f-E{transform:rotate(90deg)}
+.veh-wrap .vb.f-S{transform:rotate(180deg)} .veh-wrap .vb.f-W{transform:rotate(270deg)}
+.veh-wrap .vb .bd{fill:var(--c);stroke:#0f1c2c;stroke-opacity:.55;stroke-width:.9}
 .veh-wrap .vb .wn{fill:#fff;opacity:.88}
+.veh-wrap .vb .rf{fill:#fff;opacity:.2}
 .veh-wrap .vb .wh{fill:#0f1c2c}
-.veh-wrap .vb .ln{stroke:#0f1c2c;stroke-width:1.6;fill:none;opacity:.7}
+.veh-wrap .vb .ln{stroke:#0f1c2c;stroke-width:.8;fill:none;opacity:.45}
 .veh-wrap .vb .hl{fill:#ffe27a}
-.veh-wrap .vb .pole{stroke:#0f1c2c;stroke-width:2;stroke-linecap:round;fill:none}
-.veh-wrap .rt{z-index:1;position:absolute;left:40px;top:23px;transform:translate(-50%,-50%);min-width:20px;max-width:56px;padding:0 4px;border-radius:4px;background:#fff;color:#0f1c2c;font:700 13px/17px var(--f-display);text-align:center;letter-spacing:.02em;box-shadow:0 0 0 1px rgba(15,28,44,.35);white-space:nowrap}
-.veh-wrap .dr{z-index:1;position:absolute;left:57px;top:23px;width:21px;height:21px;border-radius:50%;background:#0f1c2c;color:#fff;border:2px solid #fff;font:700 9px/17px var(--f-body);text-align:center;letter-spacing:-.02em}
+.veh-wrap .vb .pole{stroke:var(--ink);stroke-width:1.4;stroke-linecap:round;fill:none}
+/* The route number stays upright in the middle. The direction badge sits above and right of it, clear of the pill at every
+   width (the pill is 15px tall around the centre; the badge ends 1.5px above it) and clear of the drawing at every facing. */
+.veh-wrap .rt{z-index:1;position:absolute;left:22px;top:22px;transform:translate(-50%,-50%);min-width:18px;max-width:56px;padding:0 3px;border-radius:4px;background:#fff;color:#0f1c2c;font:700 12px/15px var(--f-display);text-align:center;letter-spacing:.02em;box-shadow:0 0 0 1px rgba(15,28,44,.35);white-space:nowrap}
+.veh-wrap .rt.long{font-size:11px;padding:0 2px;letter-spacing:0}
+.veh-wrap .dr{z-index:1;position:absolute;left:30px;top:-8px;width:21px;height:21px;border-radius:50%;background:#0f1c2c;color:#fff;border:2px solid #fff;font:700 9px/17px var(--f-body);text-align:center;letter-spacing:-.02em}
 .veh-wrap .dr.none{background:#566676} /* white glyph on this gray is 5.9:1; the old #6b7a8a was 4.4:1 */
 .veh-wrap.stale{opacity:.4;filter:grayscale(1)}
 .veh-wrap.sel .vb{filter:drop-shadow(0 0 5px var(--accent)) drop-shadow(0 0 2px var(--accent))}

@@ -66,7 +66,7 @@ def test_marker_enter_space_select_and_label(root):
         assert info
         for role, label in info:
             assert role == "button", role
-            assert label and re.match(r"^(Route \S+ (bus|trolley)|Regional Rail train \S+.*?)( heading (N|NE|E|SE|S|SW|W|NW))?, ", label), label
+            assert label and re.match(r"^(Route \S+ (bus|trolley|subway)(, (north|east|south|west)bound)?|Regional Rail train \S+.*?( heading (N|NE|E|SE|S|SW|W|NW))?), ", label), label
             assert "999" not in label and "undefined" not in label and "null" not in label, label
         assert any("late" in l or "on time" in l or "early" in l for _, l in info)
         # Enter

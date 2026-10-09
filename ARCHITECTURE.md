@@ -135,13 +135,22 @@ non-zero. The train detail card says positions have no timestamp. Headings may b
 - One `L.marker` per vehicle key (`b<VehicleID>` for buses and trolleys, `t<trainno>` for rail), kept in a `Map`.
   Duplicate keys in the feed collapse to one marker. Each refresh diffs: new keys are added, existing keys get
   `setLatLng`, missing keys are removed.
-- `divIcon` `.veh-wrap` (80×44, anchor at center) holds an SVG body (bus, trolley with pole, or train),
-  a `.rt` route/train-number badge and a `.dr` cardinal badge (N…NW from heading, gray "?" when null).
+- `divIcon` `.veh-wrap` (44×44, anchor at center) holds a top-down SVG (`.vb`, 40×40, drawn pointing up: bus, trolley with
+  pole, subway car, Regional Rail train; the train is drawn slightly longer than the box and overflows it), a `.rt`
+  route/train-number pill (upright, centred) and a `.dr` badge (upright, above and right of the pill so it never overlaps it).
+  Only `.vb` rotates, by the classes `f-N f-E f-S f-W` (0, 90, 180, 270 degrees).
+- Facing and badge (WP-B, decision 15.1): `normBuses` adds `dir` (N/E/S/W from the feed's `Direction`, `''` for Loop or
+  missing). Bus, trolley and subway: badge letter and icon facing are `dir`. With no `dir` the badge is a gray "?" and the icon
+  faces the heading snapped to N/E/S/W (north if there is no heading either). Trains: badge is the 8-point heading letter and the
+  icon faces the heading snapped to N/E/S/W. `vehSig` is `kind|badge|letter|facing`, so GPS jitter or a detour on a directed
+  route never touches the DOM. The accessible name says "Route 57 bus, northbound, 2 min late" (nothing for loop or unknown;
+  trains keep "heading NE"). The vehicle card leads with the route direction and adds "Currently driving E (92°)" only when
+  the heading disagrees (or there is no route direction). The stop board and Home-heading logic still use the true heading.
 - Glide: CSS `transition: transform 1.6s` on `.veh-wrap`. The map container gets `.noglide` during zoom so
   markers do not drag across the screen when Leaflet repositions them.
 - Gotcha: Leaflet gives map-pane SVGs `z-index: 200`, so the bus drawing sets `z-index: 0` and the badges `1`.
 - Colors: buses blue, trolleys green, subway purple (`--subway`, in a delimited CSS block), rail orange; all tokens are redefined for dark mode.
-- Vehicle kinds: `bus`, `trolley`, `subway` (all three come from TransitView, classified by route id: trolley = T1-T5, G1, D1, D2 and legacy 10, 11, 13, 15, 34, 36, 101, 102; subway = B1, B2, B3, L1, M1) and `train` (TrainView). Subway uses the train drawing, a `Subway` chip, star key `subway:<route>`, and like trains has no View stop, stop board, ETA or leave-now rule.
+- Vehicle kinds: `bus`, `trolley`, `subway` (all three come from TransitView, classified by route id: trolley = T1-T5, G1, D1, D2 and legacy 10, 11, 13, 15, 34, 36, 101, 102; subway = B1, B2, B3, L1, M1) and `train` (TrainView). Subway has its own car drawing, a `Subway` chip, star key `subway:<route>`, and like trains has no View stop, stop board, ETA or leave-now rule.
 
 ## 5. Refresh loop and failure states
 
@@ -401,8 +410,8 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 | File | Lines | Holds |
 |------|-------|-------|
 | `js/util.js` | 338 | constants, formatting and geometry, `$`, the `localStorage` wrapper, saved preferences, places, starred routes, the shared `state` object, the Leaflet-missing banner |
-| `js/feed.js` | 408 | `normBuses` (ghost filter), `normTrains`, `septa()` fetch through the Worker, idle pause, `refresh`, and `collect`/`apply`, the pipeline that turns feed data into what is drawn |
-| `js/map.js` | 448 | the Leaflet map, search-point and Home pins, vehicle markers, selection, the vehicle detail card |
+| `js/feed.js` | 418 | `normBuses` (ghost filter), `normTrains`, `septa()` fetch through the Worker, idle pause, `refresh`, and `collect`/`apply`, the pipeline that turns feed data into what is drawn |
+| `js/map.js` | 515 | the Leaflet map, search-point and Home pins, vehicle markers, selection, the vehicle detail card |
 | `js/panel.js` | 650 | the sidebar: status line, My routes, search box and geocoding, Use my location, `setCenter`/`setRadius`, mode chips, saved places, Get me home, the empty-state actions |
 | `js/stops.js` | 444 | speed history and `etaFor`, stop links, stop card and live stop board |
 | `js/alerts.js` | 508 | service alerts and the leave-now rules (`evalRule`, `evalRules`, `notify`) |
@@ -410,7 +419,7 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 | `js/candidates.js` | 217 | trip planner bus candidates: nearby stops and stations, wait estimates, `buildBusCandidates` (pure) |
 | `js/planner.js` | 535 | trip planner: leg assembly, schedule state, `planTrips` (no DOM) |
 | `js/trip.js` | 664 | trip planner interface: form, results, map drawing |
-| `js/main.js` | 108 | the `window.__SEPTA_TEST__` hook and the start-up calls |
+| `js/main.js` | 111 | the `window.__SEPTA_TEST__` hook and the start-up calls |
 
 | Stylesheet | Holds |
 |------------|-------|

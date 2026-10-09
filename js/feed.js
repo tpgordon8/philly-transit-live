@@ -41,6 +41,14 @@
     kindOf = S.util.kindOf,
     lateVal = S.util.lateVal,
     num = S.util.num;
+  /* The route's overall direction as a compass letter: Northbound -> N and so on. Loop, empty or anything else -> ''. */
+  var DIR_LETTER = { northbound: 'N', eastbound: 'E', southbound: 'S', westbound: 'W' };
+  function routeDirLetter(d) {
+    var key = String(d == null ? '' : d)
+      .trim()
+      .toLowerCase();
+    return DIR_LETTER[key] || '';
+  }
   /* Anti-ghost rule: a bus counts only with a nonzero GPS timestamp that is close to the newest one in the feed.
    Timestamp 0 means schedule-only. Comparing against the feed's own newest timestamp keeps this correct
    even when the viewer's device clock is off. */
@@ -87,6 +95,7 @@
         ts: c.ts,
         heading: headingVal(b.heading),
         direction: b.Direction || '',
+        dir: routeDirLetter(b.Direction),
         dest: b.destination || '',
         next: b.next_stop_name || '',
         nextId: b.next_stop_id == null ? '' : String(b.next_stop_id),
@@ -116,6 +125,7 @@
         lng: lng,
         heading: headingVal(t.heading),
         direction: '',
+        dir: '',
         dest: t.dest || '',
         next: t.nextstop || '',
         cur: t.currentstop || '',
