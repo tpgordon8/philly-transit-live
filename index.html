@@ -281,6 +281,7 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
 .tp-steps{margin:8px 0 2px;padding:0 0 0 22px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;min-width:0}
 .tp-steps li{overflow-wrap:anywhere;padding-left:2px}
 .tp-steps .tp-sub{display:block;color:var(--mute);font-size:12.5px;margin-top:1px}
+.tp-steps li.tp-round{list-style:none;margin-top:6px}
 .tp-more{margin-top:10px;width:100%}
 .tp-priv{margin-top:14px}
 .leaflet-container path.tp-line{fill:none;stroke-linecap:round;stroke-linejoin:round}
@@ -373,7 +374,8 @@ path.gmhline{stroke:var(--accent);stroke-width:3;stroke-dasharray:2 9;stroke-lin
       </form>
       <div id="tripResults" aria-busy="false" hidden></div>
       <div id="tripLive" class="sr-only" role="status" aria-live="polite"></div>
-      <p class="empty-line tp-priv">Planning sends the start and end points of each leg to this site's Worker, which forwards them to an OpenStreetMap-based routing service, and reads Indego's public station feed through the Worker. The Worker stores nothing beyond a short-lived cache of each answer, and nothing is stored in this page.</p>
+      <p class="empty-line tp-priv">What is sent where. A typed From or To address goes to Nominatim (OpenStreetMap) to be looked up, as in search. Every leg's start and end coordinates then go to this site's Worker, which rounds them to 4 decimals (about 10 m), forwards them to the OpenStreetMap-based routing service (routing.openstreetmap.de), and keeps nothing beyond a short-lived cache of each answer. Your saved Home and place buttons, Use my location and the map center are not looked up, but their coordinates are sent as route legs in exactly the same way as a typed address. Indego's public station feed is read through the Worker. If the Worker cannot be reached, is an older version, or reports a server error (502, 503 or 504), the page asks the routing service and Indego directly instead, and then the routing service receives the leg coordinates unrounded, to 5 decimals (about 1 m). An answer such as "no route" is not a failure and is never re-sent. Nothing is stored in this page.</p>
+      <p class="empty-line tp-attr" id="tripAttr">Routing by <a href="https://routing.openstreetmap.de/" target="_blank" rel="noopener">OSRM</a> / data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></p>
     </section>
 
     <section class="sec" aria-labelledby="h-places">

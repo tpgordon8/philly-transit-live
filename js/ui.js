@@ -356,15 +356,27 @@ $('#modes').addEventListener('change',function(e){
   state.filters[inp.dataset.mode]=inp.checked;syncModeChips();savePrefs();apply();
 });
 function shortLabel(s){return String(s||'').split(',').slice(0,2).join(',').trim()}
-/* Shared Nominatim lookup (Philadelphia viewbox). Resolves the first match {lat,lng,label} or null; rejects when the
-   request fails. opts.philly appends ', Philadelphia, PA' to text without a comma (used by the trip planner only). */
+/* Shared Nominatim lookup (Philadelphia viewbox, a preference rather than a bound: the trip planner checks the region itself).
+   Resolves the first match {lat,lng,label} or null; rejects when the request fails. opts.philly appends ', Philadelphia, PA' to
+   text without a comma (used by the trip planner only). Nominatim's policy allows about one request per second, so lookups start at
+   least GEO_GAP_MS apart (the slot is reserved when called, so two quick calls queue), and answers, misses included, are kept in
+   memory for the page session; failures are not kept. */
 var GEO_URL='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&viewbox=-75.80,40.30,-74.60,39.70&q=';
+var GEO_GAP_MS=1100,geoNext=0,geoCache={};
 function geocode(q,opts){
   if(opts&&opts.philly&&q.indexOf(',')<0)q+=', Philadelphia, PA';
-  return fetch(GEO_URL+encodeURIComponent(q),{headers:{'Accept':'application/json'}}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(function(res){
-    if(!res.length)return null;
-    var r=res[0];
-    return {lat:Number(r.lat),lng:Number(r.lon),label:shortLabel(r.display_name)};
+  var key=q.trim().replace(/\s+/g,' ').toLowerCase();
+  if(Object.prototype.hasOwnProperty.call(geoCache,key)){var c=geoCache[key];return Promise.resolve(c&&{lat:c.lat,lng:c.lng,label:c.label})}
+  var now=Date.now(),at=Math.max(now,geoNext);
+  if(at-now>GEO_GAP_MS*20)at=now;                       /* the clock moved backwards: do not wait for a stale slot */
+  geoNext=at+GEO_GAP_MS;
+  return new Promise(function(res){setTimeout(res,at-now)}).then(function(){
+    return fetch(GEO_URL+encodeURIComponent(q),{headers:{'Accept':'application/json'}});
+  }).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(function(res){
+    var out=null;
+    if(res.length){var r=res[0];out={lat:Number(r.lat),lng:Number(r.lon),label:shortLabel(r.display_name)}}
+    geoCache[key]=out;
+    return out&&{lat:out.lat,lng:out.lng,label:out.label};
   });
 }
 $('#searchForm').addEventListener('submit',function(e){

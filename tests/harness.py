@@ -90,6 +90,9 @@ def haversine_m(lat1, lng1, lat2, lng2):
     return 2 * r * math.asin(math.sqrt(a))
 
 
+NOROUTE_BODY = '{"code":"NoRoute","message":"Impossible route between points"}'
+
+
 class Mocks:
     """Hermetic third parties for the trip planner: Indego GBFS, the OSM routing service and data/bus-network.json.
 
@@ -112,7 +115,9 @@ class Mocks:
         self.network_hits = 0
         # Worker-first routing (ARCHITECTURE.md 13.2 WP1). indego_hits / routing_hits keep meaning "a request that reached
         # the provider and was served": direct calls, plus Worker calls while the provider mode is ok. The lists below add
-        # the path taken. worker_mode is the Worker's own state for /route and /indego: ok | http500 | http404 | abort | http400.
+        # the path taken. worker_mode is the Worker's own state for /route and /indego: ok | http500 | http502 | http404 | abort | http400 |
+        # noroute (the real Worker's 422 {code: NoRoute} pass-through). routing_mode 'noroute' is the provider answering HTTP 400
+        # {code: NoRoute} like the real OSRM, directly or (as a 422) behind the Worker.
         self.worker_mode = "ok"
         self.worker_route_hits = []   # every /route/<profile> request seen by the mock Worker: {'profile','from','to','raw'}
         self.worker_indego_hits = []  # every /indego/<name> request: 'information' | 'status'
@@ -174,6 +179,9 @@ class Mocks:
         hit = {"profile": profile, "from": (lat1, lng1), "to": (lat2, lng2)}
         self.routing_hits.append(hit)
         self.direct_routing_hits.append(hit)
+        if self.routing_mode == "noroute":
+            route.fulfill(status=400, headers=CORS, content_type="application/json", body=NOROUTE_BODY)
+            return True
         if self.routing_mode != "ok":
             return self._fail(route, self.routing_mode)
         return self._route_ok(route, profile, lat1, lng1, lat2, lng2)
@@ -201,8 +209,11 @@ class Mocks:
             self.worker_route_hits.append(hit)
             if self.worker_mode == "abort":
                 return route.abort("failed")
-            if self.worker_mode == "http500":
-                return route.fulfill(status=500, headers=CORS, content_type="application/json", body='{"error":"mock"}')
+            if self.worker_mode in ("http500", "http502"):
+                return route.fulfill(status=int(self.worker_mode[4:]), headers=CORS, content_type="application/json", body='{"error":"mock"}')
+            if self.worker_mode == "noroute" or self.routing_mode == "noroute":
+                route.fulfill(status=422, headers=CORS, content_type="application/json", body=NOROUTE_BODY)
+                return True
             if self.worker_mode == "http404":  # an older Worker that does not know /route yet
                 return route.fulfill(status=404, headers=CORS, content_type="application/json", body='{"error":"not found"}')
             if self.worker_mode == "http400" or hit["from"] is None or profile not in SPEED_MPS:
@@ -215,8 +226,8 @@ class Mocks:
         self.worker_indego_hits.append(kind)
         if self.worker_mode == "abort":
             return route.abort("failed")
-        if self.worker_mode == "http500":
-            return route.fulfill(status=500, headers=CORS, content_type="application/json", body='{"error":"mock"}')
+        if self.worker_mode in ("http500", "http502"):
+            return route.fulfill(status=int(self.worker_mode[4:]), headers=CORS, content_type="application/json", body='{"error":"mock"}')
         if self.worker_mode == "http404":
             return route.fulfill(status=404, headers=CORS, content_type="application/json", body='{"error":"not found"}')
         if self.worker_mode == "http400" or kind not in ("information", "status"):

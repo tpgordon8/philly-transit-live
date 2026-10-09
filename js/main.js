@@ -10,10 +10,11 @@ var evalRule=S.alerts.evalRule;/*@split*/
 var TP=S.planner.TP,buildBusCandidates=S.planner.buildBusCandidates,buildNetIndex=S.planner.buildNetIndex,estimateTotal=S.planner.estimateTotal;/*@split*/
 var loadIndego=S.planner.loadIndego,loadNetwork=S.planner.loadNetwork,nearbyStations=S.planner.nearbyStations,nearbyStops=S.planner.nearbyStops;/*@split*/
 var planTrips=S.planner.planTrips,resetPlannerCaches=S.planner.resetPlannerCaches,routeLeg=S.planner.routeLeg,waitAtStop=S.planner.waitAtStop;/*@split*/
+var cancelPlan=S.planner.cancelPlan,inRegion=S.planner.inRegion;/*@split*/
 if(typeof window!=='undefined'&&window.__SEPTA_TEST__){
   window.__SEPTA_TEST__={normBuses:normBuses,normTrains:normTrains,lateVal:lateVal,lateInfo:lateInfo,cardinal:cardinal,distMi:distMi,bearing:bearing,angDiff:angDiff,parseSeptaDate:parseSeptaDate,alertKey:alertKey,esc:esc,etaFor:etaFor,speedMps:speedMps,updateSpeedHist:updateSpeedHist,speedHist:speedHist,evalRule:evalRule,
     planTrips:planTrips,routeLeg:routeLeg,loadNetwork:loadNetwork,loadIndego:loadIndego,nearbyStops:nearbyStops,nearbyStations:nearbyStations,waitAtStop:waitAtStop,
-    resetPlannerCaches:resetPlannerCaches,buildBusCandidates:buildBusCandidates,estimateTotal:estimateTotal,buildNetIndex:buildNetIndex,TP:TP};
+    resetPlannerCaches:resetPlannerCaches,buildBusCandidates:buildBusCandidates,estimateTotal:estimateTotal,buildNetIndex:buildNetIndex,TP:TP,cancelPlan:cancelPlan,inRegion:inRegion};
 }
 if(typeof document==='undefined')return;
 S.started=true;/*@split*/

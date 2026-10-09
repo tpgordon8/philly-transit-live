@@ -5,12 +5,15 @@ var S=window.SEPTA;/*@split*/
 if(S.halt)return;/*@split*/
 var $=S.util.$,el=S.util.el,fmtMi=S.util.fmtMi,isNum=S.util.isNum,state=S.util.state;/*@split*/
 var NARROW=S.ui.NARROW,geocode=S.ui.geocode,getPosition=S.ui.getPosition,map=S.ui.map,mapEl=S.ui.mapEl;/*@split*/
-var clockText=S.planner.clockText,planTrips=S.planner.planTrips;/*@split*/
+var cancelPlan=S.planner.cancelPlan,clockText=S.planner.clockText,inRegion=S.planner.inRegion,planTrips=S.planner.planTrips;/*@split*/
 /* ----- Trip planner UI (ARCHITECTURE.md section 12) -----
-   Everything lives in memory: no localStorage key, nothing is written to prefs, and nothing here touches the Worker, the 15 s
-   refresh or the vehicle markers. The map drawing is one Leaflet layer group, separate from `markers`. */
+   Everything lives in memory: no localStorage key, nothing is written to prefs, and nothing here touches the 15 s refresh or the
+   vehicle markers. Routing and Indego requests are made by planTrips (js/planner.js, through the Worker); this file only calls it,
+   and hands it a cancel handle (trip.ctx) that Clear trip and a new plan use to abandon the old plan's requests. The map drawing
+   is one Leaflet layer group, separate from `markers`. */
 var tripLayer=L.layerGroup().addTo(map);
-var trip={seq:0,busy:false,res:null,sel:0,last:null,autoShown:false,view:null};
+var OUT_MSG='That place is outside the area this planner covers (Philadelphia region).';
+var trip={seq:0,ctx:null,busy:false,res:null,sel:0,last:null,autoShown:false,view:null};
 var PHONE=window.matchMedia('(max-width:480px)');
 var fieldPt={from:null,to:null};            /* {kind:'center'} | {pt:{lat,lng,name}}; cleared when the user edits the text */
 var TRIP_REDUCED=function(){return window.matchMedia('(prefers-reduced-motion: reduce)').matches};
@@ -54,15 +57,17 @@ $('#tripLocate').addEventListener('click',function(){
 /* Resolves {pt} or {err}. Typed text is geocoded like the search box (plus ", Philadelphia, PA" when it has no comma). */
 function tripResolve(w,text){
   var fp=fieldPt[w];
-  if(fp&&fp.kind==='center')return Promise.resolve({pt:{lat:state.center.lat,lng:state.center.lng,name:'Map center'}});
-  if(fp&&fp.pt)return Promise.resolve({pt:fp.pt});
+  /* Every point is checked against the region the Worker serves before any routing call is made. */
+  function chk(pt){return inRegion(pt)?{pt:pt}:{err:OUT_MSG}}
+  if(fp&&fp.kind==='center')return Promise.resolve(chk({lat:state.center.lat,lng:state.center.lng,name:'Map center'}));
+  if(fp&&fp.pt)return Promise.resolve(chk(fp.pt));
   if(!text){
-    if(w==='from'){tripSetField('from','Map center',{kind:'center'});return Promise.resolve({pt:{lat:state.center.lat,lng:state.center.lng,name:'Map center'}})}
+    if(w==='from'){tripSetField('from','Map center',{kind:'center'});return Promise.resolve(chk({lat:state.center.lat,lng:state.center.lng,name:'Map center'}))}
     return Promise.resolve({err:'Enter a destination.'});
   }
   return geocode(text,{philly:true}).then(function(r){
     if(!r||!isNum(r.lat)||!isNum(r.lng))return {err:'Couldn\'t find that address.'};
-    return {pt:{lat:r.lat,lng:r.lng,name:text.slice(0,40)}};
+    return chk({lat:r.lat,lng:r.lng,name:text.slice(0,40)});
   },function(){return {err:'Address lookup failed. Check your connection and try again.'}});
 }
 function tripBusy(on){
@@ -79,27 +84,37 @@ $('#tripForm').addEventListener('submit',function(e){
 /* fixed: {o,d} to repeat a plan with the same points (Re-plan, Retry); null reads the form. */
 function startTrip(fixed){
   var seq=++trip.seq,box=$('#tripResults');
+  /* A new plan abandons the previous one: its queued routing calls are dropped and its requests aborted, so it cannot hold up this one. */
+  if(trip.ctx)cancelPlan(trip.ctx);
+  var ctx=trip.ctx={dead:false,calls:0};
   tripErr('from','');tripErr('to','');
   trip.res=null;trip.fit=null;tripLayer.clearLayers();
   tripBusy(true);
   box.hidden=false;box.replaceChildren(el('p','tp-mute','Planning...'));
+  $('#tripLive').textContent='Planning your trip';
   /* Clearing while a plan is in flight cancels it: the sequence number moves on and the late answer is ignored. */
   var cb=el('button','btn','Clear trip');cb.type='button';cb.id='tripClear';cb.addEventListener('click',tripClear);box.appendChild(cb);
   box.setAttribute('aria-busy','true');
-  var pts=fixed?Promise.resolve(fixed):Promise.all([tripResolve('from',$('#tripFrom').value.trim()),tripResolve('to',$('#tripTo').value.trim())]).then(function(r){
-    if(r[0].err||r[1].err){
+  /* From, then To: Nominatim allows about one lookup per second (geocode itself spaces them), so they are never sent together. */
+  var pts=fixed?Promise.resolve(fixed):tripResolve('from',$('#tripFrom').value.trim()).then(function(a){
+    if(seq!==trip.seq)return null;
+    return tripResolve('to',$('#tripTo').value.trim()).then(function(b){
       if(seq!==trip.seq)return null;
-      if(r[0].err)tripErr('from',r[0].err);
-      if(r[1].err)tripErr('to',r[1].err);
-      return null;
-    }
-    return {o:r[0].pt,d:r[1].pt};
+      if(a.err||b.err){
+        if(a.err)tripErr('from',a.err);
+        if(b.err)tripErr('to',b.err);
+        $('#tripLive').textContent='';
+        tripFieldEl(a.err?'from':'to').focus();
+        return null;
+      }
+      return {o:a.pt,d:b.pt};
+    });
   });
   pts.then(function(p){
     if(seq!==trip.seq)return;
     if(!p){tripBusy(false);box.replaceChildren();box.hidden=true;box.setAttribute('aria-busy','false');return}
     trip.last=p;
-    return planTrips(p.o,p.d).then(function(res){
+    return planTrips(p.o,p.d,{ctx:ctx}).then(function(res){
       if(seq!==trip.seq)return;
       tripBusy(false);
       if(!res.options.length){tripFail('No trip found. Try different points.',false,'tripNone');return}
@@ -111,7 +126,8 @@ function startTrip(fixed){
     },function(err){
       if(seq!==trip.seq)return;
       tripBusy(false);
-      if(err&&err.code==='routing_unavailable')tripFail('Couldn\'t reach the routing service. Try again.',true);
+      if(err&&err.code==='out_of_area')tripFail(OUT_MSG,false,'tripOut');
+      else if(err&&err.code==='routing_unavailable')tripFail('Couldn\'t reach the routing service. Try again.',true);
       else tripFail('Couldn\'t plan that trip. Try again.',true);
     });
   });
@@ -125,15 +141,18 @@ function tripFail(msg,retry,id){
   var box=$('#tripResults');
   box.hidden=false;box.setAttribute('aria-busy','false');box.replaceChildren();
   trip.res=null;tripLayer.clearLayers();tripRestoreView();
-  var m=el('p','tp-msg',msg);m.setAttribute('role','alert');if(id)m.id=id;box.appendChild(m);
+  var m=el('p','tp-msg',msg);m.setAttribute('role','alert');m.tabIndex=-1;if(id)m.id=id;box.appendChild(m);
   if(retry){
     var b=el('button','btn','Retry');b.type='button';b.id='tripRetry';b.style.marginTop='8px';
     b.addEventListener('click',function(){if(!trip.busy&&trip.last)startTrip(trip.last)});
     box.appendChild(b);
   }
+  $('#tripLive').textContent='';
+  m.focus();               /* planning is over: focus goes to the message, with the Retry control right after it */
 }
 function tripClear(){
   trip.seq++;trip.res=null;trip.last=null;
+  if(trip.ctx)cancelPlan(trip.ctx);
   tripBusy(false);
   tripLayer.clearLayers();tripRestoreView();
   var box=$('#tripResults');box.replaceChildren();box.hidden=true;box.setAttribute('aria-busy','false');
@@ -152,7 +171,7 @@ function tripLegWord(l){
 }
 function tripFastest(res){
   var best=null,bi=-1;
-  res.options.forEach(function(o,i){if(o.structure!=='car'&&!o.dominated&&(best==null||o.minutes<best)){best=o.minutes;bi=i}});
+  res.options.forEach(function(o,i){var v=o.raw!=null?o.raw:o.minutes;if(o.structure!=='car'&&!o.dominated&&(best==null||v<best)){best=v;bi=i}});
   return bi;
 }
 function tripAgo(ms){
@@ -224,6 +243,8 @@ function tripRender(){
     if(o.dominated&&o.dominatedReason)b.appendChild(el('span','tp-l3',o.dominatedReason));
     var ol=el('ol','tp-steps');ol.id='tripSteps'+i;ol.hidden=i!==trip.sel;
     o.legs.forEach(function(l){ol.appendChild(tripStep(l,asOf))});
+    var legSum=0;o.legs.forEach(function(l){legSum+=l.minutes});
+    if(legSum!==o.minutes)ol.appendChild(el('li','tp-sub tp-round','The steps are rounded one by one and add up to '+legSum+' min; the trip total of '+o.minutes+' min is rounded once from the exact times.'));
     b.setAttribute('aria-controls',ol.id);
     b.addEventListener('click',function(){tripSelect(i)});
     wrap.appendChild(b);wrap.appendChild(ol);

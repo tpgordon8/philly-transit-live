@@ -314,25 +314,21 @@ Inputs: origin O, destination D, `now`, the network JSON, Indego info and status
      minus 1 minute: wait = time - `tArr`, flagged "live". If none is tracked: wait = `hw`/2 flagged "typical, from
      schedule". If `hw` is null and no vehicle: drop the option. Ride time is `mins[a] - mins[b]` (scheduled), flagged
      "scheduled".
-3. Rank by total minutes; return at most 5 options with at most 2 per structure (walk-bus-walk, bike-bus-walk, ...) so
+3. Rank by the sum of the legs' exact (unrounded) minutes; the card shows its ceiling, and each step shows its own rounded minutes (a note says when the steps add to a different number). Return at most 5 options with at most 2 per structure (walk-bus-walk, bike-bus-walk, ...) so
    the list is varied. Every option carries its legs: `{mode, from, to, meters, minutes, basis: 'routed'|'scheduled'|'live'|'typical', path:[[lat,lng],...], notes}`.
 4. Honesty rules: no invented live data; label scheduled and typical numbers; Indego counts are as of the status timestamp
    and are shown with their age; no costs are shown; car has no traffic or parking data and says so.
 
 ### 12.4 Privacy and budget
-Since WP1, routing and Indego go through the Worker (`/route/<foot|bike|car>`, `/indego/<information|status>`, section 2);
-the Worker forwards coordinates (rounded to 4 decimals) to the routing service and stores nothing of its own beyond the
-short-lived edge cache of each answer (routes 60 s, Indego status 30 s, information 1 h). The page tries the Worker once
-and, on a Worker 5xx, a network error or unparseable answer, falls back once to the direct provider URL (a 4xx from the
-Worker, for example a point outside the Philadelphia box, is final). Each planner call therefore costs Worker requests
-(at most about a dozen route calls plus one Indego status per plan). Third parties receive only what a leg needs: Indego
-(nothing), the routing service (coordinates of leg endpoints, via the Worker, or directly in the fallback), Nominatim
-(typed addresses, already the case). The UI says: "Planning sends the start and end points of each leg to this site's
-Worker, which forwards them to an OpenStreetMap-based routing service, and reads Indego's public station feed through
-the Worker. The Worker stores nothing beyond a short-lived cache of each answer, and nothing is stored in this page."
-(same substance in README.md). Nothing is stored in v1: no localStorage key for trips, the From and To text is
-not saved, and a "last plan" is NOT stored. The 15 s refresh loop and idle pause are unchanged; planning does not count
-as a user interaction and never resumes a paused page.
+What is sent where (the page text in `index.html` and the README say the same):
+- A typed From or To address goes to Nominatim, at least 1.1 s after the previous lookup; answers (misses included) are cached in memory for the page session. Nothing typed ever reaches the Worker.
+- The start and end coordinates of every routed leg go to the Worker (`/route/<foot|bike|car>`, section 2), which rounds them to 4 decimals (about 10 m), forwards them to the OSM routing service (`routing.openstreetmap.de`, User-Agent `philly-transit-live (+https://tpgordon8.github.io/philly-transit-live/)`) and edge-caches the answer for 60 s. Indego goes through `/indego/<information|status>` (cached 1 h / 30 s) and carries no user data. The Worker stores nothing of its own. `/route` and `/indego` refuse a request without an allowed Origin (403).
+- Saved Home, saved place chips, Use my location and the map center are not geocoded, but their coordinates are routed exactly like a typed address, so they reach the Worker and the routing service the same way.
+- Fallback: the page falls back once to the direct provider URL ONLY on a network error or timeout, a Worker 404 (an older Worker without the endpoint) or a Worker 502, 503 or 504 (or a 200 that is not JSON). In that case the routing service receives the coordinates unrounded, at the page's 5 decimals (about 1 m), and Indego is read from its public GBFS URL. Every other Worker answer is final and is never re-sent elsewhere: 400 for a bad parameter, 403, and 422 `{"code":"NoRoute"|"NoSegment"|...}`, the Worker's pass-through of a well-formed OSRM error (OSRM answers HTTP 400 for every error code, which the Worker cannot report as a 502 or the page would mistake it for an outage). A 422 is never cached. The page reads `NoRoute` and `NoSegment` as "no street route between those points", which is the "No trip found" state.
+- Points outside the Worker's box (lat 39.6 to 40.4, lng -75.9 to -74.5) are refused in the page before any call: "That place is outside the area this planner covers (Philadelphia region).", with no Retry.
+
+Budget: at most about a dozen route calls plus one Indego status per plan. The routing queue runs at most 2 requests at once and starts at most one every 250 ms (`TP.MAX_INFLIGHT`, `TP.GAP_MS`). The FOSSGIS policy asks for about one request per second per client; most legs are served from the Worker's edge cache and do not reach OSRM, so 250 ms is the accepted compromise, and the planner shows "Routing by OSRM / data (c) OpenStreetMap contributors". Clear trip and a new plan cancel the old plan: queued calls are dropped, in-flight requests aborted (`cancelPlan`, `ctx.dead`).
+Nothing is stored in v1: no localStorage key for trips, the From and To text is not saved, and a "last plan" is NOT stored. The 15 s refresh loop and idle pause are unchanged; planning does not count as a user interaction and never resumes a paused page.
 
 ## 13. Tech-debt resolution plan (v1.0 stabilisation)
 
@@ -388,7 +384,7 @@ Goal: leave no known debt before the next feature. Every package keeps behaviour
 
 ### 13.4 Definition of debt free
 
-Every register item closed with a test; fast suite under 90 s; CI green on main; Worker v3 live and smoke-tested; no direct third-party call from the page when the Worker is healthy; no script block over 600 lines; a monthly job keeps schedule data fresh; this document lists no open items.
+Every register item closed with a test; fast suite under 90 s; CI green on main; Worker v3 live and smoke-tested; no direct third-party call from the page when the Worker is healthy (the direct fallback happens only on a network error, a Worker 404 or a Worker 502/503/504, never on a 4xx or 422 answer, see 12.4); no script block over 600 lines; a monthly job keeps schedule data fresh; this document lists no open items.
 
 ## 14. Code layout after the WP3 split (D8)
 

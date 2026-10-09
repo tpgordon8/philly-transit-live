@@ -18,6 +18,8 @@ FAST = {
     "test_f_geocode_miss_message_next_to_field",
     "test_f_routing_failure_message_and_retry",
     "test_i_phone_no_horizontal_scroll_touch_targets_and_show_map",
+    "test_s_out_of_region_is_refused_before_any_call",
+    "test_s_leg_rounding_note_and_total_from_exact_sum",
 }
 
 NET = json.loads((FIX / "bus-network.test.json").read_text())
@@ -39,7 +41,7 @@ def nominatim():
     return {"q=Origin": geo(O["lat"], O["lng"], "Origin St"), "q=Dest": geo(D["lat"], D["lng"], "Dest Ave"),
             "q=Other": geo(D2["lat"], D2["lng"], "Other Ave"), "q=10th": geo(39.9553, -75.1560, "10th and Race"),
             "q=Nowhere": (200, "application/json", "[]"),
-            "q=Near": geo(O["lat"] + 0.0012, O["lng"], "Near St")}
+            "q=Near": geo(O["lat"] + 0.0012, O["lng"], "Near St"), "q=Newark": geo(40.7357, -74.1724, "Newark")}
 
 
 def session(**kw):
@@ -129,13 +131,16 @@ def test_a_form_labels_placement_and_geocoding(root):
                 from: document.querySelector('label[for=tripFrom]').textContent, to: document.querySelector('label[for=tripTo]').textContent,
                 ph: [tripFrom.placeholder, tripTo.placeholder], vals: [tripFrom.value, tripTo.value],
                 btn: tripGo.textContent, hasLoc: !!document.querySelector('#tripLocate'), hasSwap: !!document.querySelector('#tripSwap'),
-                homeBtns: [tripFromHome.hidden, tripToHome.hidden], priv: sec.lastElementChild.textContent}; }""")
+                homeBtns: [tripFromHome.hidden, tripToHome.hidden], priv: sec.querySelector('.tp-priv').textContent, attr: document.querySelector('#tripAttr').textContent}; }""")
         assert info["labelled"] == "h-trip" and info["h"] == "Plan a trip"
         assert info["prev"] == "h-find" and info["next"] == "h-places"
         assert (info["from"], info["to"]) == ("From", "To") and info["vals"] == ["", ""]
         assert info["ph"] == ["Start: address or intersection", "Destination: address or intersection"]
         assert info["btn"] == "Plan trip" and info["hasLoc"] and info["hasSwap"] and info["homeBtns"] == [True, True]
-        assert info["priv"] == "Planning sends the start and end points of each leg to this site's Worker, which forwards them to an OpenStreetMap-based routing service, and reads Indego's public station feed through the Worker. The Worker stores nothing beyond a short-lived cache of each answer, and nothing is stored in this page."
+        for part in ("typed From or To address goes to Nominatim", "rounds them to 4 decimals", "saved Home and place buttons", "Use my location and the map center",
+                     "exactly the same way as a typed address", "cannot be reached, is an older version", "unrounded, to 5 decimals", "is not a failure and is never re-sent"):
+            assert part in info["priv"], part
+        assert info["attr"] == "Routing by OSRM / data \u00a9 OpenStreetMap contributors", info["attr"]
         # an intersection gets ", Philadelphia, PA" appended once; text with a comma is sent as typed
         plan_ui(s, "10th & Race", "Dest Ave, Philadelphia")
         from urllib.parse import unquote
@@ -674,7 +679,8 @@ FAIL_S12 = """() => { const f = window.fetch; window.fetch = function (u, o) {
     if (String(u).includes('route/v1/driving/-75.15800,39.95750;') || String(u).includes('/route/') && String(u).includes('from=39.95750,-75.15800&')) return Promise.resolve(new Response('{}', {status: 500}));
     return f.call(window, u, o); }; }"""
 NO_ROUTE_FOOT = """() => { const f = window.fetch; window.fetch = function (u, o) {
-    if (String(u).includes('/route/foot') || String(u).includes('routed-foot')) return Promise.resolve(new Response('{"code":"NoRoute","routes":[]}', {status: 200, headers: {'content-type': 'application/json'}}));
+    if (String(u).includes('routed-foot')) window.__direct = (window.__direct || 0) + 1;
+    if (String(u).includes('/route/foot') || String(u).includes('routed-foot')) return Promise.resolve(new Response('{"code":"NoRoute","message":"Impossible route between points"}', {status: String(u).includes('/route/foot') ? 422 : 400, headers: {'content-type': 'application/json'}}));
     return f.call(window, u, o); }; }"""
 
 
@@ -824,6 +830,8 @@ def test_k_no_trip_found_state(root):
         s.page.wait_for_selector("#tripNone", timeout=15000)
         msg = s.page.locator("#tripNone")
         assert msg.inner_text() == "No trip found. Try different points." and msg.get_attribute("role") == "alert"
+        assert not s.page.evaluate("window.__direct"), "the Worker's 422 NoRoute answer is final: nothing is re-sent to the provider"
+        assert s.page.evaluate("document.activeElement.id") == "tripNone"
         assert s.page.locator("#tripResults .tp-card").count() == 0 and s.page.locator("#tripRetry").count() == 0
         assert lines(s) == [] and pins(s) == [] and not s.page.locator("#tripGo").is_disabled()
         assert s.page.get_attribute("#tripResults", "aria-busy") == "false"
@@ -861,3 +869,136 @@ def test_k_phone_map_size_and_show_on_map(root):
         plan_ui(s)
         s.page.click("#showMap")
         assert s.page.evaluate("window.__sv")[-1]["a"]["block"] == "nearest", "between 481 and 820 px behaviour is unchanged"
+
+
+# ------------------------------------------------------------------ (s) WP5: region check, geocode pacing, a11y, cancel, rounding
+OUT_MSG = "That place is outside the area this planner covers (Philadelphia region)."
+
+
+def no_network_calls(s):
+    m = s.mocks
+    return m.worker_route_hits == [] and m.direct_routing_hits == [] and m.worker_indego_hits == [] and m.direct_indego_hits == []
+
+
+def test_s_out_of_region_is_refused_before_any_call(root):
+    places = {"home": {"name": "Far Home", "lat": 40.7357, "lng": -74.1724}, "list": []}
+    seed = f"try {{ localStorage.setItem('septa.places.v1', {json.dumps(json.dumps(places))}); }} catch (e) {{}}"
+    with session(init_scripts=[HOOK, SEED_PREFS, seed]) as s:
+        boot(s)
+        s.mocks.worker_route_hits.clear(); s.mocks.worker_indego_hits.clear(); s.mocks.direct_routing_hits.clear(); s.mocks.direct_indego_hits.clear()
+        # a typed place outside the box
+        fill(s, "Origin St", "Newark")
+        s.page.click("#tripGo")
+        s.page.wait_for_selector("#tripToErr:not([hidden])", timeout=15000)
+        assert s.page.inner_text("#tripToErr") == OUT_MSG and s.page.locator("#tripFromErr").is_hidden()
+        assert s.page.locator("#tripRetry").count() == 0 and s.page.locator("#tripResults").is_hidden()
+        assert s.page.evaluate("document.activeElement.id") == "tripTo", "focus goes to the field with the problem"
+        assert not s.page.locator("#tripGo").is_disabled() and s.page.evaluate("document.querySelector('#tripLive').textContent") == ""
+        assert no_network_calls(s), "no routing or Indego call for a place outside the region"
+        # a saved Home outside the box (used by coordinates, never geocoded)
+        s.page.click("#tripFromHome")
+        s.page.fill("#tripTo", "Dest Ave")
+        s.page.click("#tripGo")
+        s.page.wait_for_selector("#tripFromErr:not([hidden])", timeout=15000)
+        assert s.page.inner_text("#tripFromErr") == OUT_MSG and s.page.locator("#tripToErr").is_hidden()
+        assert s.page.locator("#tripRetry").count() == 0 and no_network_calls(s)
+        # an inside place still plans
+        s.page.fill("#tripFrom", "Origin St")
+        s.page.click("#tripGo")
+        wait_cards(s)
+        no_errors(s)
+
+
+def test_s_geocode_is_sequential_and_cached(root):
+    import time
+    with session() as s:
+        boot(s)
+        t = []
+        s.page.on("request", lambda r: t.append(time.monotonic()) if "nominatim" in r.url else None)
+        plan_ui(s, "Origin St", "Dest Ave")
+        assert len(t) == 2 and t[1] - t[0] >= 1.0, ("From, then To, at least a second apart", t)
+        s.page.click("#tripClear")
+        plan_ui(s, "  origin   ST ", "dest ave")
+        assert len(t) == 2, "answers are cached for the session, case and spacing ignored"
+        # a miss is cached too; failures are not
+        fill(s, "Origin St", "Nowhere Rd")
+        s.page.click("#tripGo")
+        s.page.wait_for_selector("#tripToErr:not([hidden])")
+        n = len(t)
+        s.page.click("#tripGo")
+        s.page.wait_for_selector("#tripToErr:not([hidden])")
+        assert len(t) == n, "the miss is remembered"
+
+
+def test_s_announce_planning_and_move_focus(root):
+    with session() as s:
+        boot(s)
+        s.page.evaluate("""() => { const f = window.fetch; window.fetch = function (u, o) {
+            if (String(u).includes('/route/')) return new Promise(r => setTimeout(r, 1500)).then(() => f.call(window, u, o));
+            return f.call(window, u, o); }; }""")
+        fill(s)
+        s.page.click("#tripGo")
+        s.page.wait_for_function("document.querySelector('#tripLive').textContent === 'Planning your trip'", timeout=5000)
+        assert s.page.get_attribute("#tripLive", "aria-live") == "polite" and s.page.get_attribute("#tripLive", "role") == "status"
+        wait_cards(s)
+        assert s.page.evaluate("document.activeElement.id") == "tripHeading", "focus moves to the results heading"
+        assert "trip option" in s.page.inner_text("#tripLive") and "Planning" not in s.page.inner_text("#tripLive")
+        # failure: focus goes to the error message, whose Retry control follows it
+        s.page.evaluate("""() => { window.fetch = function (u, o) { if (String(u).includes('/route/')) return Promise.resolve(new Response('{}', {status: 500})); return Promise.reject(new Error('x')); };
+            window.__SEPTA_TEST__.resetPlannerCaches(); }""")
+        s.page.click("#replan")
+        s.page.wait_for_selector("#tripRetry", timeout=20000)
+        assert s.page.evaluate("document.activeElement.getAttribute('role') + '|' + document.activeElement.className") == "alert|tp-msg"
+        assert s.page.evaluate("document.activeElement.nextElementSibling.id") == "tripRetry"
+        assert s.page.inner_text("#tripLive") == ""
+
+
+def test_s_clear_and_replan_cancel_the_abandoned_plan(root):
+    with session() as s:
+        boot(s)
+        s.page.evaluate("""() => { window.__hang = true; window.__st = {started: 0, aborted: 0}; const f = window.fetch;
+            window.fetch = function (u, o) {
+                if (window.__hang && String(u).includes('/route/')) { window.__st.started++;
+                    return new Promise((res, rej) => o.signal.addEventListener('abort', () => { window.__st.aborted++; rej(new DOMException('x', 'AbortError')); })); }
+                return f.call(window, u, o); }; }""")
+        fill(s)
+        s.page.click("#tripGo")
+        s.page.wait_for_function("window.__st.started >= 2", timeout=15000)
+        s.page.click("#tripClear")
+        s.page.wait_for_function("window.__st.aborted >= 2", timeout=5000)
+        n = s.page.evaluate("window.__st.started")
+        s.page.wait_for_timeout(1200)
+        assert s.page.evaluate("window.__st.started") == n, "queued calls of the cleared plan are dropped, not started later"
+        assert not s.page.locator("#tripGo").is_disabled() and s.page.locator("#tripResults").is_hidden()
+        # the next plan is not held up by the dead one
+        s.page.evaluate("window.__hang = false")
+        s.page.click("#tripGo")
+        wait_cards(s, timeout=10000)
+        no_errors(s)
+
+
+def test_s_leg_rounding_note_and_total_from_exact_sum(root):
+    import math
+    with session() as s:
+        boot(s)
+        plan_ui(s)
+        res = oracle(s)
+        opts = res["options"]
+        for o in opts:
+            exact = sum(l["raw"] for l in o["legs"])
+            assert o["minutes"] == math.ceil(exact - 1e-9) and abs(o["raw"] - exact) < 1e-9, o["structure"]
+        raws = [o["raw"] for o in opts if not o.get("dominated")]
+        assert raws == sorted(raws), "options are ranked on the exact sum"
+        assert res["bestMinutes"] == math.ceil(min(o["raw"] for o in opts if o["structure"] != "car") - 1e-9)
+        assert any(sum(l["minutes"] for l in o["legs"]) != o["minutes"] for o in opts), "scenario must contain a rounding mismatch"
+        notes = s.page.evaluate("[...document.querySelectorAll('#tripResults .tp-card')].map(b => { const ol = document.querySelector('#' + b.getAttribute('aria-controls')); const n = ol.querySelector('li.tp-round'); return n ? n.textContent : null; })")
+        cards_ = s.page.evaluate("[...document.querySelectorAll('#tripResults .tp-card .tp-min')].map(x => x.textContent)")
+        assert len(notes) == len(opts)
+        for o, note, shown in zip(opts, notes, cards_):
+            leg_sum = sum(l["minutes"] for l in o["legs"])
+            assert shown == f"{o['minutes']} min"
+            if leg_sum != o["minutes"]:
+                assert note and f"add up to {leg_sum} min" in note and f"total of {o['minutes']} min" in note, (o["structure"], note)
+            else:
+                assert note is None, (o["structure"], note)
+        no_errors(s)

@@ -44,6 +44,8 @@ function parseSeptaDate(s){
 }
 function shortText(s,n){s=String(s||'').replace(/\s+/g,' ').trim();return s.length>n?s.slice(0,n-1).replace(/\s+\S*$/,'')+'…':s}
 function distM(a,b){return distMi(a,b)*1609.344}
+/* Stored and fetched values are untrusted: a usable number is a finite number. */
+function isNum(x){return typeof x==='number'&&isFinite(x)}
 /* ---------- App ---------- */
 function $(s){return document.querySelector(s)}
 var store={
@@ -62,7 +64,7 @@ S.util.REFRESH_MS=REFRESH_MS;S.util.GHOST_MAX_S=GHOST_MAX_S;S.util.DROP_AFTER_MS
 S.util.CARD_LONG=CARD_LONG;S.util.SEATS=SEATS;S.util.MODE_NAME=MODE_NAME;S.util.esc=esc;S.util.cardinal=cardinal;S.util.toRad=toRad;/*@split*/
 S.util.distMi=distMi;S.util.bearing=bearing;S.util.angDiff=angDiff;S.util.fmtMi=fmtMi;S.util.lateVal=lateVal;S.util.lateInfo=lateInfo;S.util.num=num;/*@split*/
 S.util.headingVal=headingVal;S.util.parseSeptaDate=parseSeptaDate;S.util.shortText=shortText;S.util.distM=distM;S.util.$=$;S.util.store=store;/*@split*/
-S.util.showBanner=showBanner;S.util.hideBanner=hideBanner;/*@split*/
+S.util.showBanner=showBanner;S.util.hideBanner=hideBanner;S.util.isNum=isNum;/*@split*/
 S.halt=(typeof L==='undefined');/*@split*/
 if(typeof L==='undefined'){
   showBanner('','<b>Map library didn\'t load.</b> Check your connection and reload.');
@@ -70,7 +72,6 @@ if(typeof L==='undefined'){
 }
 var PHILLY={lat:39.9526,lng:-75.1652,label:'Center City (default view)'};
 /* Stored values are untrusted: anything malformed is ignored silently (and never rewritten on load). */
-function isNum(x){return typeof x==='number'&&isFinite(x)}
 var DEFAULT_FILTERS={bus:true,trolley:false,subway:false,train:false},DEFAULT_RADIUS=0.5;
 function cleanPrefs(p){
   var o=(p&&typeof p==='object'&&!Array.isArray(p))?p:{},c=o.center,f=o.filters,filters={},k;
@@ -130,6 +131,6 @@ var state={
   alerts:{items:[],ok:0,err:false,scope:'near'},fetchedAt:0
 };
 function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
-S.util.PHILLY=PHILLY;S.util.isNum=isNum;S.util.routesStore=routesStore;S.util.saveRoutes=saveRoutes;S.util.starKey=starKey;S.util.isStarred=isStarred;/*@split*/
+S.util.PHILLY=PHILLY;S.util.routesStore=routesStore;S.util.saveRoutes=saveRoutes;S.util.starKey=starKey;S.util.isStarred=isStarred;/*@split*/
 S.util.routeFilterOn=routeFilterOn;S.util.state=state;S.util.el=el;/*@split*/
 })();/*@split*/

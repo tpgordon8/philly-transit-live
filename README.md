@@ -74,9 +74,20 @@ Personal state (search center, saved places, starred routes, alert rules) lives 
 It is never sent to the Worker or anywhere else. The one exception is an address you type into search, which goes to
 Nominatim (OpenStreetMap) to be geocoded.
 
-Planning a trip sends the start and end points of each leg to this project's Worker, which forwards them (rounded to
-4 decimals, about 10 m) to an OpenStreetMap-based routing service, and reads Indego's public station feed through the
-Worker. The Worker stores nothing of its own beyond a short-lived edge cache of each answer (routes one minute). Nothing
-is stored in the page: the From and To text, the options and the drawn plan live only in the open page. If the Worker is
-down, the page falls back once to asking those two services directly.
-Typed addresses are geocoded by Nominatim, as in search.
+Planning a trip sends data only as follows:
+
+- Typed From and To addresses go to Nominatim (OpenStreetMap) to be geocoded, as in search. Lookups are at least a second
+  apart and answers are remembered in memory for the page session.
+- The coordinates of each leg's start and end go to this project's Worker, which rounds them to 4 decimals (about 10 m),
+  forwards them to the OpenStreetMap-based routing service (routing.openstreetmap.de, with a User-Agent naming this
+  project) and reads Indego's public station feed. The Worker stores nothing of its own beyond a short-lived edge cache of
+  each answer (routes one minute). The saved Home button and saved place buttons, Use my location and the map center are
+  not geocoded, but their coordinates are sent as route legs exactly like the coordinates of a typed address.
+- Fallback: if the Worker cannot be reached, answers 404 (an older Worker) or answers 502, 503 or 504, the page asks the
+  routing service and the Indego feed directly instead. Then the routing service receives the leg coordinates unrounded, to
+  5 decimals (about 1 m). A 4xx or 422 answer from the Worker, such as "no route between those points" or a place outside the
+  Philadelphia region, is an answer and is never re-sent anywhere.
+
+Nothing is stored in the page: the From and To text, the options and the drawn plan live only in the open page.
+Routing requests are spaced at least 250 ms apart with at most two in flight, and the planner shows "Routing by OSRM / data
+(c) OpenStreetMap contributors".

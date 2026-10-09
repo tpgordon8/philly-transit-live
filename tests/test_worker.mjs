@@ -7,7 +7,7 @@ const get = (path, origin = 'https://tpgordon8.github.io') =>
   worker.fetch(new Request('https://w.example' + path, { headers: origin ? { Origin: origin } : {} }));
 let r;
 r = await get('/TransitView'); assert.equal(r.status, 200); assert.equal(calls.at(-1).u, 'https://api.septa.org/hackathon/TransitView/index.php');
-assert.equal(calls.at(-1).o.cf.cacheTtl, 10);
+assert.equal(calls.at(-1).o.cf.cacheTtlByStatus['200-299'], 10);
 r = await get('/Alerts?x=1'); assert.equal(calls.at(-1).u, 'https://api.septa.org/hackathon/Alerts/index.php', 'query not forwarded');
 r = await get('/Stops?route=21'); assert.equal(r.status, 200); assert.equal(calls.at(-1).u, 'https://api.septa.org/hackathon/Stops/index.php?req1=21'); assert.equal(calls.at(-1).o.cf.cacheTtlByStatus['200-299'], 60, 'subrequest cache for Stops is the short, safe TTL');
 const n = calls.length;
@@ -17,7 +17,7 @@ for (const bad of ['/Stops', '/Stops?route=', '/Stops?route=../x', '/Stops?route
 assert.equal(calls.length, n, 'invalid params must not reach SEPTA');
 r = await get('/Arrivals?station=Suburban%20Station'); assert.equal(r.status, 200);
 assert.equal(calls.at(-1).u, 'https://api.septa.org/hackathon/Arrivals/index.php?results=10&station=Suburban%20Station');
-assert.equal(calls.at(-1).o.cf.cacheTtl, 15);
+assert.equal(calls.at(-1).o.cf.cacheTtlByStatus['200-299'], 15);
 r = await get('/Arrivals?station=30th%20Street%20Station'); assert.equal(r.status, 200);
 r = await get('/nope'); assert.equal(r.status, 404);
 r = await get('/constructor'); assert.equal(r.status, 404, 'prototype keys are not endpoints');
@@ -44,8 +44,12 @@ r = await raw('/TransitView', { 'Sec-Fetch-Site': 'same-site' }); assert.equal(r
 r = await raw('/TransitView', { 'Sec-Fetch-Site': 'none' }); assert.equal(r.status, 200, 'address-bar navigation');
 r = await get('/route/foot?from=39.95,-75.16&to=39.96,-75.17', 'null'); assert.equal(r.status, 403, 'new endpoints share the origin guard');
 globalThis.fetch = async () => new Response('{"data":{"stations":[]}}', { status: 200 });
-r = await get('/indego/status', ''); assert.equal(r.status, 200, 'no Origin header');
+r = await get('/indego/status', ''); assert.equal(r.status, 403, '/indego needs an allowed Origin: no Origin is refused');
+r = await raw('/indego/information', { 'Sec-Fetch-Site': 'same-origin' }); assert.equal(r.status, 403, 'no Origin, even with same-origin fetch metadata');
+r = await get('/route/foot?from=39.95,-75.16&to=39.96,-75.17', ''); assert.equal(r.status, 403, '/route needs an allowed Origin: no Origin is refused');
+r = await raw('/route/foot?from=39.95,-75.16&to=39.96,-75.17', { 'Sec-Fetch-Site': 'none' }); assert.equal(r.status, 403);
 r = await raw('/indego/status', { Origin: '' }); assert.equal(r.status, 403);
+r = await get('/indego/status', 'http://localhost:8000'); assert.equal(r.status, 200, 'allowed origins still work');
 
 // ---- caches mock + helpers for the smart endpoints -----------------------------------------------------------
 const store = new Map(); const puts = [];
@@ -64,6 +68,7 @@ r = await get('/route/foot?from=39.95,-75.16&to=39.96,-75.17');
 assert.equal(r.status, 200); assert.deepEqual(await r.json(), OK_ROUTE);
 assert.equal(calls.at(-1).u, OSRM + 'foot/route/v1/driving/-75.1600,39.9500;-75.1700,39.9600?overview=full&geometries=geojson', 'lng,lat order, 4 dp');
 assert.equal(calls.at(-1).o.cf.cacheTtlByStatus['200-299'], 60, 'route is edge-cached 60 s');
+assert.equal(calls.at(-1).o.headers['User-Agent'], 'philly-transit-live (+https://tpgordon8.github.io/philly-transit-live/)', 'OSRM is told who we are');
 assert.ok(calls.at(-1).o.cf.cacheTtlByStatus['300-599'] < 0, 'upstream errors are not cached');
 for (const prof of ['bike', 'car']) { r = await get(`/route/${prof}?from=39.95,-75.16&to=39.96,-75.17`); assert.equal(r.status, 200, prof); assert.ok(calls.at(-1).u.startsWith(OSRM + prof + '/'), prof); }
 r = await get('/route/foot?from=39.949949,-75.160049&to=39.96,-75.17');
@@ -92,9 +97,24 @@ assert.equal(calls.length, before, 'invalid route requests never reach the routi
 // ---- /route errors and caching ---------------------------------------------------------------------------------
 store.clear(); puts.length = 0;
 mockUpstream(429, 'slow down'); r = await get('/route/foot?from=39.95,-75.16&to=39.96,-75.17'); assert.equal(r.status, 502);
-mockUpstream(400, { code: 'NoRoute' }); r = await get('/route/foot?from=39.95,-75.16&to=39.96,-75.17'); assert.equal(r.status, 502, 'upstream 4xx is a 502 here');
-mockUpstream(200, { code: 'NoRoute', routes: [] }); r = await get('/route/foot?from=39.95,-75.16&to=39.96,-75.17'); assert.equal(r.status, 502, '200 without a route is not served as a route');
-mockUpstream(200, 'not json'); r = await get('/route/foot?from=39.95,-75.16&to=39.96,-75.17'); assert.equal(r.status, 502);
+const R1 = '/route/foot?from=39.95,-75.16&to=39.96,-75.17';
+// OSRM answers HTTP 400 with a JSON error code for every error: that is an answer, not an outage.
+for (const code of ['NoRoute', 'NoSegment', 'InvalidQuery', 'TooBig']) {
+  mockUpstream(400, { code, message: 'x' }); r = await get(R1);
+  assert.equal(r.status, 422, code + ' passes through as 422'); assert.equal((await r.json()).code, code);
+  assert.equal(r.headers.get('cache-control'), 'no-store', code + ' answers are never cached');
+  assert.equal(r.headers.get('access-control-allow-origin'), 'https://tpgordon8.github.io');
+}
+mockUpstream(200, { code: 'NoRoute', routes: [] }); r = await get(R1); assert.equal(r.status, 422, '200 with an error code is the same answer'); assert.equal((await r.json()).code, 'NoRoute');
+mockUpstream(400, { code: 'NoRoute', message: 'm'.repeat(500) }); r = await get(R1); assert.ok((await r.json()).message.length <= 200, 'message is bounded');
+// real outages stay 502: non-JSON, JSON without an error code, 404, 408, 429, 5xx, "Ok" in an error status
+mockUpstream(400, '<html>bad</html>'); r = await get(R1); assert.equal(r.status, 502, 'non-JSON 400');
+mockUpstream(400, { message: 'no code' }); r = await get(R1); assert.equal(r.status, 502, 'no code');
+mockUpstream(400, { code: 'Ok', routes: [] }); r = await get(R1); assert.equal(r.status, 502, 'an Ok code in an error status is not an answer');
+mockUpstream(400, { code: 'No Route!' }); r = await get(R1); assert.equal(r.status, 502, 'odd code text is not passed through');
+for (const st of [404, 408, 429, 500, 503]) { mockUpstream(st, { code: 'NoRoute' }); r = await get(R1); assert.equal(r.status, 502, 'upstream ' + st + ' is an outage even with an error body'); }
+mockUpstream(200, 'not json'); r = await get(R1); assert.equal(r.status, 502);
+mockUpstream(200, { code: 'Ok', routes: [] }); r = await get(R1); assert.equal(r.status, 502, 'Ok without a route is not an answer');
 globalThis.fetch = async () => { throw new Error('boom'); }; r = await get('/route/foot?from=39.95,-75.16&to=39.96,-75.17'); assert.equal(r.status, 502);
 assert.equal(puts.length, 0, 'nothing from these failures reached the cache');
 
@@ -131,8 +151,13 @@ delete globalThis.caches; mockUpstream(200, [{ stopid: '1' }]); r = await get('/
 
 // ---- other endpoints keep their behaviour ----------------------------------------------------------------------
 mockUpstream(200, []);
-r = await get('/TransitView'); assert.equal(calls.at(-1).o.cf.cacheTtl, 10); assert.equal(calls.at(-1).o.cf.cacheEverything, true);
-r = await get('/Alerts'); assert.equal(calls.at(-1).o.cf.cacheTtl, 60);
-r = await get('/Arrivals?station=Suburban%20Station'); assert.equal(calls.at(-1).o.cf.cacheTtl, 15);
+r = await get('/TransitView'); assert.equal(calls.at(-1).o.cf.cacheTtlByStatus['200-299'], 10); assert.equal(calls.at(-1).o.cf.cacheEverything, true);
+r = await get('/Alerts'); assert.equal(calls.at(-1).o.cf.cacheTtlByStatus['200-299'], 60);
+r = await get('/Arrivals?station=Suburban%20Station'); assert.equal(calls.at(-1).o.cf.cacheTtlByStatus['200-299'], 15);
+for (const name of ['/TransitView', '/TrainView', '/Alerts', '/Arrivals?station=Suburban%20Station']) {
+  r = await get(name); assert.equal(calls.at(-1).o.cf.cacheTtl, undefined, name + ': a flat cacheTtl would cache error pages');
+  assert.ok(calls.at(-1).o.cf.cacheTtlByStatus['300-599'] < 0, name + ': upstream errors are not cached');
+  assert.ok(calls.at(-1).o.cf.cacheTtlByStatus['200-299'] > 0, name);
+}
 
 console.log('worker tests passed');

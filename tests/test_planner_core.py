@@ -944,7 +944,7 @@ def test_k_no_route_answer_means_no_trip_found(root):
         open_session(s)
         no_bikes(s)
         s.page.evaluate("""() => { const f = window.fetch; window.fetch = function (u, o) {
-            if (String(u).includes('/route/foot') || String(u).includes('routed-foot')) return Promise.resolve(new Response('{"code":"NoRoute","routes":[]}', {status: 200, headers: {'content-type': 'application/json'}}));
+            if (String(u).includes('/route/foot') || String(u).includes('routed-foot')) return Promise.resolve(new Response('{"code":"NoRoute","message":"Impossible route between points"}', {status: String(u).includes('/route/foot') ? 422 : 400, headers: {'content-type': 'application/json'}}));
             return f.call(window, u, o); }; }""")
         res = ok(plan_o(s, O, D, [veh("a", "X47", "S1")], today="20260601"))
         assert res["options"] == [] and res["bestMinutes"] is None, res

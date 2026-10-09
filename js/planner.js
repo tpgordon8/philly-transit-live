@@ -2,45 +2,71 @@
 (function(){/*@split*/
 'use strict';/*@split*/
 var S=window.SEPTA;/*@split*/
-var DROP_AFTER_MS=S.util.DROP_AFTER_MS,distM=S.util.distM,state=S.util.state,toRad=S.util.toRad;/*@split*/
+var DROP_AFTER_MS=S.util.DROP_AFTER_MS,distM=S.util.distM,isNum=S.util.isNum,state=S.util.state,toRad=S.util.toRad;/*@split*/
 var collect=S.feed.collect,skipped=S.feed.skipped;/*@split*/
 /* ===== Trip planner core (ARCHITECTURE.md section 12) =====
-   Data clients and planner functions only: no DOM, no storage. Routing and Indego go Worker-first with one direct fallback. These run only when a caller (the planner UI)
-   invokes them, so a user action works even when the page is idle-paused: they deliberately do not go through fetchOnce().
-   Third parties receive only leg endpoints (routing service) or nothing (Indego, own static file). */
+   Data clients and planner functions only: no DOM, no storage. Routing and Indego go through the Worker first. The ONLY cases that
+   fall back (once) to the direct provider URL are a network error, a Worker 404 (an older Worker) and a Worker 502/503/504; any other
+   Worker answer, a 422 NoRoute included, is final. These run only when a caller (the planner UI) invokes them, so a user action
+   works even when the page is idle-paused: they deliberately do not go through fetchOnce().
+   Third parties receive only leg endpoints (routing service, via the Worker, rounded to 4 decimals there; unrounded 5 decimals in
+   the direct fallback) or nothing (Indego, own static file). */
 var TP={WALK_MPS:1.25,BIKE_MPS:3.6,CIRC:1.3,WALK_MAX_M:0.6*1609.344,BIKE_MAX_M:2.0*1609.344,STN_NEAR_M:0.15*1609.344,
   STN_START_M:1200,UNLOCK_S:90,DOCK_S:60,BOARD_S:60,MAX_CALLS:14,MAX_FINALISTS:6,PER_STRUCT_FINAL:3,PER_STRUCT_OUT:2,MAX_OUT:5,MAX_DOMINATED:3,
-  MAX_INFLIGHT:3,STALE_DAYS:14,today:null,TIMEOUT_MS:10000,RETRY_MS:1500,GRID:0.005,STATUS_TTL_MS:60000,ROUTE_BASE:'https://septa-proxy.tpgordon8.workers.dev/route/',
+  MAX_INFLIGHT:2,GAP_MS:250,BOX:{latMin:39.6,latMax:40.4,lngMin:-75.9,lngMax:-74.5},STALE_DAYS:14,today:null,TIMEOUT_MS:10000,RETRY_MS:1500,GRID:0.005,STATUS_TTL_MS:60000,ROUTE_BASE:'https://septa-proxy.tpgordon8.workers.dev/route/',
   INDEGO_BASE:'https://septa-proxy.tpgordon8.workers.dev/indego/',ROUTE_DIRECT:'https://routing.openstreetmap.de/routed-',
   INDEGO_DIRECT:'https://gbfs.bcycle.com/bcycle_indego/',NET_URL:'data/bus-network.json'};
-var tpNet=null,tpInfo=null,tpStatus=null,tpRoute={},tpQueue=[],tpInflight=0;
+var tpNet=null,tpInfo=null,tpStatus=null,tpRoute={},tpQueue=[],tpInflight=0,tpLastStart=0,tpTimer=null;
+/* The Philadelphia-region box the Worker accepts (worker/worker.js BBOX). Checked in the page before any call is made. */
+function inRegion(pt){
+  var b=TP.BOX;
+  return !!pt&&isNum(pt.lat)&&isNum(pt.lng)&&pt.lat>=b.latMin&&pt.lat<=b.latMax&&pt.lng>=b.lngMin&&pt.lng<=b.lngMax;
+}
 function tpFail(code,msg){return {code:code,message:msg||code}}
 function resetPlannerCaches(){tpNet=null;tpInfo=null;tpStatus=null;tpRoute={}}
-/* 10 s timeout, one retry after 1.5 s. Resolves parsed JSON; rejects when both attempts fail. */
-function tpGetJson(url,noStore){
-  function once(){
-    var ctl=new AbortController(),t=setTimeout(function(){ctl.abort()},TP.TIMEOUT_MS);
-    return fetch(url,noStore?{signal:ctl.signal,cache:'no-store'}:{signal:ctl.signal}).then(function(r){
-      if(!r.ok)throw new Error('HTTP '+r.status);
-      return r.json();
-    }).finally(function(){clearTimeout(t)});
-  }
-  return once().catch(function(){return new Promise(function(res){setTimeout(res,TP.RETRY_MS)}).then(once)});
-}
-/* Worker first (one attempt, no retry), then ONE fallback to the direct provider (tpGetJson, with its own retry) when the
-   Worker answers 5xx, cannot be reached or returns unparseable JSON. A 4xx from the Worker is final: no fallback. */
-function tpGetVia(workerUrl,directUrl,noStore){
+/* A plan's handle {dead, calls, ctls, keys}: its requests register an AbortController so cancelPlan can cut them short. */
+function tpCtl(ctx){
   var ctl=new AbortController(),t=setTimeout(function(){ctl.abort()},TP.TIMEOUT_MS);
-  return fetch(workerUrl,noStore?{signal:ctl.signal,cache:'no-store'}:{signal:ctl.signal}).then(function(r){
-    if(r.status>=400&&r.status<500&&r.status!==404){var e=new Error('HTTP '+r.status);e.final=true;throw e}
-    if(!r.ok)throw new Error('HTTP '+r.status);
+  if(ctx){(ctx.ctls||(ctx.ctls=[])).push(ctl)}
+  return {signal:ctl.signal,done:function(){clearTimeout(t);if(ctx&&ctx.ctls){var i=ctx.ctls.indexOf(ctl);if(i>=0)ctx.ctls.splice(i,1)}}};
+}
+/* A 4xx answer other than 404/408/429 is an answer (OSRM sends HTTP 400 with {"code":"NoRoute"}), not an outage: the error is
+   final (never retried or re-sent elsewhere) and carries the parsed body when there is one. */
+function tpFinal(r){
+  return r.text().then(function(t){var e=new Error('HTTP '+r.status);e.final=true;e.status=r.status;try{e.body=JSON.parse(t)}catch(x){}throw e});
+}
+function tpIsAnswer(st){return st>=400&&st<500&&st!==404&&st!==408&&st!==429}
+function tpFetch(url,noStore,ctx){
+  var c=tpCtl(ctx);
+  return fetch(url,noStore?{signal:c.signal,cache:'no-store'}:{signal:c.signal}).then(function(r){
+    if(tpIsAnswer(r.status))return tpFinal(r);
+    if(!r.ok){var e=new Error('HTTP '+r.status);e.status=r.status;throw e}
     return r.json();
-  }).finally(function(){clearTimeout(t)}).catch(function(e){
-    if(e&&e.final)throw e;
-    return tpGetJson(directUrl,noStore);
+  }).finally(c.done);
+}
+/* 10 s timeout, one retry after 1.5 s (not after a final 4xx answer or once the plan is cancelled). Resolves parsed JSON. */
+function tpGetJson(url,noStore,ctx){
+  return tpFetch(url,noStore,ctx).catch(function(e){
+    if((e&&e.final)||(ctx&&ctx.dead))throw e;
+    return new Promise(function(res){setTimeout(res,TP.RETRY_MS)}).then(function(){
+      if(ctx&&ctx.dead)throw e;
+      return tpFetch(url,noStore,ctx);
+    });
   });
 }
-function isNum(x){return typeof x==='number'&&isFinite(x)}
+/* Worker first (one attempt, no retry). ONE fallback to the direct provider (tpGetJson, with its own retry) only when the Worker
+   cannot be reached, answers 404 (an older Worker without the endpoint) or 502/503/504 (the Worker, or its upstream, is down),
+   or sends a 200 that is not JSON. Every other Worker answer is final: 422 {"code":"NoRoute"} and other 4xx are answers, so the
+   coordinates are not re-sent to the provider. A cancelled plan never falls back. */
+function tpGetVia(workerUrl,directUrl,noStore,ctx){
+  return tpFetch(workerUrl,noStore,ctx).catch(function(e){
+    if(ctx&&ctx.dead)throw e;
+    var st=e&&e.status;
+    if(e&&e.final)throw e;
+    if(st!=null&&st!==404&&st!==502&&st!==503&&st!==504)throw Object.assign(e,{final:true});
+    return tpGetJson(directUrl,noStore,ctx);
+  });
+}
 function validateNetwork(n){
   var bad=function(m){throw new Error('bus-network: '+m)};
   if(!n||typeof n!=='object'||n.v!==1)bad('v');
@@ -107,16 +133,32 @@ function loadIndego(fresh){
     throw tpFail('indego_unavailable','Indego bike data could not be loaded.');
   });
 }
-/* ----- Routing client: at most 3 requests in flight, in-memory cache by profile and 5 dp endpoints. ----- */
+/* ----- Routing client: at most 2 requests in flight and at least 250 ms between starts (the OSM routing service asks for about
+   one request per second per client; most plan legs are served from the Worker's cache, which does not reach that service),
+   in-memory cache by profile and 5 dp endpoints. A cancelled plan's queued calls are dropped without delaying the next plan. ----- */
 function tpPump(){
   while(tpInflight<TP.MAX_INFLIGHT&&tpQueue.length){
-    var job=tpQueue.shift();
-    if(job.ctx&&job.ctx.dead){job.reject(tpFail('routing_unavailable','Plan abandoned.'));continue}
-    tpInflight++;
+    var job=tpQueue[0];
+    if(job.ctx&&job.ctx.dead){tpQueue.shift();job.reject(tpFail('routing_unavailable','Plan abandoned.'));continue}
+    var wait=tpLastStart+TP.GAP_MS-Date.now();
+    if(wait>0&&wait<=TP.GAP_MS){if(!tpTimer)tpTimer=setTimeout(function(){tpTimer=null;tpPump()},wait);return}
+    tpQueue.shift();tpLastStart=Date.now();tpInflight++;
     if(job.ctx)job.ctx.calls++;
     job.run().then(job.resolve,job.reject).then(function(){tpInflight--;tpPump()});
   }
 }
+/* Abandons a plan: queued calls are dropped now, in-flight requests are aborted (their slots free at once), and results that
+   still arrive are ignored by the caller. Its entries in the route cache are removed so a later plan never inherits them. */
+function cancelPlan(ctx){
+  if(!ctx)return;
+  ctx.dead=true;
+  (ctx.ctls||[]).slice().forEach(function(c){try{c.abort()}catch(e){}});
+  (ctx.keys||[]).forEach(function(k){if(tpRoute[k.key]===k.p)delete tpRoute[k.key]});
+  tpQueue.filter(function(j){return j.ctx===ctx}).forEach(function(j){j.reject(tpFail('routing_unavailable','Plan abandoned.'))});
+  tpQueue=tpQueue.filter(function(j){return j.ctx!==ctx});
+}
+/* OSRM codes that mean "the service looked and there is no path": NoRoute, and NoSegment (a point it cannot snap to a street). */
+function noRouteCode(c){return c==='NoRoute'||c==='NoSegment'}
 function routeKey(profile,a,b){return profile+'|'+a.lat.toFixed(5)+','+a.lng.toFixed(5)+'|'+b.lat.toFixed(5)+','+b.lng.toFixed(5)}
 function routeLeg(profile,a,b,ctx){
   if(profile!=='foot'&&profile!=='bike'&&profile!=='car')return Promise.reject(tpFail('routing_unavailable','profile'));
@@ -126,16 +168,21 @@ function routeLeg(profile,a,b,ctx){
   var direct=TP.ROUTE_DIRECT+profile+'/route/v1/driving/'+a.lng.toFixed(5)+','+a.lat.toFixed(5)+';'+b.lng.toFixed(5)+','+b.lat.toFixed(5)+'?overview=full&geometries=geojson';
   var p=new Promise(function(resolve,reject){
     tpQueue.push({ctx:ctx,resolve:resolve,reject:reject,run:function(){
-      return tpGetVia(url,direct).then(function(j){
-        if(j&&j.code==='NoRoute')throw tpFail('no_route','There is no street route between those points.');
+      return tpGetVia(url,direct,false,ctx).then(function(j){
+        if(j&&noRouteCode(j.code))throw tpFail('no_route','There is no street route between those points.');
         var r=j&&j.code==='Ok'&&j.routes&&j.routes[0];
         if(!r||!isNum(r.distance)||!isNum(r.duration)||!r.geometry||!Array.isArray(r.geometry.coordinates)||r.geometry.coordinates.length<2)throw 0;
         return {meters:r.distance,seconds:r.duration,path:r.geometry.coordinates.map(function(c){return [c[1],c[0]]})};
-      }).catch(function(e){throw e&&e.code==='no_route'?e:tpFail('routing_unavailable','Walking, biking or driving directions could not be loaded.')});
+      }).catch(function(e){
+        if(e&&e.code==='no_route')throw e;
+        if(e&&e.body&&noRouteCode(e.body.code))throw tpFail('no_route','There is no street route between those points.');
+        throw tpFail('routing_unavailable','Walking, biking or driving directions could not be loaded.');
+      });
     }});
     tpPump();
   });
   tpRoute[key]=p;
+  if(ctx)(ctx.keys||(ctx.keys=[])).push({key:key,p:p});
   p.catch(function(){if(tpRoute[key]===p)delete tpRoute[key]});
   return p;
 }
@@ -302,8 +349,10 @@ function assembleBus(c,rs,spec,ix,veh){
 }
 function optionOf(structure,legs){
   var t=0,m=0;
-  legs.forEach(function(l){t+=l.minutes;m+=l.meters});
-  return {structure:structure,minutes:t,meters:m,legs:legs};
+  legs.forEach(function(l){t+=l.raw;m+=l.meters});
+  /* Ranking and dominance use the exact sum `raw`; the shown total is its ceiling. Each leg shows its own rounded minutes, so
+     the shown legs can add to more than the total (the card says so). */
+  return {structure:structure,minutes:ceilMin(t),raw:t,meters:m,legs:legs};
 }
 /* 'Today' as a day number. Injectable for tests: opts.today or TP.today, as 'YYYYMMDD' or epoch ms; default is the local date. */
 function ymdIdx(s){var m=/^(\d{4})(\d{2})(\d{2})$/.exec(String(s));return m?Date.UTC(+m[1],+m[2]-1,+m[3])/864e5:null}
@@ -341,12 +390,16 @@ function noLiveRoutes(ix,O,D,veh){
 function planTrips(origin,dest,opts){
   opts=opts||{};
   if(!origin||!dest||!isNum(origin.lat)||!isNum(origin.lng)||!isNum(dest.lat)||!isNum(dest.lng))return Promise.reject(tpFail('bad_input','Origin and destination need coordinates.'));
+  if(!inRegion(origin)||!inRegion(dest))return Promise.reject(tpFail('out_of_area','That place is outside the area this planner covers (Philadelphia region).'));
   var O={lat:origin.lat,lng:origin.lng,name:origin.name||'Start'},D={lat:dest.lat,lng:dest.lng,name:dest.name||'Destination'};
-  var ctx={calls:0,dead:false},notes=[];
+  /* opts.ctx: the caller's cancel handle ({dead:false}); cancelPlan(ctx), or .cancel() on the returned promise, abandons the plan. */
+  var ctx=opts.ctx&&typeof opts.ctx==='object'?opts.ctx:{};
+  if(!isNum(ctx.calls))ctx.calls=0;
+  var notes=[];
   var today=tpTodayIdx(opts.today);
   /* Planner notes are structured: {code, ...data}. The UI words them. Legacy availability notes carry a ready-made `text`. */
   function note(code,extra){for(var i=0;i<notes.length;i++)if(notes[i].code===code)return;notes.push(Object.assign({code:code},extra||{}))}
-  return Promise.all([loadNetwork().then(function(x){return x},function(){return null}),loadIndego(true).then(function(x){return x},function(){return null})]).then(function(r){
+  var pr=Promise.all([loadNetwork().then(function(x){return x},function(){return null}),loadIndego(true).then(function(x){return x},function(){return null})]).then(function(r){
     var nw=r[0],stations=r[1],veh,busUp=true;
     if(!stations)note('indego_unavailable',{text:'Indego bike data unavailable, bike options hidden.'});
     if(opts.vehicles)veh=opts.vehicles;
@@ -393,10 +446,10 @@ function planTrips(origin,dest,opts){
     function asOfOf(){return {indego:stations?stations.asOf:null,network:nw?{generated:nw.net.generated||null,feed:nw.net.feed||null}:null}}
     return pWalk.then(function(w){
       if(w.e&&w.e.code==='no_route'){ /* the routing service answered: there is no street path between the points */
-        ctx.dead=true;
+        cancelPlan(ctx);
         return {options:[],notes:notes,bestMinutes:null,hiddenCount:0,asOf:asOfOf(),stats:{routingCalls:ctx.calls,finalists:0}};
       }
-      if(w.e){ctx.dead=true;throw w.e}
+      if(w.e){cancelPlan(ctx);throw w.e}
       return Promise.all([pCar,pBike||Promise.resolve(null),Promise.all(pFin)]).then(function(rest){
         var options=[],car=rest[0],bk=rest[1];
         options.push(optionOf('walk',[mkLeg('walk',O,D,w.v,0,'routed',[])]));
@@ -423,19 +476,19 @@ function planTrips(origin,dest,opts){
           var rl=Object.keys(waitless).sort();
           if(nl0)nl0.routes=nl0.routes.concat(rl.filter(function(x){return nl0.routes.indexOf(x)<0}));else note('no_live_bus',{routes:rl});
         }
-        options.sort(function(a,b){return a.minutes-b.minutes});
+        options.sort(function(a,b){return a.raw-b.raw});
         /* An option that is not a single-mode baseline and takes at least as long as the best walk-only or bike-only
            trip is "dominated": shown after the main list, never hidden silently. Car is never a reference. */
         var ref=null,refKind='';
         options.forEach(function(o){
-          if(o.structure==='walk'&&(!ref||o.minutes<ref.minutes)){ref=o;refKind='walking'}
-          if(o.structure==='walk-bike-walk'&&(!ref||o.minutes<ref.minutes)){ref=o;refKind='biking'}
+          if(o.structure==='walk'&&(!ref||o.raw<ref.raw)){ref=o;refKind='walking'}
+          if(o.structure==='walk-bike-walk'&&(!ref||o.raw<ref.raw)){ref=o;refKind='biking'}
         });
         var best=null;
-        options.forEach(function(o){if(o.structure!=='car'&&(best==null||o.minutes<best))best=o.minutes});
+        options.forEach(function(o){if(o.structure!=='car'&&(best==null||o.raw<best))best=o.raw});
         options.forEach(function(o){
           var base=o.structure==='walk'||o.structure==='walk-bike-walk'||o.structure==='car';
-          o.dominated=!base&&!!ref&&o.minutes>=ref.minutes;
+          o.dominated=!base&&!!ref&&o.raw>=ref.raw;
           if(o.dominated)o.dominatedReason='slower than '+refKind+' the whole way';
         });
         var per={},res=[],hid=0;
@@ -449,17 +502,19 @@ function planTrips(origin,dest,opts){
         });
         if(options.some(function(o){return o.structure.indexOf('bus')>=0})&&!res.some(function(o){return o.structure.indexOf('bus')>=0&&!o.dominated}))
           note('no_bus_beats_baseline',{baseline:refKind});
-        return {options:res,notes:notes,bestMinutes:best,hiddenCount:hid,
+        return {options:res,notes:notes,bestMinutes:best==null?null:ceilMin(best),hiddenCount:hid,
           asOf:asOfOf(),
           stats:{routingCalls:ctx.calls,finalists:finals.length}};
       });
     });
   });
+  pr.cancel=function(){cancelPlan(ctx)};pr.ctx=ctx;
+  return pr;
 }
 /* ===== end Trip planner core ===== */
 
 S.planner.TP=TP;S.planner.resetPlannerCaches=resetPlannerCaches;S.planner.buildNetIndex=buildNetIndex;S.planner.loadNetwork=loadNetwork;/*@split*/
 S.planner.loadIndego=loadIndego;S.planner.routeLeg=routeLeg;S.planner.nearbyStops=nearbyStops;S.planner.nearbyStations=nearbyStations;/*@split*/
 S.planner.estimateTotal=estimateTotal;S.planner.waitAtStop=waitAtStop;S.planner.buildBusCandidates=buildBusCandidates;S.planner.clockText=clockText;/*@split*/
-S.planner.planTrips=planTrips;/*@split*/
+S.planner.planTrips=planTrips;S.planner.cancelPlan=cancelPlan;S.planner.inRegion=inRegion;/*@split*/
 })();/*@split*/
