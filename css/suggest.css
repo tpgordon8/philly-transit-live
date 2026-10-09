@@ -8,4 +8,4 @@
 /* The highlighted option has a heavy edge bar and an outline as well as a tint, so it does not rely on colour. */
 .sug-opt[aria-selected=true]{background:color-mix(in srgb,var(--accent) 14%,var(--panel));border-left-color:var(--accent);outline:2px solid var(--accent);outline-offset:-2px}
 @media (forced-colors:active){.sug-opt[aria-selected=true]{outline-color:Highlight;border-left-color:Highlight}}
-.sug-attr{margin-top:6px;font-size:12px}
+.sug-attr,.sug-priv{margin-top:6px;font-size:12px}

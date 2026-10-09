@@ -36,7 +36,7 @@
 <body>
 <div id="app">
   <aside id="panel" aria-label="Controls">
-    <button class="sheet-handle" id="sheetHandle" type="button" aria-expanded="true" aria-controls="panel"><span class="sheet-label">Controls</span></button>
+    <button class="sheet-handle" id="sheetHandle" type="button" aria-expanded="true"><span class="sheet-label">Controls</span></button>
     <div class="brand">
       <h1>Septer</h1>
       <div class="status" id="status"><span class="dot" id="dot"></span><span id="statusText" aria-hidden="true">Connecting to SEPTA…</span><span class="sr-only" id="statusLive" role="status" aria-live="polite">Connecting to SEPTA</span></div>
@@ -48,6 +48,7 @@
         <input type="text" id="addr" placeholder="Street address or intersection" aria-label="Street address">
         <button class="btn primary" type="submit" id="btnSearch">Search</button>
       </form>
+      <p class="empty-line sug-priv" id="sugPrivFind">Text you type here goes to Photon while you type, to suggest places.</p>
       <p class="empty-line sug-attr" id="sugAttrFind">Suggestions: <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></p>
       <div class="row" style="margin-top:8px">
         <button class="btn" type="button" id="btnLocate" style="flex:1">Use my location</button>
@@ -83,7 +84,7 @@
       </form>
       <div id="tripResults" aria-busy="false" hidden></div>
       <div id="tripLive" class="sr-only" role="status" aria-live="polite"></div>
-      <p class="empty-line tp-priv">What is sent where. While you type in the search box or in From or To, the typed text and the map center (or your saved Home), rounded to 2 decimals (about 1 km), go to Photon (photon.komoot.io, OpenStreetMap data) to suggest places and addresses. Places on the built-in list of well-known Philadelphia places are suggested without any request. A typed From or To address you did not pick from the suggestions, and intersections such as 10th and Race, go to Nominatim (OpenStreetMap) to be looked up, as in search. Every leg's start and end coordinates then go to this site's Worker, which rounds them to 4 decimals (about 10 m), forwards them to the OpenStreetMap-based routing service (routing.openstreetmap.de), and keeps nothing beyond a short-lived cache of each answer. Your saved Home and place buttons, Use my location and the map center are not looked up, but their coordinates are sent as route legs in exactly the same way as a typed address. Indego's public station feed is read through the Worker. If the Worker cannot be reached, is an older version, or reports a server error (502, 503 or 504), the page asks the routing service and Indego directly instead, and then the routing service receives the leg coordinates unrounded, to 5 decimals (about 1 m). An answer such as "no route" is not a failure and is never re-sent. Nothing is stored in this page.</p>
+      <p class="empty-line tp-priv">What is sent where. While you type in the search box or in From or To, the typed text and a search point, rounded to 2 decimals (about 1 km), go to Photon (photon.komoot.io, OpenStreetMap data) to suggest places and addresses. The search point is your current search location (your located position after Use my location); in From and To it is your saved Home, or the search point when no Home is saved. Places on the built-in list of well-known Philadelphia places are suggested without any request. A typed From or To address you did not pick from the suggestions, and intersections such as 10th and Race, go to Nominatim (OpenStreetMap) to be looked up, as in search. Every leg's start and end coordinates then go to this site's Worker, which rounds them to 4 decimals (about 10 m), forwards them to the OpenStreetMap-based routing service (routing.openstreetmap.de), and keeps nothing beyond a short-lived cache of each answer. Your saved Home and place buttons, Use my location and the map center are not looked up, but their coordinates are sent as route legs in exactly the same way as a typed address. Indego's public station feed is read through the Worker. If the Worker cannot be reached, is an older version, or reports a server error (502, 503 or 504), the page asks the routing service and Indego directly instead, and then the routing service receives the leg coordinates unrounded, to 5 decimals (about 1 m). An answer such as "no route" is not a failure and is never re-sent. Nothing is stored in this page.</p>
       <p class="empty-line tp-attr" id="tripAttr">Routing by <a href="https://routing.openstreetmap.de/" target="_blank" rel="noopener">OSRM</a> / data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></p>
     </section>
 

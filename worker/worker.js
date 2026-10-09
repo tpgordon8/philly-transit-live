@@ -1,4 +1,4 @@
-// SEPTA proxy for Philly Transit Live. Forwards fixed SEPTA hackathon endpoints and adds CORS.
+// SEPTA proxy for Septer. Forwards fixed SEPTA hackathon endpoints and adds CORS.
 // Deployed as the Cloudflare Worker "septa-proxy" (https://septa-proxy.tpgordon8.workers.dev).
 // This file is the source of truth. Deploy by pasting it into the Worker editor in the Cloudflare dashboard.
 //

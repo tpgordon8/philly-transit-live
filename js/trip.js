@@ -57,6 +57,7 @@
   }
   /* Per field: editing clears the stored point; the Home button fills it; a picked suggestion (js/suggest.js) fills it with the
    place's coordinates, so tripResolve uses them and does not geocode. */
+  var tripSug = {};
   ['from', 'to'].forEach(function (w) {
     tripFieldEl(w).addEventListener('input', function () {
       fieldPt[w] = null;
@@ -66,7 +67,7 @@
       var h = state.places.home;
       if (h) tripSetField(w, h.name, { pt: { lat: h.lat, lng: h.lng, name: h.name } });
     });
-    S.suggest.attach(tripFieldEl(w), {
+    tripSug[w] = S.suggest.attach(tripFieldEl(w), {
       onPick: function (p) {
         fieldPt[w] = { pt: { lat: p.lat, lng: p.lng, name: p.name.slice(0, 40) } };
         tripErr(w, '');
@@ -161,6 +162,8 @@
   }
   $('#tripForm').addEventListener('submit', function (e) {
     e.preventDefault();
+    tripSug.from.close(); /* no suggestion request or list may outlive the submit */
+    tripSug.to.close();
     if (trip.busy) return;
     startTrip(null);
   });

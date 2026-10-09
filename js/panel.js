@@ -349,6 +349,7 @@
   });
   $('#searchForm').addEventListener('submit', function (e) {
     e.preventDefault();
+    addrSug.close(); /* no suggestion request or list may outlive the submit */
     var q = $('#addr').value.trim();
     if (!q) {
       setNote('Type a street address or intersection first.', true);

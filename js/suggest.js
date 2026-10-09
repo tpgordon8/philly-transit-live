@@ -26,6 +26,7 @@
     MAX_SUB = 100,
     MAX_CACHE = 200,
     NEAR_MI = 10 /* results this close to the bias are listed before farther ones */,
+    SAME_PLACE_MI = 0.25 /* a Photon answer with a built-in place's name within this distance (about 400 m) is that place */,
     MARGIN = 8,
     GAP_PX = 4;
   var STATES = { Pennsylvania: 'PA', 'New Jersey': 'NJ', Delaware: 'DE', Maryland: 'MD' };
@@ -96,7 +97,7 @@
   function dupOfPlace(it) {
     var k = norm(it.label);
     return loadPlaces().some(function (p) {
-      return p.keys.indexOf(k) >= 0 && distMi(p, it) < 0.25;
+      return p.keys.indexOf(k) >= 0 && distMi(p, it) < SAME_PLACE_MI;
     });
   }
 
@@ -224,16 +225,11 @@
       : ''; /* the alternating space lets a repeated message be read again */
   }
 
-  function attach(input, opts) {
-    opts = opts || {};
-    liveRegion();
+  /* One field's state `c` is made once by create() and passed to the small functions below; the page-wide pieces (the Photon scheduler,
+     the cache, the live region) stay above. */
+  function create(input, opts) {
     var id = 'sug' + ++uid,
-      list = el('ul', 'sug-list'),
-      items = [],
-      active = -1,
-      isOpen = false,
-      pick = null,
-      seq = 0;
+      list = el('ul', 'sug-list');
     list.id = id + '-list';
     list.setAttribute('role', 'listbox');
     list.setAttribute('aria-label', 'Suggestions');
@@ -247,186 +243,206 @@
     input.setAttribute('autocomplete', 'off');
     input.setAttribute('autocapitalize', 'off');
     input.setAttribute('spellcheck', 'false');
-
-    function bias() {
-      var b = opts.biasProvider && opts.biasProvider();
-      return b && isNum(b.lat) && isNum(b.lng) ? { lat: b.lat, lng: b.lng } : null;
-    }
-    /* The list is position:fixed and appended to <body>, so the scrolling sidebar cannot clip it and no header covers it. It opens
-     below the field, or above when there is more room there, and scrolls inside its own max-height. */
-    function place() {
-      var r = input.getBoundingClientRect(),
-        vv = window.visualViewport,
-        top = vv ? vv.offsetTop : 0,
-        left = vv ? vv.offsetLeft : 0,
-        vw = vv ? vv.width : window.innerWidth,
-        vh = vv ? vv.height : window.innerHeight;
-      if (r.bottom < top || r.top > top + vh) {
-        close();
-        return;
-      }
-      var w = Math.min(r.width, vw - 2 * MARGIN),
-        x = Math.min(Math.max(r.left, left + MARGIN), left + vw - w - MARGIN),
-        keep = list.scrollTop;
-      list.style.maxHeight = 'none';
-      var full = list.scrollHeight,
-        below = top + vh - r.bottom - GAP_PX - MARGIN,
-        above = r.top - top - GAP_PX - MARGIN,
-        up = full > below && above > below,
-        h = Math.max(0, Math.min(full, up ? above : below));
-      list.style.maxHeight = h + 'px';
-      list.scrollTop = keep; /* measuring at full height reset it */
-      list.style.width = w + 'px';
-      list.style.left = x + 'px';
-      list.style.top = (up ? r.top - GAP_PX - h : r.bottom + GAP_PX) + 'px';
-    }
+    var c = {
+      input: input,
+      opts: opts || {},
+      id: id,
+      list: list,
+      items: [],
+      active: -1,
+      isOpen: false,
+      pick: null,
+      seq: 0
+    };
     /* The page, the sidebar or the visual viewport moved (scroll, resize, on-screen keyboard); scrolling the list itself does not. */
-    function move(e) {
-      if (!e || e.target !== list) place();
+    c.move = function (e) {
+      if (!e || e.target !== list) placeList(c);
+    };
+    return c;
+  }
+  function biasOf(c) {
+    var b = c.opts.biasProvider && c.opts.biasProvider();
+    return b && isNum(b.lat) && isNum(b.lng) ? { lat: b.lat, lng: b.lng } : null;
+  }
+  /* ----- Position ----- */
+  /* The list is position:fixed and appended to <body>, so the scrolling sidebar cannot clip it and no header covers it. It opens
+     below the field, or above when there is more room there, and scrolls inside its own max-height. */
+  function placeList(c) {
+    var list = c.list,
+      r = c.input.getBoundingClientRect(),
+      vv = window.visualViewport,
+      top = vv ? vv.offsetTop : 0,
+      left = vv ? vv.offsetLeft : 0,
+      vw = vv ? vv.width : window.innerWidth,
+      vh = vv ? vv.height : window.innerHeight;
+    if (r.bottom < top || r.top > top + vh) {
+      setOpen(c, false);
+      return;
     }
-    function setOpen(on) {
-      if (on === isOpen) {
-        if (on) place();
-        return;
-      }
-      isOpen = on;
-      list.hidden = !on;
-      input.setAttribute('aria-expanded', on ? 'true' : 'false');
-      var fn = on ? 'addEventListener' : 'removeEventListener';
-      window[fn]('resize', move);
-      window[fn]('scroll', move, true);
-      if (window.visualViewport) {
-        window.visualViewport[fn]('resize', move);
-        window.visualViewport[fn]('scroll', move);
-      }
-      if (on) place();
-      else {
-        setActive(-1);
-        list.replaceChildren();
-      }
+    var w = Math.min(r.width, vw - 2 * MARGIN),
+      x = Math.min(Math.max(r.left, left + MARGIN), left + vw - w - MARGIN),
+      keep = list.scrollTop;
+    list.style.maxHeight = 'none';
+    var full = list.scrollHeight,
+      below = top + vh - r.bottom - GAP_PX - MARGIN,
+      above = r.top - top - GAP_PX - MARGIN,
+      up = full > below && above > below,
+      h = Math.max(0, Math.min(full, up ? above : below));
+    list.style.maxHeight = h + 'px';
+    list.scrollTop = keep; /* measuring at full height reset it */
+    list.style.width = w + 'px';
+    list.style.left = x + 'px';
+    list.style.top = (up ? r.top - GAP_PX - h : r.bottom + GAP_PX) + 'px';
+  }
+  function setOpen(c, on) {
+    if (on === c.isOpen) {
+      if (on) placeList(c);
+      return;
     }
-    function close() {
-      setOpen(false);
+    c.isOpen = on;
+    c.list.hidden = !on;
+    c.input.setAttribute('aria-expanded', on ? 'true' : 'false');
+    var fn = on ? 'addEventListener' : 'removeEventListener';
+    window[fn]('resize', c.move);
+    window[fn]('scroll', c.move, true);
+    if (window.visualViewport) {
+      window.visualViewport[fn]('resize', c.move);
+      window.visualViewport[fn]('scroll', c.move);
     }
-    function setActive(i) {
-      active = i;
-      var rows = list.children;
-      for (var k = 0; k < rows.length; k++) {
-        rows[k].setAttribute('aria-selected', k === i ? 'true' : 'false');
-      }
-      if (i >= 0 && rows[i]) {
-        input.setAttribute('aria-activedescendant', rows[i].id);
-        rows[i].scrollIntoView({ block: 'nearest' });
-      } else input.removeAttribute('aria-activedescendant');
+    if (on) placeList(c);
+    else {
+      setActive(c, -1);
+      c.list.replaceChildren();
     }
-    function render() {
-      list.replaceChildren();
-      items.forEach(function (it, i) {
-        var li = el('li', 'sug-opt');
-        li.id = id + '-' + i;
-        li.setAttribute('role', 'option');
-        li.setAttribute('aria-selected', 'false');
-        li.dataset.i = i;
-        li.appendChild(el('span', 'sug-l1', it.label));
-        if (it.sub) li.appendChild(el('span', 'sug-l2', it.sub));
-        list.appendChild(li);
-      });
+  }
+  /* ----- Rendering ----- */
+  function setActive(c, i) {
+    c.active = i;
+    var rows = c.list.children;
+    for (var k = 0; k < rows.length; k++) {
+      rows[k].setAttribute('aria-selected', k === i ? 'true' : 'false');
     }
-    function show(final, keep) {
-      var at = keep && active < items.length ? active : -1;
-      if (items.length && document.activeElement === input) {
-        render();
-        setOpen(true);
-        setActive(at);
-      } else close();
-      if (final)
-        say(
-          items.length
-            ? items.length + (items.length === 1 ? ' suggestion' : ' suggestions')
-            : 'No suggestions'
-        );
-    }
-    function choose(i) {
-      var it = items[i];
-      if (!it) return;
-      items = [];
-      seq++;
-      cancelJob();
-      input.value = it.label;
-      pick = { lat: it.lat, lng: it.lng, name: it.label };
-      close();
-      say('');
-      if (opts.onPick) opts.onPick({ lat: it.lat, lng: it.lng, name: it.label, sub: it.sub });
-    }
-    function merge(lm, ph) {
-      return lm.concat(ph || []).slice(0, MAX_ITEMS);
-    }
-    function onInput() {
-      pick = null;
-      var mine = ++seq,
-        q = cap(input.value, MAX_QUERY);
-      cancelJob();
-      if (q.length < MIN_CHARS) {
-        items = [];
-        close();
-        say('');
-        return;
-      }
-      var qn = norm(q),
-        key = qn,
-        lm = matchPlaces(qn),
-        b = bias();
-      if (Object.prototype.hasOwnProperty.call(cache, key)) {
-        items = merge(lm, cache[key]);
-        show(true);
-        return;
-      }
-      items = lm;
-      if (isIntersection(q) || qn.length < MIN_CHARS) {
-        show(true);
-        return;
-      }
-      show(false); /* built-in places appear now; the count is announced once Photon has answered */
-      schedule(q, key, b, function (res) {
-        if (mine !== seq) return;
-        items = merge(lm, res);
-        show(true, true);
-      });
-    }
-    input.addEventListener('input', onInput);
-    input.addEventListener('keydown', function (e) {
-      var n = items.length,
-        k = e.key;
-      if (k === 'ArrowDown' || k === 'ArrowUp') {
-        if (!n) return;
-        e.preventDefault();
-        if (!isOpen) {
-          render();
-          setOpen(true);
-          setActive(k === 'ArrowDown' ? 0 : n - 1);
-          return;
-        }
-        setActive(k === 'ArrowDown' ? (active + 1) % n : (active - 1 + n) % n);
-      } else if ((k === 'Home' || k === 'End') && isOpen && n) {
-        e.preventDefault();
-        setActive(k === 'Home' ? 0 : n - 1);
-      } else if (k === 'Enter') {
-        if (isOpen && active >= 0) {
-          e.preventDefault();
-          choose(active);
-        }
-      } else if (k === 'Escape') {
-        if (isOpen) {
-          e.preventDefault();
-          close();
-        } else if (input.value) {
-          e.preventDefault();
-          input.value = '';
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      } else if (k === 'Tab') close();
+    if (i >= 0 && rows[i]) {
+      c.input.setAttribute('aria-activedescendant', rows[i].id);
+      rows[i].scrollIntoView({ block: 'nearest' });
+    } else c.input.removeAttribute('aria-activedescendant');
+  }
+  function renderRows(c) {
+    c.list.replaceChildren();
+    c.items.forEach(function (it, i) {
+      var li = el('li', 'sug-opt');
+      li.id = c.id + '-' + i;
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', 'false');
+      li.dataset.i = i;
+      li.appendChild(el('span', 'sug-l1', it.label));
+      if (it.sub) li.appendChild(el('span', 'sug-l2', it.sub));
+      c.list.appendChild(li);
     });
-    input.addEventListener('blur', close);
+  }
+  /* The count is announced only to a user who is still in the field: a late answer for a field they left stays silent. */
+  function show(c, final, keep) {
+    var n = c.items.length,
+      focused = document.activeElement === c.input,
+      at = keep && c.active < n ? c.active : -1;
+    if (n && focused) {
+      renderRows(c);
+      setOpen(c, true);
+      setActive(c, at);
+    } else setOpen(c, false);
+    if (final && focused) say(n ? n + (n === 1 ? ' suggestion' : ' suggestions') : 'No suggestions');
+  }
+  /* ----- Choosing and typing ----- */
+  function choose(c, i) {
+    var it = c.items[i];
+    if (!it) return;
+    c.items = [];
+    c.seq++;
+    cancelJob();
+    c.input.value = it.label;
+    c.pick = { lat: it.lat, lng: it.lng, name: it.label };
+    setOpen(c, false);
+    say('');
+    if (c.opts.onPick) c.opts.onPick({ lat: it.lat, lng: it.lng, name: it.label, sub: it.sub });
+  }
+  function merge(lm, ph) {
+    return lm.concat(ph || []).slice(0, MAX_ITEMS);
+  }
+  function onInput(c) {
+    c.pick = null;
+    var mine = ++c.seq,
+      q = cap(c.input.value, MAX_QUERY);
+    cancelJob();
+    if (q.length < MIN_CHARS) {
+      c.items = [];
+      setOpen(c, false);
+      say('');
+      return;
+    }
+    var qn = norm(q),
+      b = biasOf(c),
+      key = qn + '|' + (b ? b.lat.toFixed(2) + ',' + b.lng.toFixed(2) : ''),
+      lm = matchPlaces(qn);
+    if (Object.prototype.hasOwnProperty.call(cache, key)) {
+      c.items = merge(lm, cache[key]);
+      show(c, true);
+      return;
+    }
+    c.items = lm;
+    if (isIntersection(q) || qn.length < MIN_CHARS) {
+      show(c, true);
+      return;
+    }
+    show(c, false); /* built-in places appear now; the count is announced once Photon has answered */
+    schedule(q, key, b, function (res) {
+      if (mine !== c.seq) return;
+      c.items = merge(lm, res);
+      show(c, true, true);
+    });
+  }
+  /* ----- Keyboard ----- */
+  function onArrow(c, e) {
+    var n = c.items.length,
+      down = e.key === 'ArrowDown';
+    if (!n) return;
+    e.preventDefault();
+    if (!c.isOpen) {
+      renderRows(c);
+      setOpen(c, true);
+      setActive(c, down ? 0 : n - 1);
+      return;
+    }
+    setActive(c, down ? (c.active + 1) % n : (c.active - 1 + n) % n);
+  }
+  function onEscape(c, e) {
+    if (c.isOpen) {
+      e.preventDefault();
+      setOpen(c, false);
+    } else if (c.input.value) {
+      e.preventDefault();
+      c.input.value = '';
+      c.input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+  function onKeydown(c, e) {
+    if (e.isComposing || e.keyCode === 229) return; /* an input method is composing: its keys are not ours */
+    var n = c.items.length,
+      k = e.key;
+    if (k === 'ArrowDown' || k === 'ArrowUp') onArrow(c, e);
+    else if ((k === 'Home' || k === 'End') && c.isOpen && n) {
+      e.preventDefault();
+      setActive(c, k === 'Home' ? 0 : n - 1);
+    } else if (k === 'Enter') {
+      if (c.isOpen && c.active >= 0) {
+        e.preventDefault();
+        choose(c, c.active);
+      }
+    } else if (k === 'Escape') onEscape(c, e);
+    else if (k === 'Tab') setOpen(c, false);
+  }
+  /* ----- Pointer ----- */
+  function wireList(c) {
+    var list = c.list;
     /* A press on the list must not move focus out of the field: the blur would close the list before the pick. */
     list.addEventListener('mousedown', function (e) {
       e.preventDefault();
@@ -436,17 +452,43 @@
       if (!li) return;
       /* A mouse picks on press. A finger may be starting to scroll a long list, and hiding the list under a lifted finger
        lets the tap fall through to the map, so touch and pen pick on the tap's click. */
-      if (e.pointerType === 'mouse' && e.button === 0) choose(Number(li.dataset.i));
+      if (e.pointerType === 'mouse' && e.button === 0) choose(c, Number(li.dataset.i));
     });
     list.addEventListener('click', function (e) {
       var li = e.target.closest('[role=option]');
-      if (li && isOpen) choose(Number(li.dataset.i));
+      if (li && c.isOpen) choose(c, Number(li.dataset.i));
     });
+  }
+
+  /* Returns { picked(), close() }. close() drops the pending debounce, queued job and request, ignores any answer still on its way,
+     and closes the list: call it before the field's text is used for something else (a submit). */
+  function attach(input, opts) {
+    liveRegion();
+    var c = create(input, opts);
+    input.addEventListener('input', function () {
+      onInput(c);
+    });
+    input.addEventListener('keydown', function (e) {
+      onKeydown(c, e);
+    });
+    function close() {
+      c.seq++;
+      cancelJob();
+      setOpen(c, false);
+    }
+    input.addEventListener('blur', function () {
+      cancelJob(); /* a request nobody is looking at is not worth sending */
+      setOpen(c, false);
+    });
+    wireList(c);
     return {
       /* {lat, lng, name} while the field still holds exactly the picked label, else null (editing discards the pick). */
       picked: function () {
-        return pick && input.value === pick.name ? { lat: pick.lat, lng: pick.lng, name: pick.name } : null;
-      }
+        return c.pick && input.value === c.pick.name
+          ? { lat: c.pick.lat, lng: c.pick.lng, name: c.pick.name }
+          : null;
+      },
+      close: close
     };
   }
 

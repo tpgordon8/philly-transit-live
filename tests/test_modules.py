@@ -75,3 +75,8 @@ def test_isnum_is_defined_once_and_exported_before_the_leaflet_early_return(root
     assert re.search(r"function isNum\(", u).start() < early and u.index("S.util.isNum = isNum") < early, "isNum must exist even when Leaflet is missing"
     for name in ("routing", "planner", "trip"):
         assert re.search(r"isNum\s*=\s*S\.util\.isNum", src[name]), f"{name}.js must import isNum from util"
+
+
+def test_worker_header_comment_says_septer(root):
+    first = (pathlib.Path(root) / "worker" / "worker.js").read_text().split("\n")[0]
+    assert "Septer" in first and "Philly Transit Live" not in first, first

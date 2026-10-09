@@ -290,6 +290,29 @@ def test_sheet_toggle_and_keyboard_reach(root):
         assert s.page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--kb').trim()") == "0px"
 
 
+def test_pinch_zoom_is_not_a_keyboard_and_the_handle_has_no_dangling_controls(root):
+    with session(root, (390, 844)) as s:
+        boot(s)
+        assert s.page.get_attribute("#sheetHandle", "aria-expanded") in ("true", "false")
+        assert s.page.get_attribute("#sheetHandle", "aria-controls") is None  # no wrapper holds only the content below the handle
+        kb = "getComputedStyle(document.documentElement).getPropertyValue('--kb').trim()"
+        s.page.focus("#addr")
+        shrink = """(scale) => { const vv = window.visualViewport;
+            Object.defineProperty(vv, 'height', {configurable: true, get: () => window.innerHeight - 330});
+            Object.defineProperty(vv, 'scale', {configurable: true, get: () => scale});
+            vv.dispatchEvent(new Event('resize')); }"""
+        s.page.evaluate(shrink, 2.0)  # pinch-zoomed: a shorter visual viewport, no keyboard
+        s.page.wait_for_timeout(150)
+        assert s.page.evaluate(kb) == "0px"
+        s.page.evaluate(shrink, 1.0)  # unzoomed with a field focused: the keyboard
+        s.page.wait_for_timeout(150)
+        assert s.page.evaluate(kb) == "330px"
+        s.page.evaluate("document.activeElement.blur()")  # no text field focused: not a keyboard either
+        s.page.evaluate("window.visualViewport.dispatchEvent(new Event('resize'))")
+        s.page.wait_for_timeout(150)
+        assert s.page.evaluate(kb) == "0px"
+
+
 def test_safe_area_dvh_and_viewport_meta(root):
     html = (pathlib.Path(root) / "index.html").read_text()
     assert "viewport-fit=cover" in html

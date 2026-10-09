@@ -12,6 +12,7 @@
     root = document.documentElement;
   var FIELD = 'input, select, textarea';
   var KEYBOARD_MIN_PX = 80; /* a visual viewport this much shorter than the layout viewport is an on-screen keyboard */
+  var PINCH_EPSILON = 0.01; /* a visual viewport scale this far from 1 means the user pinch-zoomed */
   var KEYBOARD_SETTLE_MS = 350; /* the keyboard animates in; measure after it has stopped */
   /* The map's box changed: Leaflet is told, and the view is put back exactly (its own re-centring rounds to whole pixels).
      Nothing happens when the box kept its size, as on a wide screen where the sheet states do not apply. */
@@ -35,18 +36,21 @@
     setOpen(app.dataset.sheet !== 'open');
   });
   /* A browser that leaves the layout alone for the keyboard (iOS) reports it only through visualViewport: shrink the page by the covered
-     height so the sheet and the field being typed in end up above the keyboard. Browsers that resize the layout report 0 here. */
+     height so the sheet and the field being typed in end up above the keyboard. Browsers that resize the layout report 0 here.
+     A pinch-zoomed page also has a shorter visual viewport but no keyboard, so --kb applies only at scale 1 with a text field focused. */
   function fitKeyboard() {
     var vv = window.visualViewport;
     if (!vv) return;
+    var a = document.activeElement;
+    var typing = !!(a && a.matches && a.matches(FIELD));
+    var unzoomed = Math.abs((vv.scale || 1) - 1) < PINCH_EPSILON;
     var covered = window.innerHeight - vv.height - vv.offsetTop;
-    var kb = (covered > KEYBOARD_MIN_PX ? Math.round(covered) : 0) + 'px';
+    var kb = (typing && unzoomed && covered > KEYBOARD_MIN_PX ? Math.round(covered) : 0) + 'px';
     if ((root.style.getPropertyValue('--kb') || '0px') !== kb) {
       root.style.setProperty('--kb', kb);
       resizeMap();
     }
-    var a = document.activeElement;
-    if (a && a.matches && a.matches(FIELD) && panel.contains(a)) a.scrollIntoView({ block: 'nearest' });
+    if (typing && panel.contains(a)) a.scrollIntoView({ block: 'nearest' });
   }
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', fitKeyboard);

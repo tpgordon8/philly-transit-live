@@ -109,7 +109,7 @@ page itself through GitHub Pages.
 
 Personal state (search center, saved places, starred routes, alert rules) lives only in your browser's `localStorage`.
 We never upload or store it. What does leave your browser is, while you type in the search box or in the From and To fields
-of the trip planner, the typed text and the map center (or your saved Home), rounded to 2 decimals (about 1 km, only used to
+of the trip planner, the typed text and a search point (your located position after Use my location or the point you last searched; in From and To your saved Home, or the search point when no Home is saved), rounded to 2 decimals (about 1 km, only used to
 rank nearby places first), sent straight to Photon (photon.komoot.io, OpenStreetMap data) to suggest places and addresses;
 Photon is asked only after 3 characters and a short pause, at most once a second, and about 40 well-known Philadelphia places
 are suggested from a list in the page with no request at all. When you press Search or Plan trip without picking a suggestion,

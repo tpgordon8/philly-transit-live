@@ -660,7 +660,7 @@ def test_privacy_text_and_attribution_in_page_and_docs(root):
     for text in (priv, readme, arch[arch.index("### 12.4"):arch.index("## 13.")]):
         for part in ("photon.komoot.io", "2 decimals", "Nominatim"):
             assert part in text, part
-        assert re.search(r"typed text|typed search text", text) and re.search(r"map cent(er|re)", text) and re.search(r"intersection", text)
+        assert re.search(r"typed text|typed search text", text) and re.search(r"search point", text) and not re.search(r"typed text and the map cent", text) and re.search(r"intersection", text)
     assert "Photon" in readme and "Photon" in arch
 
 
@@ -671,3 +671,120 @@ def test_files_and_order(root):
     assert "suggest:{}" in html and "landmarks:{}" in html
     for f in ("js/suggest.js", "js/landmarks.js"):
         assert (ROOT / f).read_text().count("\n") <= 700
+
+
+# ------------------------------------------------------------------ review round: cancel, focus, IME, cache key, privacy, size
+def test_submit_cancels_the_pending_suggestion_request_in_search_and_trip(root):
+    with session() as s:
+        s.photon.features = [MARKET]
+        boot(s)
+        type_in(s, "#addr", "1234 market")  # inside the 250 ms debounce
+        s.page.press("#addr", "Enter")  # Enter keeps focus in the field, so only close() can stop the request
+        s.page.wait_for_timeout(700)
+        assert len(s.photon.hits) == 0, s.photon.hits
+        assert s.page.get_attribute("#addr", "aria-expanded") == "false"
+        s.page.wait_for_timeout(1100)
+        s.page.evaluate("HTMLElement.prototype.focus = function () {}")  # a failed submit moves focus (a blur would cancel the job by itself)
+        type_in(s, "#tripFrom", "1234 market")
+        s.page.press("#tripFrom", "Enter")
+        s.page.wait_for_timeout(700)
+        assert len(s.photon.hits) == 0, s.photon.hits
+
+
+def test_close_cancels_job_request_and_late_answers_and_blur_cancels_the_job(root):
+    with session() as s:
+        s.photon.features = [MARKET]
+        boot(s)
+        # the returned close(): an answer for a request already sent must not reopen the list
+        s.page.evaluate("""() => { const i = document.createElement('input'); i.id = 'probe'; document.querySelector('#panel').appendChild(i);
+            window.__sug = window.SEPTA.suggest.attach(i, {}); }""")
+        s.page.click("#probe")
+        s.page.fill("#probe", "1234 market")
+        s.page.evaluate("window.__sug.close()")
+        s.page.wait_for_timeout(700)
+        assert len(s.photon.hits) == 0 and live(s) == ""
+        # blur drops the debounced job
+        type_in(s, "#addr", "1234 market")
+        s.page.focus("#tripTo")  # moves focus away inside the debounce
+        s.page.wait_for_timeout(700)
+        assert len(s.photon.hits) == 0, s.photon.hits
+
+
+def test_count_is_announced_only_while_the_field_has_focus(root):
+    with session() as s:
+        boot(s)
+        s.page.evaluate("""() => { const i = document.querySelector('#addr'); i.value = 'city hall'; i.dispatchEvent(new Event('input', {bubbles: true})); }""")
+        assert s.page.evaluate("document.activeElement === document.querySelector('#addr')") is False
+        wait_hits(s, 1)  # the answer arrives while the field is not focused
+        s.page.wait_for_timeout(300)
+        assert live(s) == "", live(s)
+        s.photon.hits.clear()
+        type_in(s, "#addr", "city hall")
+        wait_live(s, "1 suggestion")
+
+
+def test_keys_during_ime_composition_are_left_alone(root):
+    with session() as s:
+        boot(s)
+        type_in(s, "#addr", "station")
+        assert len(opts(s)) == 4
+        s.page.keyboard.press("ArrowDown")
+        before = s.page.input_value("#addr")
+        res = s.page.evaluate("""() => { const i = document.querySelector('#addr'), out = [];
+            for (const init of [{key: 'Enter', isComposing: true}, {key: 'Escape', keyCode: 229}, {key: 'ArrowDown', isComposing: true}, {key: 'Tab', keyCode: 229}]) {
+                const e = new KeyboardEvent('keydown', Object.assign({bubbles: true, cancelable: true}, init));
+                i.dispatchEvent(e); out.push(e.defaultPrevented); }
+            return out; }""")
+        assert res == [False] * 4, res
+        assert s.page.input_value("#addr") == before and len(opts(s)) == 4
+        assert [o["sel"] for o in opts(s)] == ["true", "false", "false", "false"], opts(s)
+        assert s.page.get_attribute("#addr", "aria-expanded") == "true"
+
+
+def test_cache_key_includes_the_rounded_bias(root):
+    with session() as s:
+        s.photon.features = [MARKET]
+        boot(s)
+        s.page.evaluate("localStorage.setItem('septa.places.v1', JSON.stringify({home: {name: 'Home spot', lat: 39.9912, lng: -75.1234}, list: []}))")
+        s.page.reload()
+        s.wait_live()
+        type_in(s, "#addr", "1234 market")  # biased to the search point
+        wait_hits(s, 1)
+        s.page.wait_for_timeout(1100)
+        type_in(s, "#tripFrom", "1234 market")  # same text, biased to Home: not the same question
+        wait_hits(s, 2)
+        assert s.photon.hits[0]["lat"] != s.photon.hits[1]["lat"], s.photon.hits
+        s.page.wait_for_timeout(1100)
+        type_in(s, "#tripTo", "1234  Market")  # same text and same bias as the From field: from the cache
+        s.page.wait_for_timeout(700)
+        assert len(s.photon.hits) == 2, s.photon.hits
+
+
+def test_privacy_names_the_search_point_not_the_map_center(root):
+    root = pathlib.Path(root)
+    readme = (root / "README.md").read_text()
+    arch = (root / "ARCHITECTURE.md").read_text()
+    with session() as s:
+        s.open()
+        s.wait_live()
+        priv = s.page.inner_text(".tp-priv")
+        note = s.page.inner_text("#sugPrivFind")
+    assert "Photon" in note and "while you type" in note, note
+    for text in (priv, readme, arch[arch.index("### 12.4"):arch.index("## 13.")]):
+        assert "search point" in text and "Use my location" in text and "saved Home" in text, text[:200]
+        assert not re.search(r"typed text and the (bias point, which is the )?map cent", text)
+
+
+def test_suggest_source_names_its_constants_and_keeps_functions_short(root):
+    src = (ROOT / "js/suggest.js").read_text()
+    assert re.search(r"SAME_PLACE_MI = 0\.25\b", src) and "< 0.25" not in src
+    assert "SAME_PLACE_MI" in (ROOT / "ARCHITECTURE.md").read_text()
+    lines, start, longest = src.split("\n"), None, 0
+    for i, line in enumerate(lines):
+        m = re.match(r"( *)function \w+", line)
+        if m and start is None:
+            start, indent = i, m.group(1)
+        elif start is not None and line == indent + "}":
+            longest = max(longest, i - start + 1)
+            start = None
+    assert longest <= 80, longest
