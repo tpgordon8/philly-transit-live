@@ -4,8 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#1f5fae">
-<title>Philly Transit Live</title>
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111b27" media="(prefers-color-scheme: dark)">
+<title>Septer: live Philadelphia transit</title>
+<meta name="description" content="Septer shows live SEPTA buses, trolleys and Regional Rail trains near any Philadelphia address, with stop boards, leave-now alerts and trip planning.">
+<meta name="application-name" content="Septer">
+<meta name="apple-mobile-web-app-title" content="Septer">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Septer">
+<meta property="og:title" content="Septer: live Philadelphia transit">
+<meta property="og:description" content="Live SEPTA buses, trolleys and Regional Rail trains near any Philadelphia address, with stop boards, leave-now alerts and trip planning.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Septer: live Philadelphia transit">
+<meta name="twitter:description" content="Live SEPTA buses, trolleys and Regional Rail trains near any Philadelphia address, with stop boards, leave-now alerts and trip planning.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="css/leaflet.css">
 <link rel="stylesheet" href="css/base.css">
@@ -21,7 +37,7 @@
 <div id="app">
   <aside id="panel" aria-label="Controls">
     <div class="brand">
-      <h1>Philly <span>Transit</span> Live</h1>
+      <h1>Septer</h1>
       <div class="status" id="status"><span class="dot" id="dot"></span><span id="statusText" aria-hidden="true">Connecting to SEPTA…</span><span class="sr-only" id="statusLive" role="status" aria-live="polite">Connecting to SEPTA</span></div>
     </div>
 

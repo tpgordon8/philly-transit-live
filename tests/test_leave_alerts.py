@@ -378,7 +378,7 @@ def run_hidden_alert(root, perm):
 
 def test_hidden_alert_notification_only_when_granted(root):
     text, notes = run_hidden_alert(root, "granted")
-    assert len(notes) == 1 and notes[0]["t"] == text and text.startswith("Leave now — the 21 is about "), (notes, text)
+    assert len(notes) == 1 and notes[0]["t"] == "Septer" and notes[0]["o"] == {"body": text} and text.startswith("Leave now — the 21 is about "), (notes, text)
     text, notes = run_hidden_alert(root, "default")
     assert notes == []
     text, notes = run_hidden_alert(root, "denied")

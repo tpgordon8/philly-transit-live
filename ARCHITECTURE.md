@@ -1,4 +1,6 @@
-# Philly Transit Live — architecture
+# Septer: architecture
+
+The product was renamed from Philly Transit Live to Septer in version 1.1 (section 15). The repository, the GitHub Pages address, the Worker name and its User-Agent, and the `septa.*` localStorage keys keep their old names; text below that quotes the old name is history.
 
 Status: Phase 0 audit, approved by the architect. Source of truth is this repo; `index.html` plus the scripts in `js/` are canonical (section 14).
 Copies of the app outside the repo (for example a published artifact) are stale and may not work.

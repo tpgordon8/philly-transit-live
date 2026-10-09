@@ -311,7 +311,7 @@
     }
     try {
       if (window.Notification && Notification.permission === 'granted' && document.hidden)
-        new Notification(msg);
+        new Notification('Septer', { body: msg });
     } catch (e) {
       /* Notification can throw on some browsers; the toast already shows */
     }

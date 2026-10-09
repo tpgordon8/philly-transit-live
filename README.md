@@ -1,4 +1,6 @@
-# Philly Transit Live
+# Septer: live Philadelphia transit
+
+Septer is the new name of this project. The repository and the GitHub Pages address (`philly-transit-live`) keep their old names so existing links keep working.
 
 A live map of SEPTA buses, trolleys and Regional Rail trains around any address in Philadelphia, with route alerts,
 shareable stop links, stop boards with computed ETAs, and "leave now" alerts. Live at
@@ -23,6 +25,8 @@ saved places, Home, radius, filters), `stops` (stop links, stop board, ETA), `al
 interface) and `main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else
 is global. If a file fails to load, a red banner at the top of the page names it. How the files fit together and how to
 add one: [ARCHITECTURE.md](ARCHITECTURE.md) section 14. There is no build step; GitHub Pages serves the files as they are.
+
+The app manifest is `manifest.webmanifest` and the logo mark and its PNG exports are in `icons/` (`favicon.svg` is the source; there is no service worker). The title is set in the Helvetica-style system font stack, so no font file for it is shipped.
 
 ## Lint and format
 

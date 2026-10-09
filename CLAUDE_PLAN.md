@@ -1,4 +1,4 @@
-# Philly Transit Live — Claude execution plan
+# Septer — Claude execution plan
 
 Paste the **Mission brief** into Claude to start. Everything below it is the
 plan Claude's agents must follow. Human owner: repo owner (@tpgordon8).
