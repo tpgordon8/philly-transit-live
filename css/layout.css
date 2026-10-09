@@ -1,0 +1,14 @@
+/* layout.css: app shell, sidebar, map stage and their responsive rules. */
+#app{display:grid;grid-template-columns:392px minmax(0,1fr);height:100%}
+#panel{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;display:flex;flex-direction:column;min-width:0}
+#stage{position:relative;min-width:0;min-height:0}
+#map{position:absolute;inset:0;background:var(--map-bg)}
+@media (max-width:820px){
+  #app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,46%) minmax(0,54%)}
+  #panel{order:2;border-right:0;border-top:1px solid var(--line)}
+  #stage{order:1}
+}
+/* Phones: with a trip drawn the map gets half the screen (never under 45%), the options scroll in the panel below. */
+@media (max-width:480px){
+  #app{grid-template-rows:minmax(45vh,50%) minmax(0,1fr)}
+}
