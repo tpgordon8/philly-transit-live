@@ -1,5 +1,5 @@
 """Indego bike stations on the map (ARCHITECTURE.md 15.5): the mode chip, markers by availability, zoom rules, the station card,
-Directions into the trip planner, polling rules, failure behaviour, phone layout and badge contrast. Hermetic: the harness mocks the
+Walk here into the trip planner, polling rules, failure behaviour, phone layout and badge contrast. Hermetic: the harness mocks the
 Worker's /indego/* endpoints and the direct fallback."""
 import json
 import time
@@ -240,7 +240,7 @@ def test_card_directions_escape_and_keyboard(root):
         # the age moves with the clock
         s.tick(20000)
         assert int(re.search(r"Updated (\d+) s ago", s.page.inner_text("#indegoCard")).group(1)) >= int(age.group(1)) + 15
-        # Directions fills the To field with this station and opens the planner
+        # Walk here fills the To field with this station and opens the planner
         s.page.click("#indegoDir")
         assert s.page.input_value("#tripTo") == nm[:40]
         assert s.page.is_hidden("#indegoCard")
@@ -287,6 +287,15 @@ def test_one_card_at_a_time(root):
         s.page.evaluate("document.querySelectorAll('.ind-wrap').forEach(e => delete e.dataset.pick)")
         open_first(s)
         assert s.page.is_hidden("#detail") and s.page.is_visible("#indegoCard")
+        # Escape after a tap (focus not in the card) still closes it and puts focus on the marker
+        s.page.keyboard.press("Escape")
+        assert s.page.is_hidden("#indegoCard")
+        assert s.page.evaluate("document.activeElement.classList.contains('ind-wrap')")
+        # zooming out below 14 takes the card away with the markers
+        s.page.evaluate("document.querySelectorAll('.ind-wrap').forEach(e => delete e.dataset.pick)")
+        open_first(s)
+        view(s, 13)
+        assert s.page.is_hidden("#indegoCard") and n_markers(s) == 0
 
 
 # ---------------------------------------------------------------- data freshness: polling, failure
@@ -409,7 +418,7 @@ def test_phone_layout_no_overflow_and_card_clear_of_zoom(root):
             # the marker was moved above the card
             e = s.page.evaluate("""() => { const r = document.querySelector('.ind-wrap.sel').getBoundingClientRect(); return {t: r.top, b: r.bottom, l: r.left, r: r.right}; }""")
             assert e["b"] <= card["t"] + 8 and e["t"] >= m["t"] - 1, (vp, e, card)
-            # the Close button is a 44 px target; Directions too
+            # the Close button is a 44 px target; Walk here too
             for sel in ("#indegoClose", "#indegoDir"):
                 r = R.rect(s, sel)
                 assert r["w"] >= 43.5 and r["h"] >= 43.5, (sel, r)

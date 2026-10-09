@@ -1,6 +1,6 @@
 # Septer: live Philadelphia transit
 
-Septer shows where SEPTA buses, trolleys and Regional Rail trains are right now around any Philadelphia address. Search an address or use your location, tap a vehicle to see its route, direction and delay, open a stop to see which buses are heading there, get a "leave now" alert when your bus is close, or plan a trip by walking, Indego bike share, one bus or trolley, or car. Live at
+Septer shows where SEPTA buses, trolleys and Regional Rail trains are right now around any Philadelphia address. Search an address or use your location, tap a vehicle to see its route, direction and delay, open a stop to see which buses are heading there, see Indego bike stations and how many bikes each has, get a "leave now" alert when your bus is close, or plan a trip by walking, Indego bike share, one bus or trolley, or car. Live at
 https://septer.tarapaigegordon.com/ (also reachable at https://tpgordon8.github.io/philly-transit-live/, which forwards there)
 
 Septer is the new name of this project. The repository and the GitHub Pages address (`philly-transit-live`) keep their old names so existing links keep working.

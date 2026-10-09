@@ -333,7 +333,7 @@
     note.id = 'indegoNote';
     var age = el('p', 'ind-sub');
     age.id = 'indegoAge';
-    var dir = el('button', 'btn small primary', 'Directions');
+    var dir = el('button', 'btn small primary', 'Walk here');
     dir.type = 'button';
     dir.id = 'indegoDir';
     dir.addEventListener('click', directions);
@@ -365,7 +365,7 @@
           : '';
     f.note.hidden = !f.note.textContent;
     f.age.textContent = ageText() + (isDim() ? '. May be out of date.' : '');
-    f.dir.setAttribute('aria-label', 'Directions to ' + s.name);
+    f.dir.setAttribute('aria-label', 'Walk to ' + s.name);
   }
   /* On a phone the card covers most of the short map; pan once so the marker sits in the strip above it (as the vehicle card does). */
   function panAboveCard(id) {
