@@ -1,46 +1,45 @@
-/* js/feed.js: vehicle feed: ghost filter and normalisers, fetch through the Worker, idle pause, refresh loop and the collect/apply render pipeline. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */ /*@split*/
+/* js/feed.js: vehicle feed: ghost filter and normalisers, fetch through the Worker, idle pause, refresh loop and the collect/apply render pipeline. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */
 (function () {
-  /*@split*/
-  'use strict'; /*@split*/
-  var S = window.SEPTA; /*@split*/
+  'use strict';
+  var S = window.SEPTA;
   function renderDetail() {
-    return S.ui.renderDetail.apply(null, arguments);
-  } /*@split*/
+    return S.map.renderDetail.apply(null, arguments);
+  }
   function renderMyRoutes() {
-    return S.ui.renderMyRoutes.apply(null, arguments);
-  } /*@split*/
+    return S.panel.renderMyRoutes.apply(null, arguments);
+  }
   function renderStatus() {
-    return S.ui.renderStatus.apply(null, arguments);
-  } /*@split*/
+    return S.panel.renderStatus.apply(null, arguments);
+  }
   function syncMarkers() {
-    return S.ui.syncMarkers.apply(null, arguments);
-  } /*@split*/
+    return S.map.syncMarkers.apply(null, arguments);
+  }
   function renderStopBoard() {
     return S.stops.renderStopBoard.apply(null, arguments);
-  } /*@split*/
+  }
   function updateBoardAge() {
     return S.stops.updateBoardAge.apply(null, arguments);
-  } /*@split*/
+  }
   function updateSpeedHist() {
     return S.stops.updateSpeedHist.apply(null, arguments);
-  } /*@split*/
+  }
   function evalRules() {
     return S.alerts.evalRules.apply(null, arguments);
-  } /*@split*/
+  }
   function hasActiveRule() {
     return S.alerts.hasActiveRule.apply(null, arguments);
-  } /*@split*/
+  }
   function loadAlerts() {
     return S.alerts.loadAlerts.apply(null, arguments);
-  } /*@split*/
+  }
   function renderAlerts() {
     return S.alerts.renderAlerts.apply(null, arguments);
-  } /*@split*/
+  }
   var GHOST_MAX_S = S.util.GHOST_MAX_S,
     headingVal = S.util.headingVal,
     kindOf = S.util.kindOf,
     lateVal = S.util.lateVal,
-    num = S.util.num; /*@split*/
+    num = S.util.num;
   /* Anti-ghost rule: a bus counts only with a nonzero GPS timestamp that is close to the newest one in the feed.
    Timestamp 0 means schedule-only. Comparing against the feed's own newest timestamp keeps this correct
    even when the viewer's device clock is off. */
@@ -141,17 +140,17 @@
   S.feed.normBuses = normBuses;
   S.feed.normTrains = normTrains;
   S.feed.alertKey = alertKey;
-  S.feed.vehicleAlertKey = vehicleAlertKey; /*@split*/
-  if (S.halt) return; /*@split*/
+  S.feed.vehicleAlertKey = vehicleAlertKey;
+  if (S.halt) return;
   var $ = S.util.$,
     DROP_AFTER_MS = S.util.DROP_AFTER_MS,
     REFRESH_MS = S.util.REFRESH_MS,
     distMi = S.util.distMi,
     esc = S.util.esc,
-    isStarred = S.util.isStarred; /*@split*/
+    isStarred = S.util.isStarred;
   var routeFilterOn = S.util.routeFilterOn,
     starKey = S.util.starKey,
-    state = S.util.state; /*@split*/
+    state = S.util.state;
   /* ----- Network: SEPTA's API sends no CORS headers, so every call goes through our own Cloudflare Worker.
    The Worker forwards an allowlist of SEPTA feeds and a few validated query endpoints, and adds CORS; the list changes
    with the Worker version, so see ARCHITECTURE.md section 2 for the current endpoints. Retry once on failure. ----- */
@@ -399,7 +398,7 @@
   S.feed.septa = septa;
   S.feed.collect = collect;
   S.feed.apply = apply;
-  S.feed.skipped = skipped; /*@split*/
+  S.feed.skipped = skipped;
   S.feed.wantedSources = wantedSources;
-  S.feed.refresh = refresh; /*@split*/
-})(); /*@split*/
+  S.feed.refresh = refresh;
+})();

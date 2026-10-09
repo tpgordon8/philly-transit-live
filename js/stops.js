@@ -1,18 +1,17 @@
-/* js/stops.js: stop-board ETA math, stop links, stop card and live stop board. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */ /*@split*/
+/* js/stops.js: stop-board ETA math, stop links, stop card and live stop board. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */
 (function () {
-  /*@split*/
-  'use strict'; /*@split*/
-  var S = window.SEPTA; /*@split*/
+  'use strict';
+  var S = window.SEPTA;
   function alertRow() {
     return S.alerts.alertRow.apply(null, arguments);
-  } /*@split*/
+  }
   function updateAlertRow() {
     return S.alerts.updateAlertRow.apply(null, arguments);
-  } /*@split*/
+  }
   var angDiff = S.util.angDiff,
     bearing = S.util.bearing,
     distM = S.util.distM,
-    distMi = S.util.distMi; /*@split*/
+    distMi = S.util.distMi;
   /* ----- Stop board math. SEPTA publishes no bus predictions here, so an ETA exists only when it can be computed from
    measured data: straight-line distance (padded 15 %) over speed measured from successive GPS reports. ----- */
   var speedHist = {},
@@ -89,20 +88,20 @@
   S.stops.speedHist = speedHist;
   S.stops.updateSpeedHist = updateSpeedHist;
   S.stops.speedMps = speedMps;
-  S.stops.etaFor = etaFor; /*@split*/
-  if (S.halt) return; /*@split*/
+  S.stops.etaFor = etaFor;
+  if (S.halt) return;
   var $ = S.util.$,
     DROP_AFTER_MS = S.util.DROP_AFTER_MS,
-    el = S.util.el; /*@split*/
+    el = S.util.el;
   var lateInfo = S.util.lateInfo,
     num = S.util.num,
-    state = S.util.state; /*@split*/
+    state = S.util.state;
   var collect = S.feed.collect,
-    septa = S.feed.septa; /*@split*/
-  var map = S.ui.map,
-    mapEl = S.ui.mapEl,
-    select = S.ui.select,
-    setCenter = S.ui.setCenter; /*@split*/
+    septa = S.feed.septa;
+  var map = S.map.map,
+    mapEl = S.map.mapEl,
+    select = S.map.select,
+    setCenter = S.panel.setCenter;
   /* ----- Shareable stop links (#stop=<id>&route=<route>) -----
    Stop lists come from the Worker (Stops?route=), are cached per route in memory, and never include anything personal. */
   var stopCache = {},
@@ -434,8 +433,8 @@
   S.stops.STOP_ID_RE = STOP_ID_RE;
   S.stops.STOP_RT_RE = STOP_RT_RE;
   S.stops.closeStop = closeStop;
-  S.stops.renderStopBoard = renderStopBoard; /*@split*/
+  S.stops.renderStopBoard = renderStopBoard;
   S.stops.updateBoardAge = updateBoardAge;
   S.stops.openStop = openStop;
-  S.stops.stopFromHash = stopFromHash; /*@split*/
-})(); /*@split*/
+  S.stops.stopFromHash = stopFromHash;
+})();

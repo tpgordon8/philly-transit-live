@@ -1,23 +1,22 @@
-/* js/trip.js: trip planner interface: form, results list and map drawing. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */ /*@split*/
+/* js/trip.js: trip planner interface: form, results list and map drawing. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */
 (function () {
-  /*@split*/
-  'use strict'; /*@split*/
-  var S = window.SEPTA; /*@split*/
-  if (S.halt) return; /*@split*/
+  'use strict';
+  var S = window.SEPTA;
+  if (S.halt) return;
   var $ = S.util.$,
     el = S.util.el,
     fmtMi = S.util.fmtMi,
     isNum = S.util.isNum,
-    state = S.util.state; /*@split*/
-  var NARROW = S.ui.NARROW,
-    geocode = S.ui.geocode,
-    getPosition = S.ui.getPosition,
-    map = S.ui.map,
-    mapEl = S.ui.mapEl; /*@split*/
-  var cancelPlan = S.planner.cancelPlan,
+    state = S.util.state;
+  var NARROW = S.map.NARROW,
+    geocode = S.panel.geocode,
+    getPosition = S.panel.getPosition,
+    map = S.map.map,
+    mapEl = S.map.mapEl;
+  var cancelPlan = S.routing.cancelPlan,
     clockText = S.planner.clockText,
-    inRegion = S.planner.inRegion,
-    planTrips = S.planner.planTrips; /*@split*/
+    inRegion = S.routing.inRegion,
+    planTrips = S.planner.planTrips;
   /* ----- Trip planner UI (ARCHITECTURE.md section 12) -----
    Everything lives in memory: no localStorage key, nothing is written to prefs, and nothing here touches the 15 s refresh or the
    vehicle markers. Routing and Indego requests are made by planTrips (js/planner.js, through the Worker); this file only calls it,
@@ -660,5 +659,5 @@
         animate: !TRIP_REDUCED()
       });
   }
-  S.trip.tripRenderPlaces = tripRenderPlaces; /*@split*/
-})(); /*@split*/
+  S.trip.tripRenderPlaces = tripRenderPlaces;
+})();

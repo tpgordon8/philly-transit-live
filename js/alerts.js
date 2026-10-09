@@ -1,11 +1,10 @@
-/* js/alerts.js: service alerts and leave-now alert rules. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */ /*@split*/
+/* js/alerts.js: service alerts and leave-now alert rules. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */
 (function () {
-  /*@split*/
-  'use strict'; /*@split*/
-  var S = window.SEPTA; /*@split*/
+  'use strict';
+  var S = window.SEPTA;
   var DROP_AFTER_MS = S.util.DROP_AFTER_MS,
-    state = S.util.state; /*@split*/
-  var etaFor = S.stops.etaFor; /*@split*/
+    state = S.util.state;
+  var etaFor = S.stops.etaFor;
   /* ----- Leave-now rules. A rule may fire only from a numeric, non-rough etaFor result for a bus whose very next stop is the
    rule's stop, while the bus source is fresh. `src` is {ok,stale} for the bus source (defaults to the live one). ----- */
   var RULE_DEDUPE_MS = 15 * 60000;
@@ -47,23 +46,23 @@
     }
     return res;
   }
-  S.alerts.evalRule = evalRule; /*@split*/
-  if (S.halt) return; /*@split*/
+  S.alerts.evalRule = evalRule;
+  if (S.halt) return;
   var $ = S.util.$,
     distMi = S.util.distMi,
     el = S.util.el,
     parseSeptaDate = S.util.parseSeptaDate,
     shortText = S.util.shortText,
-    store = S.util.store; /*@split*/
+    store = S.util.store;
   var alertKey = S.feed.alertKey,
     collect = S.feed.collect,
     idleNow = S.feed.idleNow,
     pauseNow = S.feed.pauseNow,
-    septa = S.feed.septa; /*@split*/
-  var vehicleAlertKey = S.feed.vehicleAlertKey; /*@split*/
-  var NARROW = S.ui.NARROW; /*@split*/
+    septa = S.feed.septa;
+  var vehicleAlertKey = S.feed.vehicleAlertKey;
+  var NARROW = S.map.NARROW;
   var STOP_ID_RE = S.stops.STOP_ID_RE,
-    STOP_RT_RE = S.stops.STOP_RT_RE; /*@split*/
+    STOP_RT_RE = S.stops.STOP_RT_RE;
   /* ----- Alerts ----- */
   function stripHTML(s) {
     if (!s) return '';
@@ -485,9 +484,9 @@
   S.alerts.loadAlerts = loadAlerts;
   S.alerts.renderAlerts = renderAlerts;
   S.alerts.hasActiveRule = hasActiveRule;
-  S.alerts.evalRules = evalRules; /*@split*/
+  S.alerts.evalRules = evalRules;
   S.alerts.renderRules = renderRules;
   S.alerts.alertRow = alertRow;
   S.alerts.updateAlertRow = updateAlertRow;
-  S.alerts.renderNotify = renderNotify; /*@split*/
-})(); /*@split*/
+  S.alerts.renderNotify = renderNotify;
+})();

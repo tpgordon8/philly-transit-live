@@ -117,7 +117,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script>
 /* Module namespace and load-failure banner (ARCHITECTURE.md section 14). Every js/*.js file adds only window.SEPTA.<name>. */
-window.SEPTA={util:{},feed:{},ui:{},stops:{},alerts:{},planner:{},trip:{},failed:[]};
+window.SEPTA={util:{},feed:{},map:{},panel:{},stops:{},alerts:{},routing:{},candidates:{},planner:{},trip:{},failed:[]};
 window.SEPTA.loadFailed=function(file){
   var S=window.SEPTA,box=document.getElementById('loadError');
   if(S.failed.indexOf(file)<0)S.failed.push(file);
@@ -136,9 +136,12 @@ window.addEventListener('error',function(e){
 </script>
 <script src="js/util.js"></script>
 <script src="js/feed.js"></script>
-<script src="js/ui.js"></script>
+<script src="js/map.js"></script>
+<script src="js/panel.js"></script>
 <script src="js/stops.js"></script>
 <script src="js/alerts.js"></script>
+<script src="js/routing.js"></script>
+<script src="js/candidates.js"></script>
 <script src="js/planner.js"></script>
 <script src="js/trip.js"></script>
 <script src="js/main.js"></script>

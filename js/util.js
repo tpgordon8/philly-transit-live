@@ -1,8 +1,7 @@
-/* js/util.js: constants, formatting and geometry helpers, DOM shortcuts, localStorage store, saved preferences, places, starred routes and the shared state object. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */ /*@split*/
+/* js/util.js: constants, formatting and geometry helpers, DOM shortcuts, localStorage store, saved preferences, places, starred routes and the shared state object. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */
 (function () {
-  /*@split*/
-  'use strict'; /*@split*/
-  var S = window.SEPTA; /*@split*/
+  'use strict';
+  var S = window.SEPTA;
   /* ---------- Pure logic (no DOM) ---------- */
   var REFRESH_MS = 15000,
     GHOST_MAX_S = 150,
@@ -167,30 +166,30 @@
   S.util.GHOST_MAX_S = GHOST_MAX_S;
   S.util.DROP_AFTER_MS = DROP_AFTER_MS;
   S.util.kindOf = kindOf;
-  S.util.CARD = CARD; /*@split*/
+  S.util.CARD = CARD;
   S.util.CARD_LONG = CARD_LONG;
   S.util.SEATS = SEATS;
   S.util.MODE_NAME = MODE_NAME;
   S.util.esc = esc;
   S.util.cardinal = cardinal;
-  S.util.toRad = toRad; /*@split*/
+  S.util.toRad = toRad;
   S.util.distMi = distMi;
   S.util.bearing = bearing;
   S.util.angDiff = angDiff;
   S.util.fmtMi = fmtMi;
   S.util.lateVal = lateVal;
   S.util.lateInfo = lateInfo;
-  S.util.num = num; /*@split*/
+  S.util.num = num;
   S.util.headingVal = headingVal;
   S.util.parseSeptaDate = parseSeptaDate;
   S.util.shortText = shortText;
   S.util.distM = distM;
   S.util.$ = $;
-  S.util.store = store; /*@split*/
+  S.util.store = store;
   S.util.showBanner = showBanner;
   S.util.hideBanner = hideBanner;
-  S.util.isNum = isNum; /*@split*/
-  S.halt = typeof L === 'undefined'; /*@split*/
+  S.util.isNum = isNum;
+  S.halt = typeof L === 'undefined';
   if (typeof L === 'undefined') {
     showBanner('', "<b>Map library didn't load.</b> Check your connection and reload.");
     return;
@@ -318,8 +317,8 @@
   S.util.routesStore = routesStore;
   S.util.saveRoutes = saveRoutes;
   S.util.starKey = starKey;
-  S.util.isStarred = isStarred; /*@split*/
+  S.util.isStarred = isStarred;
   S.util.routeFilterOn = routeFilterOn;
   S.util.state = state;
-  S.util.el = el; /*@split*/
-})(); /*@split*/
+  S.util.el = el;
+})();

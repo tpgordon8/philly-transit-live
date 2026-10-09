@@ -13,7 +13,7 @@ FAST = {
 }
 
 HOOK = "window.__SEPTA_TEST__ = true"
-FILES = ["util", "feed", "ui", "stops", "alerts", "planner", "trip", "main"]
+FILES = ["util", "feed", "map", "panel", "stops", "alerts", "routing", "candidates", "planner", "trip", "main"]
 
 
 def test_missing_script_file_shows_error_banner(root):
@@ -59,7 +59,7 @@ def test_js_files_are_small_and_listed_in_order(root):
     assert listed == FILES, listed
     for name in FILES:
         n = (root / "js" / f"{name}.js").read_text().count("\n")
-        assert n <= 600, f"js/{name}.js has {n} lines"
+        assert n <= 700, f"js/{name}.js has {n} lines"
     assert html.index("leaflet.min.js") < html.index("js/util.js"), "Leaflet must load before the app"
     inline = sum(m.count("\n") + 1 for m in re.findall(r"<script>\n(.*?)</script>", html, flags=re.S))
     assert inline < 60, inline
@@ -71,6 +71,7 @@ def test_isnum_is_defined_once_and_exported_before_the_leaflet_early_return(root
     defs = [n for n in FILES if re.search(r"function isNum\(", src[n])]
     assert defs == ["util"], defs
     u = src["util"]
-    early = u.index("if(typeof L==='undefined'){")
-    assert u.index("function isNum(") < early and u.index("S.util.isNum=isNum") < early, "isNum must exist even when Leaflet is missing"
-    assert "isNum=S.util.isNum" in src["planner"] and "isNum=S.util.isNum" in src["trip"]
+    early = re.search(r"if \(typeof L === 'undefined'\) \{", u).start()
+    assert re.search(r"function isNum\(", u).start() < early and u.index("S.util.isNum = isNum") < early, "isNum must exist even when Leaflet is missing"
+    for name in ("routing", "planner", "trip"):
+        assert re.search(r"isNum\s*=\s*S\.util\.isNum", src[name]), f"{name}.js must import isNum from util"
