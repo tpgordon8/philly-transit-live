@@ -4,7 +4,7 @@ Septer is the new name of this project. The repository and the GitHub Pages addr
 
 A live map of SEPTA buses, trolleys and Regional Rail trains around any address in Philadelphia, with route alerts,
 shareable stop links, stop boards with computed ETAs, and "leave now" alerts. Live at
-https://tpgordon8.github.io/philly-transit-live/
+https://septer.tarapaigegordon.com/ (also reachable at https://tpgordon8.github.io/philly-transit-live/, which forwards there)
 
 ## How data flows
 

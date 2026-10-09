@@ -32,11 +32,11 @@ globalThis.fetch = async (u, o) => { calls.push({ u, o }); return new Response('
 // ---- origins -------------------------------------------------------------------------------------------------
 const raw = (path, headers) => worker.fetch(new Request('https://w.example' + path, { headers }));
 r = await raw('/TransitView', { Origin: '' }); assert.equal(r.status, 403, 'present-but-empty Origin is rejected');
-for (const ok of ['https://tpgordon8.github.io', 'http://localhost', 'http://localhost:8000', 'http://127.0.0.1:54321', 'http://127.0.0.1']) {
+for (const ok of ['https://tpgordon8.github.io', 'https://septer.tarapaigegordon.com', 'http://localhost', 'http://localhost:8000', 'http://127.0.0.1:54321', 'http://127.0.0.1']) {
   r = await get('/TransitView', ok); assert.equal(r.status, 200, ok); assert.equal(r.headers.get('access-control-allow-origin'), ok, ok);
 }
 for (const bad of ['https://localhost', 'http://localhost.evil.example', 'http://localhost:80a', 'http://evil.example:3000', 'http://127.0.0.1.evil.example',
-  'https://tpgordon8.github.io.evil.example', 'http://tpgordon8.github.io', 'http://localhost:1234/x', 'file://', 'HTTP://LOCALHOST']) {
+  'https://tpgordon8.github.io.evil.example', 'https://septer.tarapaigegordon.com.evil.example', 'http://septer.tarapaigegordon.com', 'https://tarapaigegordon.com', 'http://tpgordon8.github.io', 'http://localhost:1234/x', 'file://', 'HTTP://LOCALHOST']) {
   r = await get('/TransitView', bad); assert.equal(r.status, 403, bad);
 }
 r = await raw('/TransitView', { 'Sec-Fetch-Site': 'cross-site' }); assert.equal(r.status, 403, 'browser cross-site request without Origin');

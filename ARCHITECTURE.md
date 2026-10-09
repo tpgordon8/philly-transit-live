@@ -66,7 +66,7 @@ SEPTA public hackathon API (no key, no CORS headers)
   Stops are cached for the 60 s subrequest TTL (always safe, but up to 1,440 times more upstream fetches per route and
   edge location than the intended day). Moving to a custom domain would turn the day-long cache on without a code
   change. `tests/test_worker.mjs` covers the TTL choice; the workers.dev behaviour itself cannot be verified offline.
-- CORS and origins: allows `https://tpgordon8.github.io` plus `http://localhost` and `http://127.0.0.1` on any port. Any
+- CORS and origins: allows `https://tpgordon8.github.io`, `https://septer.tarapaigegordon.com` plus `http://localhost` and `http://127.0.0.1` on any port. Any
   other `Origin` header, including `null` and the empty string, gets 403. A request with no `Origin` is allowed (curl,
   the smoke test) unless it carries a `Sec-Fetch-Site` of cross-site or same-site. This is a soft guard, since non-browser
   clients can spoof `Origin`; the data is public anyway. (`null`, a locally opened file, used to be allowed.)

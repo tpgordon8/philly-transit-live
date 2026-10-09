@@ -16,12 +16,13 @@
 // Answers on /route: 200 with the OSRM route; 422 with {"code":"NoRoute"|"NoSegment"|...} when the routing service gave a
 // well-formed error answer (OSRM sends HTTP 400 for every error code; the page needs the code and must not retry
 // elsewhere); 502 only when the service itself failed (unreachable, timeout, non-JSON, 5xx, 429). 422 is never cached.
-// Origins: the Pages origin plus http://localhost and http://127.0.0.1 on any port. An Origin header that is present
+// Origins: the Pages origin, the custom domain https://septer.tarapaigegordon.com, plus http://localhost and http://127.0.0.1 on any port. An Origin header that is present
 // but not in that list (including 'null' and the empty string) gets 403. A request with no Origin header is allowed
 // (curl, the smoke test) unless it carries browser Sec-Fetch headers showing a cross-site browser request.
 const PAGES = 'https://tpgordon8.github.io';
+const CUSTOM = 'https://septer.tarapaigegordon.com';
 const LOCAL_RE = /^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/;
-const originAllowed = (o) => o === PAGES || LOCAL_RE.test(o);
+const originAllowed = (o) => o === PAGES || o === CUSTOM || LOCAL_RE.test(o);
 const BASE = 'https://api.septa.org/hackathon/';
 const ROUTE_RE = /^[A-Za-z0-9]{1,6}$/;
 const STATION_RE = /^[A-Za-z0-9 .'&/-]{2,40}$/;
