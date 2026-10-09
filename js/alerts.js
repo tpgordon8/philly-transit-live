@@ -32,7 +32,7 @@ function evalRule(rule,vehicles,now,src){
 }
 S.alerts.evalRule=evalRule;/*@split*/
 if(S.halt)return;/*@split*/
-var $=S.util.$,distMi=S.util.distMi,el=S.util.el,parseSeptaDate=S.util.parseSeptaDate,shortText=S.util.shortText,state=S.util.state,store=S.util.store;/*@split*/
+var $=S.util.$,distMi=S.util.distMi,el=S.util.el,parseSeptaDate=S.util.parseSeptaDate,shortText=S.util.shortText,store=S.util.store;/*@split*/
 var alertKey=S.feed.alertKey,collect=S.feed.collect,idleNow=S.feed.idleNow,pauseNow=S.feed.pauseNow,septa=S.feed.septa;/*@split*/
 var vehicleAlertKey=S.feed.vehicleAlertKey;/*@split*/
 var NARROW=S.ui.NARROW;/*@split*/

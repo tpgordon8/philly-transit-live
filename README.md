@@ -16,14 +16,14 @@ caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md). By defau
 loaded with ordinary `<script src>` tags in dependency order: `util` (helpers, storage, shared state), `feed` (vehicle
 feed, ghost filter, idle pause, refresh), `ui` (map, markers, detail panel, places), `stops` (stop links, stop board,
 ETA), `alerts` (service alerts, leave-now rules), `planner` (trip planner core), `trip` (trip planner interface) and
-`main` (test hook and start). Each file adds only `window.SEPTA.<name>`. If a file fails to load, a red banner at the
+`main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else is global. If a file fails to load, a red banner at the
 top of the page names it. How the files fit together and how to add one: [ARCHITECTURE.md](ARCHITECTURE.md) section 14.
 
 ## Run the tests
 
 Needs Python 3 with Playwright (headless Chromium) and, for the Worker unit test, Node.
 
-    python3 tests/run.py --fast           # fast subset, one or more tests per feature area (CI gate on every push)
+    python3 tests/run.py --fast           # fast subset, one or more tests per feature area (CI gate on every pull request and on main)
     python3 tests/run.py                  # whole offline suite (runs on main in CI)
     python3 tests/run.py --only stop      # only tests whose file or name contains "stop"
     python3 tests/run.py --jobs 2         # worker processes (default: CPU count, at most 4)
@@ -40,13 +40,13 @@ Tagging: each `tests/test_*.py` has a module-level set naming its fast tests, fo
     FAST = {"test_boot_and_refresh", "test_ghost_filter"}
 
 Every other `test_*` function in the file is full-only. Put a test in `FAST` when it covers a feature area the fast
-set would otherwise miss or is the cheapest test of that area; keep the fast run near 90 seconds. `run.py` stops with
+set would otherwise miss or is the cheapest test of that area; keep the fast run under 90 seconds on 2 CPUs (measured: 54 tests, 74 s wall on a 2-CPU machine that was also busy with other jobs, load average about 7; it was 95 s before the fast set was trimmed). `run.py` stops with
 an error if `FAST` is missing or names a test that does not exist. The Worker unit test (`tests/test_worker.mjs`) is
 always in the fast set.
 
 `tests/test_modules.py` covers the script split: a blocked `js/` file shows the error banner, `window` gains only
 `SEPTA`, and file sizes and load order stay as documented. Tests that grep the source use `app_source(root)` or
-`app_script(root)` from `tests/harness.py`, which read `index.html` plus the `js/` files. `python3 tools/check_split.py`
+`app_script(root)` from `tests/harness.py`, which read `index.html` plus the `js/` files. `python3 tools/check_split.py` (also run by CI)
 compares the `js/` files with the last single-file `index.html` (commit `cc22b7e`) and fails unless the move was pure.
 
 `tests/test_data_sanity.py` guards `data/bus-network.json`: route, stop and pattern counts within 10 percent of
@@ -55,12 +55,19 @@ the counts, update the baseline in the same commit.
 
 ## Continuous integration and data refresh
 
-`.github/workflows/ci.yml` runs the Worker test and the fast suite on every push and pull request, and the full suite
-on `main`. `.github/workflows/refresh-bus-network.yml` runs monthly (and on demand from the Actions tab): it rebuilds
+`.github/workflows/ci.yml` runs the fast suite (which includes the Worker unit test) on every pull request and on pushes to
+`main`, and the full suite on `main`. A branch with an open pull request is tested once, and a newer push cancels the older run. `.github/workflows/refresh-bus-network.yml` runs monthly (and on demand from the Actions tab): it rebuilds
 `data/bus-network.json` with `tools/build_network.py` from SEPTA's GTFS zip, and only if the feed's validity dates
 changed opens a pull request with the new file and the data test results. The repository setting "Allow GitHub
 Actions to create and approve pull requests" must be on. Pull requests opened by the workflow do not start CI on
-their own; close and reopen the pull request to run it.
+their own; close and reopen the pull request to run it. If a refresh pull request is still open the next run does nothing,
+and the job never force-pushes over a branch that has an open pull request, so commits you add to it are safe.
+
+GitHub switches off scheduled workflows in a repository with no activity for 60 days. The refresh workflow has a
+`keepalive` job that re-enables itself through the Actions API each month (it needs no secret, only the workflow's own
+token). I could not verify offline that this call resets GitHub's timer; if the monthly run stops appearing in the
+Actions tab, open Actions, choose "Refresh bus network", click "Enable workflow", and then "Run workflow" once.
+Merging any commit to `main` also counts as activity.
 
 ## Deploy the Worker
 
@@ -80,3 +87,38 @@ Worker. The Worker stores nothing of its own beyond a short-lived edge cache of 
 is stored in the page: the From and To text, the options and the drawn plan live only in the open page. If the Worker is
 down, the page falls back once to asking those two services directly.
 Typed addresses are geocoded by Nominatim, as in search.
+
+## Contributing
+
+**Run the tests.** `python3 tests/run.py --fast` for the quick gate before every push, `python3 tests/run.py` for the whole
+suite before merging (several minutes). `--only <text>` narrows to matching tests; the Playwright version CI uses is
+pinned in `.github/workflows/ci.yml`.
+
+**Add a module.** Follow ARCHITECTURE.md section 14.3: a new `js/<name>.js` shaped like `js/main.js`, a `<name>:{}` entry in
+the inline namespace object and a `<script src>` tag in `index.html`, the name in `FILES` in `tests/test_modules.py`, at
+most 600 lines. Then run the fast suite and `python3 tools/check_split.py`.
+
+**Regenerate the bus data.** The monthly workflow does it for you. By hand: `python3 tools/build_network.py --zip-url
+https://www3.septa.org/developer/gtfs_public.zip`, then `python3 tests/run.py --only network_data` and `--only data_sanity`.
+If route or stop counts really moved more than 10 percent, update `tests/data_baseline.json` in the same commit.
+
+**Deploy the Worker.** See "Deploy the Worker" above: paste `worker/worker.js` into the Cloudflare dashboard editor and
+deploy. No wrangler, no API token, no secrets. Run `python3 tests/live_smoke.py` afterwards.
+
+## Known limits
+
+- Cloudflare free plan: 100,000 Worker requests a day, and edge-cache hits count. A default page costs about 6,000 a
+  day; about 16 pages open around the clock reach the cap. The page stops requesting after an hour without interaction.
+  Details and the arithmetic: ARCHITECTURE.md section 2.
+- The Worker runs on `*.workers.dev`, where the Cache API does nothing, so `Stops` answers are cached 60 seconds, not the
+  intended day. A custom domain would fix that.
+- SEPTA's API is a free hackathon service with no promises: no bus predictions (arrival times are estimates from measured
+  speed), no CORS headers (hence the Worker), and occasional empty or stale feeds.
+- Third-party services with their own fair-use limits: the OpenStreetMap routing service and OSM tiles, Nominatim
+  (address search), Indego's public feed, Google Fonts and cdnjs. Any of them can be slow or down; the planner then
+  says so rather than guessing.
+- Bus schedule data (`data/bus-network.json`) is a snapshot of SEPTA's GTFS feed and expires on the feed's end date; the
+  planner warns when it is within 14 days of that date or past it.
+- Leave-now alerts fire only while the page is open; phones may pause background tabs. There is no push notification.
+- GitHub Pages and Actions free-tier limits apply, and scheduled workflows pause after 60 days without repository
+  activity (see above).

@@ -8,7 +8,6 @@ from harness import FIX, Session
 # Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
 FAST = {
     "test_e2e_toast_fires_once_at_threshold",
-    "test_labels_and_remove_button",
     "test_permission_flow",
     "test_rules_persist_across_reload",
     "test_unit_eval_rule",
@@ -533,3 +532,30 @@ def test_mobile_no_hscroll_with_section_rule_and_toast(root):
         row = s.page.evaluate("(() => { const b = document.querySelector('#stopCard .alertrow'); return b.scrollWidth <= b.clientWidth + 1 })()")
         assert row
         s.shot("leave_alerts_390")
+
+
+def test_hostile_vehicle_id_does_not_break_rendering_or_rules(root):
+    """SEPTA's VehicleID is free text. A double quote in it used to make the focus-restore selector in the stop board
+    throw inside apply(), which stopped marker updates and leave-now evaluation for every later refresh."""
+    hostile = '36"78]\\'
+    with Session(root) as s:
+        setup_moving(s, 3000)
+        bus(s, "3678")["VehicleID"] = hostile  # rename after positioning: setup_moving finds the bus by its old id
+        boot(s)
+        add_alert(s, 5)
+        key = "b" + hostile
+        fired = None
+        for i in range(16):
+            # keep keyboard focus on the hostile bus's board row so every refresh takes the focus-restore path
+            s.page.evaluate("(k) => { const r = [...document.querySelectorAll('#stopBoard .sbrow')].find(x => x.dataset.key === k); if (r) r.focus(); }", key)
+            step(s, hostile)
+            if toasts(s):
+                fired = toasts(s)
+                break
+        assert fired, status(s)
+        assert len(fired) == 1 and fired[0].startswith("Leave now — the 21 is about"), fired
+        assert stored_rules(s)[0]["last"]["key"] == key
+        assert s.page.locator("#stopBoard .sbrow").count() >= 1
+        assert s.markers() > 0
+        assert s.page.locator(".veh-wrap").count() > 0
+        assert not s.console_errors, s.console_errors

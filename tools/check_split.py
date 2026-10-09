@@ -17,7 +17,7 @@ left must be the same code, only rearranged:
 
 It also fails when a js file is over 600 lines, when the inline script left in index.html is 60 lines or more, when
 a js file assigns a window property other than SEPTA or __SEPTA_TEST__, or when index.html lists a js file that does
-not exist. Exit status 0 means all checks passed.
+not exist, or when a file imports or shims the same name twice. Functions named in ALLOWED_CHANGES (deliberate later fixes) are excluded from the body comparison only. Exit status 0 means all checks passed.
 """
 import argparse
 import collections
@@ -30,6 +30,11 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEFAULT_BASE = "cc22b7e"
 MARK = "@split"
 MAX_JS_LINES = 600
+# Deliberate behaviour fixes made after the split. A function listed here must still exist in both versions, but its
+# body is not compared. Keep this list short and give the reason; every entry needs a test.
+ALLOWED_CHANGES = {
+    "renderStopBoard": "WP6: focus restore matches data-key by comparison instead of building a CSS selector from VehicleID",
+}
 MAX_INLINE_LINES = 60
 REGEX_PREV_WORDS = {"return", "typeof", "case", "in", "of", "delete", "void", "throw", "new", "else", "do", "instanceof"}
 PUNCT3 = {"===", "!==", "**=", "<<=", ">>=", ">>>", "...", "&&=", "||=", "??="}
@@ -222,6 +227,15 @@ def main():
                 kept.append(ln)
         code = "\n".join(kept)
         new_parts.append(code)
+        # An import (var x=S.mod.x) or shim (function x(){return S.mod.x...}) must not declare a name twice in one file.
+        seen = collections.Counter()
+        for ln in text.split("\n"):
+            if MARK in ln:
+                seen.update(re.findall(r"(?:\bvar |,)\s*([A-Za-z_$][\w$]*)=S\.[A-Za-z]+\.[A-Za-z_$]", ln))
+                seen.update(re.findall(r"^function ([A-Za-z_$][\w$]*)\(\)\{return S\.", ln))
+        for name, cnt in sorted(seen.items()):
+            if cnt > 1:
+                problems.append("%s declares %s %d times in its import and shim lines" % (f, name, cnt))
         for m in re.finditer(r"\bwindow\.([A-Za-z_$][\w$]*)\s*=(?!=)", code):
             if m.group(1) not in ("__SEPTA_TEST__",):
                 problems.append("%s assigns window.%s" % (f, m.group(1)))
@@ -246,8 +260,12 @@ def main():
         problems.append("top-level var names differ: only before %s, only after %s" % (
             sorted((collections.Counter(bv) - collections.Counter(nv)).elements()),
             sorted((collections.Counter(nv) - collections.Counter(bv)).elements())))
-    bc = collections.Counter(" ".join(t for t, _ in ch) for ch in b_chunks)
-    nc = collections.Counter(" ".join(t for t, _ in ch) for ch in n_chunks)
+    def keep(ch):
+        head = " ".join(t for t, _ in ch[:3])
+        return not any(head == "function %s (" % n for n in ALLOWED_CHANGES)
+
+    bc = collections.Counter(" ".join(t for t, _ in ch) for ch in b_chunks if keep(ch))
+    nc = collections.Counter(" ".join(t for t, _ in ch) for ch in n_chunks if keep(ch))
     if bc != nc:
         for label, diff in (("only before", bc - nc), ("only after", nc - bc)):
             for chunk_text, cnt in list(diff.items())[:5]:
@@ -258,12 +276,14 @@ def main():
     print("now  %s: %d functions, %d vars, %d chunks, %d tokens (%d wrapper lines ignored)" % (
         ", ".join(f.split("/")[-1] for f in files), len(nf), len(nv), len(n_chunks), len(n_toks), wrapper_lines))
     print("inline script lines left in index.html: %d" % inline_lines)
+    for n, why in ALLOWED_CHANGES.items():
+        print("allowed change: %s (%s)" % (n, why))
     if problems:
         print("FAIL")
         for p in problems:
             print(" -", p)
         return 1
-    print("OK: pure move (same functions, same vars, same token streams)")
+    print("OK: pure move apart from the %d allowed change(s) above (same functions, same vars, same token streams)" % len(ALLOWED_CHANGES))
     return 0
 
 

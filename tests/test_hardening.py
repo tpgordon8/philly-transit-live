@@ -6,7 +6,6 @@ from harness import FIX, Session, app_source
 
 # Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
 FAST = {
-    "test_banner_reflects_each_sources_state",
     "test_bogus_future_record_does_not_empty_map",
     "test_chips_counts_markers_and_toggles",
     "test_corrupt_prefs_null",

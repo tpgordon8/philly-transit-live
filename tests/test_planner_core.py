@@ -13,10 +13,8 @@ from harness import FIX, Session, haversine_m
 # Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
 FAST = {
     "test_a_load_network_rejects_malformed_and_indexes_good",
-    "test_a_nearby_stops_radius",
     "test_a_route_leg_client",
     "test_c_walk_bus_walk_stops_ride_and_live_wait",
-    "test_d_bike_bus_walk",
     "test_e_legs_sum_to_total_and_have_paths",
 }
 
