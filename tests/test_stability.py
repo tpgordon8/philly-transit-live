@@ -249,7 +249,7 @@ def test_malformed_200_takes_the_stale_path(root):
             assert stale and err and count > 0, (label, stale_state(s))
             assert s.markers() == n, (label, "the map must keep the last good positions", s.markers(), n)
             assert not s.page.locator("#empty").is_visible(), label
-            assert "last known" in s.page.inner_text("#banner").lower(), (label, s.page.inner_text("#banner"))
+            assert "older positions" in s.page.inner_text("#banner").lower(), (label, s.page.inner_text("#banner"))
     with Session(root) as s:  # an HTML page answered with status 200
         boot(s)
         s.page.route("**/septa-proxy.tpgordon8.workers.dev/TransitView*", lambda r: r.fulfill(status=200, content_type="text/html", body="<html><body>Maintenance</body></html>"))
