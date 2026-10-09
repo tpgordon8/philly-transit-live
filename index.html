@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="css/map.css">
 <link rel="stylesheet" href="css/panel.css">
 <link rel="stylesheet" href="css/trip.css">
+<link rel="stylesheet" href="css/suggest.css">
 <link rel="stylesheet" href="css/stops.css">
 <link rel="stylesheet" href="css/alerts.css">
 </head>
@@ -30,6 +31,7 @@
         <input type="text" id="addr" placeholder="Street address or intersection" aria-label="Street address">
         <button class="btn primary" type="submit" id="btnSearch">Search</button>
       </form>
+      <p class="empty-line sug-attr" id="sugAttrFind">Suggestions: <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></p>
       <div class="row" style="margin-top:8px">
         <button class="btn" type="button" id="btnLocate" style="flex:1">Use my location</button>
       </div>
@@ -60,10 +62,11 @@
         <p class="note bad tp-err" id="tripToErr" role="alert" hidden></p>
         <div class="tp-chips" id="tripChips" role="group" aria-label="Saved places for the destination" hidden></div>
         <button class="btn primary tp-go" type="submit" id="tripGo">Plan trip</button>
+        <p class="empty-line sug-attr" id="sugAttrTrip">Suggestions: <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></p>
       </form>
       <div id="tripResults" aria-busy="false" hidden></div>
       <div id="tripLive" class="sr-only" role="status" aria-live="polite"></div>
-      <p class="empty-line tp-priv">What is sent where. A typed From or To address goes to Nominatim (OpenStreetMap) to be looked up, as in search. Every leg's start and end coordinates then go to this site's Worker, which rounds them to 4 decimals (about 10 m), forwards them to the OpenStreetMap-based routing service (routing.openstreetmap.de), and keeps nothing beyond a short-lived cache of each answer. Your saved Home and place buttons, Use my location and the map center are not looked up, but their coordinates are sent as route legs in exactly the same way as a typed address. Indego's public station feed is read through the Worker. If the Worker cannot be reached, is an older version, or reports a server error (502, 503 or 504), the page asks the routing service and Indego directly instead, and then the routing service receives the leg coordinates unrounded, to 5 decimals (about 1 m). An answer such as "no route" is not a failure and is never re-sent. Nothing is stored in this page.</p>
+      <p class="empty-line tp-priv">What is sent where. While you type in the search box or in From or To, the typed text and the map center (or your saved Home), rounded to 2 decimals (about 1 km), go to Photon (photon.komoot.io, OpenStreetMap data) to suggest places and addresses. Places on the built-in list of well-known Philadelphia places are suggested without any request. A typed From or To address you did not pick from the suggestions, and intersections such as 10th and Race, go to Nominatim (OpenStreetMap) to be looked up, as in search. Every leg's start and end coordinates then go to this site's Worker, which rounds them to 4 decimals (about 10 m), forwards them to the OpenStreetMap-based routing service (routing.openstreetmap.de), and keeps nothing beyond a short-lived cache of each answer. Your saved Home and place buttons, Use my location and the map center are not looked up, but their coordinates are sent as route legs in exactly the same way as a typed address. Indego's public station feed is read through the Worker. If the Worker cannot be reached, is an older version, or reports a server error (502, 503 or 504), the page asks the routing service and Indego directly instead, and then the routing service receives the leg coordinates unrounded, to 5 decimals (about 1 m). An answer such as "no route" is not a failure and is never re-sent. Nothing is stored in this page.</p>
       <p class="empty-line tp-attr" id="tripAttr">Routing by <a href="https://routing.openstreetmap.de/" target="_blank" rel="noopener">OSRM</a> / data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></p>
     </section>
 
@@ -117,7 +120,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script>
 /* Module namespace and load-failure banner (ARCHITECTURE.md section 14). Every js/*.js file adds only window.SEPTA.<name>. */
-window.SEPTA={util:{},feed:{},map:{},panel:{},stops:{},alerts:{},routing:{},candidates:{},planner:{},trip:{},failed:[]};
+window.SEPTA={util:{},feed:{},map:{},panel:{},stops:{},alerts:{},routing:{},candidates:{},planner:{},trip:{},landmarks:{},suggest:{},failed:[]};
 window.SEPTA.loadFailed=function(file){
   var S=window.SEPTA,box=document.getElementById('loadError');
   if(S.failed.indexOf(file)<0)S.failed.push(file);
@@ -137,6 +140,8 @@ window.addEventListener('error',function(e){
 <script src="js/util.js"></script>
 <script src="js/feed.js"></script>
 <script src="js/map.js"></script>
+<script src="js/landmarks.js"></script>
+<script src="js/suggest.js"></script>
 <script src="js/panel.js"></script>
 <script src="js/stops.js"></script>
 <script src="js/alerts.js"></script>

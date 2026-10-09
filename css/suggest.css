@@ -1,0 +1,11 @@
+/* suggest.css: the place and address suggestion list (js/suggest.js). The list is position:fixed inside <body>, so the scrolling
+   sidebar cannot clip it; js/suggest.js sets its left, top, width and max-height. */
+.sug-list{position:fixed;z-index:1400;margin:0;padding:4px;list-style:none;overflow-y:auto;overscroll-behavior:contain;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow)}
+.sug-opt{display:flex;flex-direction:column;justify-content:center;min-height:44px;padding:6px 10px;border-left:4px solid transparent;border-radius:6px;cursor:pointer;touch-action:manipulation}
+.sug-l1{font-weight:600;overflow-wrap:anywhere}
+.sug-l2{font-size:12.5px;color:var(--mute);overflow-wrap:anywhere}
+@media (hover:hover){.sug-opt:hover{background:var(--paper)}}
+/* The highlighted option has a heavy edge bar and an outline as well as a tint, so it does not rely on colour. */
+.sug-opt[aria-selected=true]{background:color-mix(in srgb,var(--accent) 14%,var(--panel));border-left-color:var(--accent);outline:2px solid var(--accent);outline-offset:-2px}
+@media (forced-colors:active){.sug-opt[aria-selected=true]{outline-color:Highlight;border-left-color:Highlight}}
+.sug-attr{margin-top:6px;font-size:12px}
