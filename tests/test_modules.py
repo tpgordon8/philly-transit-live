@@ -49,7 +49,7 @@ def test_page_adds_only_the_septa_namespace(root):
         allowed = {"SEPTA", "L", "leaflet", "__SEPTA_TEST__"}  # our namespace, Leaflet (CDN script; it also exposes `leaflet`), the test hook
         stray = sorted(k for k in extra if k not in allowed and not k.startswith("__pw") and not k.startswith("_leaflet"))
         assert not stray, f"unexpected globals: {stray}"
-        assert set(s.page.evaluate("Object.keys(window.SEPTA)")) >= set(FILES)
+        assert set(s.page.evaluate("Object.keys(window.SEPTA)")) >= set(FILES) - {"main"}  # main.js adds no namespace of its own
 
 
 def test_js_files_are_small_and_listed_in_order(root):

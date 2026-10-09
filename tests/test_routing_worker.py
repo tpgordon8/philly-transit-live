@@ -144,13 +144,14 @@ def test_w_worker_422_noroute_is_an_answer_not_an_outage(root):
         assert len(s.mocks.worker_route_hits) == 1 and s.mocks.direct_routing_hits == []
 
 
-def test_w_worker_500_and_other_non_listed_statuses_are_final(root):
-    """Only a network error, 404 and 502/503/504 fall back; a plain 500 from the Worker does not."""
+def test_w_worker_500_falls_back_once(root):
+    """A crashed Worker answers 500 (Cloudflare error 1101); that is an outage like 502/503/504 and falls back once."""
     with Session(root, init_scripts=[HOOK]) as s:
         open_session(s)
         s.mocks.worker_mode = "http500"
-        assert s.page.evaluate(ROUTE_JS, [A, B]) == {"err": "routing_unavailable"}
-        assert len(s.mocks.worker_route_hits) == 1 and s.mocks.direct_routing_hits == []
+        r = s.page.evaluate(ROUTE_JS, [A, B])
+        assert "meters" in r, r
+        assert len(s.mocks.worker_route_hits) == 1 and len(s.mocks.direct_routing_hits) == 1
 
 
 def test_w_direct_fallback_reads_osrm_noroute_without_retry(root):

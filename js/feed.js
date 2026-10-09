@@ -74,7 +74,8 @@ if(S.halt)return;/*@split*/
 var $=S.util.$,DROP_AFTER_MS=S.util.DROP_AFTER_MS,REFRESH_MS=S.util.REFRESH_MS,distMi=S.util.distMi,esc=S.util.esc,isStarred=S.util.isStarred;/*@split*/
 var routeFilterOn=S.util.routeFilterOn,starKey=S.util.starKey,state=S.util.state;/*@split*/
 /* ----- Network: SEPTA's API sends no CORS headers, so every call goes through our own Cloudflare Worker.
-   The Worker forwards three fixed endpoints (TransitView, TrainView, Alerts) and adds CORS. Retry once on failure. ----- */
+   The Worker forwards an allowlist of SEPTA feeds and a few validated query endpoints, and adds CORS; the list changes
+   with the Worker version, so see ARCHITECTURE.md section 2 for the current endpoints. Retry once on failure. ----- */
 var WORKER='https://septa-proxy.tpgordon8.workers.dev';
 /* ----- Idle pause (ARCHITECTURE.md section 2): after an hour without a real user interaction the page makes no
    requests at all. Only pointerdown, keydown, touchstart, wheel, focus and becoming visible count; timers and fetches do not. ----- */

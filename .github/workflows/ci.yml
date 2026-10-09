@@ -1,14 +1,17 @@
 name: CI
 
+# Push runs only for main; every other branch is covered by its pull request, so a same-repo branch is not tested twice.
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
 
+# A newer run on the same ref (branch, or pull request merge ref) cancels the superseded one.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -29,9 +32,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install playwright==1.56.0
           python -m playwright install --with-deps chromium
-      - name: Worker unit tests
-        run: node tests/test_worker.mjs
-      - name: Fast suite
+      - name: Fast suite (includes the Worker unit tests; run.py runs tests/test_worker.mjs itself)
         run: python tests/run.py --fast
       - name: Keep test output
         if: failure()

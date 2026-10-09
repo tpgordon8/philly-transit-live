@@ -11,8 +11,6 @@ FAST = {
     "test_escape_closes_only_one_thing",
     "test_marker_enter_space_select_and_label",
     "test_single_clear_selection_and_all_paths_work",
-    "test_status_text_not_live_and_state_changes_announced",
-    "test_touch_targets_at_least_40",
 }
 
 STOPS = json.loads((FIX / "Stops.json").read_text())

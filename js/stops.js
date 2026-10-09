@@ -54,7 +54,7 @@ function etaFor(v,stop){
 }
 S.stops.speedHist=speedHist;S.stops.updateSpeedHist=updateSpeedHist;S.stops.speedMps=speedMps;S.stops.etaFor=etaFor;/*@split*/
 if(S.halt)return;/*@split*/
-var $=S.util.$,DROP_AFTER_MS=S.util.DROP_AFTER_MS,angDiff=S.util.angDiff,bearing=S.util.bearing,distMi=S.util.distMi,el=S.util.el;/*@split*/
+var $=S.util.$,DROP_AFTER_MS=S.util.DROP_AFTER_MS,el=S.util.el;/*@split*/
 var lateInfo=S.util.lateInfo,num=S.util.num,state=S.util.state;/*@split*/
 var collect=S.feed.collect,septa=S.feed.septa;/*@split*/
 var map=S.ui.map,mapEl=S.ui.mapEl,select=S.ui.select,setCenter=S.ui.setCenter;/*@split*/
@@ -189,7 +189,7 @@ function renderStopBoard(){
   var age=el('div','sbfine');age.id='boardAge';box.appendChild(age);
   updateBoardAge();
   card.scrollTop=top;
-  if(fk){var f=box.querySelector('button[data-key="'+fk+'"]');if(f)f.focus({preventScroll:true})}
+  if(fk){var f=null;box.querySelectorAll('button[data-key]').forEach(function(x){if(x.dataset.key===fk)f=x});if(f)f.focus({preventScroll:true})}
 }
 function updateBoardAge(){
   var n=$('#boardAge'),b=state.src.bus;

@@ -12,10 +12,7 @@ from harness import FIX, Session
 
 # Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
 FAST = {
-    "test_a_cards_headline_summary_selection_and_badges",
     "test_a_form_labels_placement_and_geocoding",
-    "test_b_selection_draws_legs_markers_and_clear_removes",
-    "test_f_geocode_miss_message_next_to_field",
     "test_f_routing_failure_message_and_retry",
     "test_i_phone_no_horizontal_scroll_touch_targets_and_show_map",
     "test_s_out_of_region_is_refused_before_any_call",

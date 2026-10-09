@@ -7,7 +7,7 @@ Copies of the app outside the repo (for example a published artifact) are stale 
 
 ```
 Browser (GitHub Pages, static index.html)
-   │  GET https://septa-proxy.tpgordon8.workers.dev/<TransitView|TrainView|Alerts>
+   │  GET https://septa-proxy.tpgordon8.workers.dev/<endpoint>   (section 2 lists them)
    ▼
 Cloudflare Worker "septa-proxy"  (worker/worker.js)
    │  GET https://api.septa.org/hackathon/<Name>/index.php
@@ -38,10 +38,13 @@ SEPTA public hackathon API (no key, no CORS headers)
   its own next stop first, or never reach this stop. Buses 45–60° off stay listed with "—".
 - The page never calls SEPTA directly. `api.septa.org` and `www3.septa.org` send no CORS headers, and the free
   public CORS proxies are dead (corsproxy.io wants a key; allorigins and codetabs time out).
-- Third-party calls that remain: OpenStreetMap tiles, Google Fonts, cdnjs (Leaflet 1.9.4), and Nominatim for
-  address search. Nominatim receives the address the user types. The one other exception is a user click: the
-  "Open transit directions" link in the Get me home card opens Google Maps with the user's start point and Home
-  coordinates in the URL, and the card says so next to the link. Nothing else leaves the browser.
+- Third-party calls the page makes itself: OpenStreetMap tiles, Google Fonts, cdnjs (Leaflet 1.9.4), and Nominatim for
+  address search (it receives the address the user types, also for the trip planner's From and To). Trip planning does
+  not call its providers directly while the Worker is healthy: routing and Indego go through the Worker first, and a
+  direct provider call happens only as a fallback (what is sent, to whom, and when the fallback applies: section 12.4).
+  The one other exception is a user click: the "Open transit directions" link in the Get me home card opens Google Maps
+  with the user's start point and Home coordinates in the URL, and the card says so next to the link. Personal state
+  (center, saved places, starred routes, alert rules) never leaves the browser.
 - Deviation from the plan text: the page calls `TransitView` with **no `?route=`**, which returns every active
   vehicle in one response (about 290 KB). One Worker request per refresh is cheaper against the daily budget than
   one request per route, so the plan's "batch route requests" goal is met by design.
@@ -49,15 +52,18 @@ SEPTA public hackathon API (no key, no CORS headers)
 ## 2. The Worker
 
 - Allowlist: `TransitView`, `TrainView`, `Alerts` (no parameters; the query string is ignored), plus `Stops?route=<id>`
-  (id matches `^[A-Za-z0-9]{1,6}$`, edge-cached a day) and `Arrivals?station=<name>` (name matches
+  (id matches `^[A-Za-z0-9]{1,6}$`; meant to be cached a day, see the caching note below) and `Arrivals?station=<name>` (name matches
   `^[A-Za-z0-9 .'&/-]{2,40}$`, upstream `results=10`, cached 15 s). Bad parameters get 400 without reaching SEPTA.
   Anything else is a 404. Unit test: `node tests/test_worker.mjs`.
 - New in v3: `/route/<foot|bike|car>?from=lat,lng&to=lat,lng` (both points finite numbers inside lat 39.6 to 40.4,
   lng -75.9 to -74.5, rounded to 4 decimals before the upstream call; anything else is 400; edge-cached 60 s) and
   `/indego/<information|status>` (GBFS, cached 1 h / 30 s). Upstream errors are never cached (`cacheTtlByStatus` makes
   non-2xx uncacheable) and an answer that is not a valid route or station feed is a 502. `Stops` answers that are empty or
-  not an array live 60 s; a real list lives a day through the Cache API, which only works on a custom domain, so on
-  `*.workers.dev` Stops are cached 60 s (safe, unverified offline).
+  not an array live 60 s. A real list is meant to live a day, through the Cache API, which only does anything on a
+  custom domain. What is true today: the deployed Worker runs on `*.workers.dev`, where the Cache API is a no-op, so
+  Stops are cached for the 60 s subrequest TTL (always safe, but up to 1,440 times more upstream fetches per route and
+  edge location than the intended day). Moving to a custom domain would turn the day-long cache on without a code
+  change. `tests/test_worker.mjs` covers the TTL choice; the workers.dev behaviour itself cannot be verified offline.
 - CORS and origins: allows `https://tpgordon8.github.io` plus `http://localhost` and `http://127.0.0.1` on any port. Any
   other `Origin` header, including `null` and the empty string, gets 403. A request with no `Origin` is allowed (curl,
   the smoke test) unless it carries a `Sec-Fetch-Site` of cross-site or same-site. This is a soft guard, since non-browser
@@ -203,7 +209,7 @@ path. It exits 1 on any failure. Run it after every Worker deploy.
 
 1. **Task 1.2 is not client-only.** Stops come from `Stops/index.php?req1=<route>` (a per-route list of
    `{stopid, stopname, lat, lng}`, about 128 stops for route 21, unordered, no direction). The Worker does not
-   allow it. Task W1 adds `Stops` (route validated against `^[A-Za-z0-9]{1,6}$`, edge-cached for a day) and, for
+   allow it. Task W1 adds `Stops` (route validated against `^[A-Za-z0-9]{1,6}$`; cached a day where the Cache API works, else 60 s: section 2) and, for
    rail boards, `Arrivals` (station validated). W1 is architect-owned and deploys first.
 2. **Stop board ETAs.** SEPTA supplies no bus predictions here. ETAs for buses are computed from the vehicle's
    measured speed (successive refreshes), its distance to the stop, and its `next_stop_id`/heading. If speed is
@@ -258,8 +264,8 @@ arrive-by times in v1. Car is a standalone comparison option, never combined wit
 ### 12.1 Data sources
 | Need | Source | Notes |
 |---|---|---|
-| Street paths and times for walk, bike, car | OSM-based routing service `https://routing.openstreetmap.de/routed-foot|routed-bike|routed-car/route/v1/driving/<lng,lat;lng,lat>` (OSRM API, CORS open) | Fair use only. Only finalist legs are requested (at most about a dozen calls per plan), results cached in memory per coordinate pair and profile. Coordinates leave the browser to this third party, like typed addresses already go to Nominatim; the UI and README say so. |
-| Indego stations and live bike/dock counts | GBFS: `https://gbfs.bcycle.com/bcycle_indego/station_information.json` (cached for the page session) and `station_status.json` (fetched fresh for each plan, ttl 60 s). CORS open, no key | `num_bikes_available`, `num_bikes_available_types` (electric/classic/smart), `num_docks_available`, `is_renting`, `is_returning`. Direct from the browser, so it costs no Worker requests. |
+| Street paths and times for walk, bike, car | OSM-based routing service `https://routing.openstreetmap.de/routed-foot|routed-bike|routed-car/route/v1/driving/<lng,lat;lng,lat>` (OSRM API, CORS open) | Fair use only. Only finalist legs are requested (at most about a dozen calls per plan), results cached in memory per coordinate pair and profile. Coordinates reach this third party, like typed addresses already reach Nominatim; the UI and README say so. They go through the Worker; a direct call is only the fallback (section 12.4). |
+| Indego stations and live bike/dock counts | GBFS: `https://gbfs.bcycle.com/bcycle_indego/station_information.json` (cached for the page session) and `station_status.json` (fetched fresh for each plan, ttl 60 s). CORS open, no key (the page reads them through the Worker's `/indego/*`, which costs Worker requests; direct only as the fallback, section 12.4) | `num_bikes_available`, `num_bikes_available_types` (electric/classic/smart), `num_docks_available`, `is_renting`, `is_returning`. |
 | Bus network topology and scheduled running times | SEPTA static GTFS (`https://www3.septa.org/developer/gtfs_public.zip`, inner `google_bus.zip`) preprocessed offline by `tools/build_network.py` into `data/bus-network.json` | Committed to the repo, served by GitHub Pages, fetched lazily the first time the planner opens. Regenerate when SEPTA publishes a new feed. The file records the feed's validity dates and the UI shows "schedule data as of ...". |
 | Live buses | existing TransitView feed already in the page | Used for "is this route running now" and for the wait at the boarding stop. |
 
@@ -336,25 +342,25 @@ Goal: leave no known debt before the next feature. Every package keeps behaviour
 
 ### 13.1 Debt register
 
-| ID | Debt | Risk | Package |
-|----|------|------|---------|
-| D1 | Planner calls the free OSM routing service and Indego directly from the page: no cache, no shared rate limit, no provider switch | Trips fail when the provider throttles; users' coordinates go straight to a third party | WP1 |
-| D2 | Cached `Stops` answers of `[]` live for a day | One bad upstream answer hides a route's stops all day | WP1 |
-| D3 | Worker accepts an `Origin` of `null` | Soft guard | WP1 |
-| D4 | Planner reports every failure as "some bus options could not be completed" | User cannot tell a routing limit from "no bus trip exists" | WP2 |
-| D5 | Indego pin counts are parsed back out of leg note text | Breaks silently when wording changes | WP2 |
-| D6 | Clear trip does not restore the previous map view; "No trip found" state untested; plan on a 390 px phone map is small | Rough edges | WP2 |
-| D7 | Bus schedule data is a static snapshot that expires 2027-02-20 and must be regenerated by hand | Silent staleness | WP2 (warning in UI), WP4 (automation) |
-| D8 | One 2,300-line script block with shared globals | Every change costs more to read around | WP3 |
-| D9 | Full suite takes ~9 minutes; no CI | Slow feedback, no gate on main | WP4 |
-| D10 | Leftover feature branches and worktrees | Clutter | lead |
+| ID | Debt | Risk | Package | Status |
+|----|------|------|---------|----|
+| D1 | Planner calls the free OSM routing service and Indego directly from the page: no cache, no shared rate limit, no provider switch | Trips fail when the provider throttles; users' coordinates go straight to a third party | WP1 | in review round 2 (WP5) |
+| D2 | Cached `Stops` answers of `[]` live for a day | One bad upstream answer hides a route's stops all day | WP1 | closed, `272f1b2`; the one-day cache only works on a custom domain (section 2) |
+| D3 | Worker accepts an `Origin` of `null` | Soft guard | WP1 | closed, `272f1b2` |
+| D4 | Planner reports every failure as "some bus options could not be completed" | User cannot tell a routing limit from "no bus trip exists" | WP2 | in review round 2 (WP5) |
+| D5 | Indego pin counts are parsed back out of leg note text | Breaks silently when wording changes | WP2 | closed, `99f1441` |
+| D6 | Clear trip does not restore the previous map view; "No trip found" state untested; plan on a 390 px phone map is small | Rough edges | WP2 | in review round 2 (WP5) |
+| D7 | Bus schedule data is a static snapshot that expires 2027-02-20 and must be regenerated by hand | Silent staleness | WP2 (warning in UI), WP4 (automation) | closed after review round 2 (warning in UI `99f1441`; refresh workflow `1da8b58`, hardened and given a keepalive in round 2) |
+| D8 | One 2,300-line script block with shared globals | Every change costs more to read around | WP3 | closed after review round 2 (split `daa0d6d`; duplicate declarations and the unused `S.main` removed in round 2) |
+| D9 | Full suite takes ~9 minutes; no CI | Slow feedback, no gate on main | WP4 | closed after review round 2 (runner and CI `1da8b58`; duplicate Worker test, duplicate branch runs and the fast-set time fixed in round 2) |
+| D10 | Leftover feature branches and worktrees | Clutter | lead | lead task, not a code change; verify with `git branch -a` and `git worktree list` |
 
 ### 13.2 Work packages
 
 **WP1 Worker v3 and client routing (owns `worker/worker.js`, `tests/test_worker.mjs`, `tests/live_smoke.py`, and in `index.html` only the `ROUTE_BASE`/`INDEGO_BASE` constants and `routeLeg`/`loadIndego` fetch calls).**
 - New endpoints: `/route/<foot|bike|car>?from=lat,lng&to=lat,lng` and `/indego/<information|status>`. `from` and `to` must be two finite numbers inside a Philadelphia-region box (lat 39.6 to 40.4, lng -75.9 to -74.5); anything else gets 400. Coordinates are rounded to 4 decimals before the upstream call and the cache key, edge-cached 60 s (route) and 30 s (Indego status), 1 hour for Indego information. Upstream errors are never cached.
 - Empty or non-array `Stops` upstream answers are cached 60 s, not a day. Origin `null` and empty origins are rejected with 403 for browser-style requests; the allow-list is the Pages origin plus localhost and 127.0.0.1 on any port. Existing endpoint behaviour is otherwise unchanged.
-- Client: planner routing and Indego go through the Worker first; on a Worker 5xx or network error it falls back once to the direct provider URL, so one outage cannot take the planner down. Privacy text in the page, README and section 12.4 is updated: coordinates go to our Worker, which forwards them to the routing service and does not store them.
+- Client: planner routing and Indego go through the Worker first; when that fails it falls back to the direct provider URL (the exact rules are in section 12.4), so one outage cannot take the planner down. Privacy text in the page, README and section 12.4 is updated: coordinates go to our Worker, which forwards them to the routing service and does not store them.
 - Tests: Worker unit tests for validation, rounding, caching TTLs, null origin, and error non-caching; page tests for Worker-first, fallback, and that no direct provider call is made when the Worker answers.
 
 **WP2 Planner honesty and polish (owns the planner and trip-UI regions of `index.html`, `tests/test_planner_core.py`, `tests/test_trip_ui.py`).**
@@ -369,7 +375,7 @@ Goal: leave no known debt before the next feature. Every package keeps behaviour
 - Pages deploy serves the files as is; the service of any file that fails to load shows a visible error banner rather than a blank page.
 
 **WP4 Tests, CI and data freshness (owns `tests/run.py`, `.github/`, `tools/`, `README.md` test section; no `index.html` edits).**
-- Tag tests `fast` or `full`. `run.py --fast` runs the fast set (target under 90 s) and covers every package at least once; plain `run.py` still runs everything. Run test files in parallel processes with isolated output folders.
+- Tag tests `fast` or `full`. `run.py --fast` runs the fast set (target under 90 s on 2 CPUs). Measured on 2 CPUs while the machine was also loaded by other jobs (load average about 7): the first fast set of 64 tests took 95 s, which missed the target, so it was trimmed to 54 tests (one or two fewer in six files, every test file keeps at least one fast test) and now takes 74 s, with CPU time down from 90 s to 71 s. The full suite of 208 tests took 899 s on the same loaded machine; an idle-machine figure was not measured and covers every package at least once; plain `run.py` still runs everything. Run test files in parallel processes with isolated output folders.
 - GitHub Actions: on every push and pull request run the fast suite plus the Worker tests; on main also the full suite. A monthly scheduled workflow regenerates the bus network from SEPTA's GTFS URL; if the feed date range changed it opens a pull request with the new data and the test results, otherwise it does nothing. If the repo token cannot push workflow files, deliver the files committed in a separate branch and say so.
 - Add a data sanity test: route and stop counts within 10 percent of the committed file, file under 1.5 MB, and feed end date in the future.
 
@@ -403,7 +409,7 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 | `js/trip.js` | 302 | trip planner interface: form, results, map drawing |
 | `js/main.js` | 36 | the `window.__SEPTA_TEST__` hook and the start-up calls |
 
-The inline script before them creates `window.SEPTA` (one object per file, plus `failed` and `loadFailed`) and the load-error listener. `index.html` then loads `util`, `feed`, `ui`, `stops`, `alerts`, `planner`, `trip`, `main` in that order, then a one-line check that `main.js` ran.
+The inline script before them creates `window.SEPTA` (one object per file except `main`, which adds none, plus `failed` and `loadFailed`) and the load-error listener. `index.html` then loads `util`, `feed`, `ui`, `stops`, `alerts`, `planner`, `trip`, `main` in that order, then a one-line check that `main.js` ran.
 
 ### 14.2 How the files share code
 
@@ -417,7 +423,7 @@ The old script was one closure, so every function saw every other function and v
 
 Function bodies and every other line of code are moved unchanged. Top-level statements that run at load time (event wiring, `setInterval`, the one-time defaults migration) stay in the file that owns what they touch, in their original relative order, so timers and listeners are registered in the same order as before. The one exception is the `__SEPTA_TEST__.tripMap` assignment, which moved to `main.js` after the hook is created.
 
-`python3 tools/check_split.py` proves the move was pure: it removes the wrapper lines and compares the remaining code with `index.html` at `cc22b7e` as sorted function names, sorted var names, and the multiset of top-level code chunks as token streams. It also fails on a file over 600 lines, 60 or more inline lines, or a stray `window` assignment.
+The move was verified as pure at the time by a one-off checker (function names and token streams of every top-level chunk matched `index.html` at `cc22b7e`). The checker was retired in review round 2 because deliberate logic changes made its comparison meaningless; `tests/test_modules.py` keeps enforcing file size, load order, and that `window` gains only `SEPTA`.
 
 ### 14.3 Adding a module
 

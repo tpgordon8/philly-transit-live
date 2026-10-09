@@ -6,7 +6,7 @@ var DROP_AFTER_MS=S.util.DROP_AFTER_MS,distM=S.util.distM,isNum=S.util.isNum,sta
 var collect=S.feed.collect,skipped=S.feed.skipped;/*@split*/
 /* ===== Trip planner core (ARCHITECTURE.md section 12) =====
    Data clients and planner functions only: no DOM, no storage. Routing and Indego go through the Worker first. The ONLY cases that
-   fall back (once) to the direct provider URL are a network error, a Worker 404 (an older Worker) and a Worker 502/503/504; any other
+   fall back (once) to the direct provider URL are a network error, a Worker 404 (an older Worker) and a Worker 500/502/503/504; any other
    Worker answer, a 422 NoRoute included, is final. These run only when a caller (the planner UI) invokes them, so a user action
    works even when the page is idle-paused: they deliberately do not go through fetchOnce().
    Third parties receive only leg endpoints (routing service, via the Worker, rounded to 4 decimals there; unrounded 5 decimals in
@@ -55,7 +55,7 @@ function tpGetJson(url,noStore,ctx){
   });
 }
 /* Worker first (one attempt, no retry). ONE fallback to the direct provider (tpGetJson, with its own retry) only when the Worker
-   cannot be reached, answers 404 (an older Worker without the endpoint) or 502/503/504 (the Worker, or its upstream, is down),
+   cannot be reached, answers 404 (an older Worker without the endpoint) or 500/502/503/504 (the Worker, or its upstream, is down),
    or sends a 200 that is not JSON. Every other Worker answer is final: 422 {"code":"NoRoute"} and other 4xx are answers, so the
    coordinates are not re-sent to the provider. A cancelled plan never falls back. */
 function tpGetVia(workerUrl,directUrl,noStore,ctx){
@@ -63,7 +63,7 @@ function tpGetVia(workerUrl,directUrl,noStore,ctx){
     if(ctx&&ctx.dead)throw e;
     var st=e&&e.status;
     if(e&&e.final)throw e;
-    if(st!=null&&st!==404&&st!==502&&st!==503&&st!==504)throw Object.assign(e,{final:true});
+    if(st!=null&&st!==404&&st!==500&&st!==502&&st!==503&&st!==504)throw Object.assign(e,{final:true});
     return tpGetJson(directUrl,noStore,ctx);
   });
 }

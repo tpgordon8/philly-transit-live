@@ -14,10 +14,8 @@ from harness import FIX, Session, haversine_m
 FAST = {
     "test_s_rank_and_dominance_use_the_exact_sum",
     "test_a_load_network_rejects_malformed_and_indexes_good",
-    "test_a_nearby_stops_radius",
     "test_a_route_leg_client",
     "test_c_walk_bus_walk_stops_ride_and_live_wait",
-    "test_d_bike_bus_walk",
     "test_e_legs_sum_to_total_and_have_paths",
 }
 
