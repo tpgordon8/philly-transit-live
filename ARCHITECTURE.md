@@ -299,7 +299,7 @@ extracted bus feed). Standard library only, about 5 s; stop_times.txt is streame
 extracted to a temp directory; nothing downloaded is executed. Then run `python3 tests/run.py --only network_data`
 and commit `data/bus-network.json`.
 
-### 12.3 Planner algorithm (pure functions in `js/planner.js`, exposed on `window.__SEPTA_TEST__`)
+### 12.3 Planner algorithm (functions in `js/routing.js`, `js/candidates.js` and `js/planner.js`, exposed on `window.__SEPTA_TEST__`)
 Inputs: origin O, destination D, `now`, the network JSON, Indego info and status, live buses (`collect()`).
 1. Always compute WALK (foot route O to D), CAR (car route), and BIKE: nearest rentable station S1 to O with at least
    one bike (rank by straight-line distance, consider the nearest 3), nearest station S2 to D with at least one free
@@ -392,50 +392,64 @@ Goal: leave no known debt before the next feature. Every package keeps behaviour
 
 Every register item closed with a test; fast suite under 90 s; CI green on main; Worker v3 live and smoke-tested; no direct third-party call from the page when the Worker is healthy (the direct fallback happens only on a network error, a Worker 404 or a Worker 502/503/504, never on a 4xx or 422 answer, see 12.4); no script block over 600 lines; a monthly job keeps schedule data fresh; this document lists no open items.
 
-## 14. Code layout after the WP3 split (D8)
+## 14. Code layout (WP3 split, reshaped by WP-F)
 
-`index.html` keeps the markup, the styles, the Leaflet tag (with its SRI hash, unchanged) and 18 lines of inline script. The 2,000-line application script became eight classic scripts. There is no bundler, no ES modules and no build step; GitHub Pages serves the files as they are.
+`index.html` keeps the markup, the Leaflet script tag (with its SRI hash, unchanged), eight `<link rel="stylesheet">` tags and 18 lines of inline script. The application code is eleven classic scripts under `js/` and the styles are eight stylesheets under `css/`. There is no bundler, no ES modules and no build step; GitHub Pages serves the files as they are. Prettier and ESLint (section 15.1) are dev tools only.
 
 ### 14.1 Files and load order
 
 | File | Lines | Holds |
 |------|-------|-------|
-| `js/util.js` | 135 | constants, formatting and geometry, `$`, the `localStorage` wrapper, saved preferences, places, starred routes, the shared `state` object, the Leaflet-missing banner |
-| `js/feed.js` | 212 | `normBuses` (ghost filter), `normTrains`, `septa()` fetch through the Worker, idle pause, `refresh`, and `collect`/`apply`, the pipeline that turns feed data into what is drawn |
-| `js/ui.js` | 493 | the Leaflet map, vehicle markers, status line, vehicle detail panel, location search, saved places, `setCenter`/`setRadius` |
-| `js/stops.js` | 238 | speed history and `etaFor`, stop links, stop card and live stop board |
-| `js/alerts.js` | 252 | service alerts and the leave-now rules (`evalRule`, `evalRules`, `notify`) |
-| `js/planner.js` | 465 | trip planner core: bus network, Indego, routing, `planTrips` (no DOM) |
-| `js/trip.js` | 302 | trip planner interface: form, results, map drawing |
-| `js/main.js` | 36 | the `window.__SEPTA_TEST__` hook and the start-up calls |
+| `js/util.js` | 338 | constants, formatting and geometry, `$`, the `localStorage` wrapper, saved preferences, places, starred routes, the shared `state` object, the Leaflet-missing banner |
+| `js/feed.js` | 408 | `normBuses` (ghost filter), `normTrains`, `septa()` fetch through the Worker, idle pause, `refresh`, and `collect`/`apply`, the pipeline that turns feed data into what is drawn |
+| `js/map.js` | 448 | the Leaflet map, search-point and Home pins, vehicle markers, selection, the vehicle detail card |
+| `js/panel.js` | 650 | the sidebar: status line, My routes, search box and geocoding, Use my location, `setCenter`/`setRadius`, mode chips, saved places, Get me home, the empty-state actions |
+| `js/stops.js` | 444 | speed history and `etaFor`, stop links, stop card and live stop board |
+| `js/alerts.js` | 508 | service alerts and the leave-now rules (`evalRule`, `evalRules`, `notify`) |
+| `js/routing.js` | 442 | trip planner data clients: planner constants `TP`, bus network, Indego, the routing queue, `routeLeg`, `cancelPlan` (no DOM) |
+| `js/candidates.js` | 217 | trip planner bus candidates: nearby stops and stations, wait estimates, `buildBusCandidates` (pure) |
+| `js/planner.js` | 535 | trip planner: leg assembly, schedule state, `planTrips` (no DOM) |
+| `js/trip.js` | 664 | trip planner interface: form, results, map drawing |
+| `js/main.js` | 108 | the `window.__SEPTA_TEST__` hook and the start-up calls |
 
-The inline script before them creates `window.SEPTA` (one object per file except `main`, which adds none, plus `failed` and `loadFailed`) and the load-error listener. `index.html` then loads `util`, `feed`, `ui`, `stops`, `alerts`, `planner`, `trip`, `main` in that order, then a one-line check that `main.js` ran.
+| Stylesheet | Holds |
+|------------|-------|
+| `css/leaflet.css` | the Leaflet stylesheet (was inlined; the Leaflet script tag and its SRI hash are untouched) |
+| `css/base.css` | design tokens and dark theme, reset, typography, header and brand, the status dot |
+| `css/layout.css` | app shell, sidebar, map stage and their responsive rules (820 px and 480 px) |
+| `css/map.css` | Leaflet overrides and controls, vehicle markers, pins, the vehicle card, the empty-state card |
+| `css/panel.css` | sidebar sections, search, buttons, chips, saved places, My routes |
+| `css/trip.css` | trip planner form, results and map drawing |
+| `css/stops.css` | stop card and live stop board |
+| `css/alerts.css` | service alerts, banners, leave-now rules, toasts |
+
+The stylesheets load in the order of that table, and the rules inside each file keep the relative order they had in the old inline block. WP-F checked that no pair of rules with the same specificity and a shared property swapped order, and that computed styles of every element and screenshots at 390 and 1280 px, light and dark, were identical before and after.
+
+The inline script before the app scripts creates `window.SEPTA` (one object per file except `main`, which adds none, plus `failed` and `loadFailed`) and the load-error listener. `index.html` then loads `util`, `feed`, `map`, `panel`, `stops`, `alerts`, `routing`, `candidates`, `planner`, `trip`, `main` in that order, then a one-line check that `main.js` ran.
 
 ### 14.2 How the files share code
 
-The old script was one closure, so every function saw every other function and variable. Each file is now its own closure (an IIFE with `'use strict'`) and shares code only through `window.SEPTA.<file>`. Every line that is not original code ends in `/*@split*/` and is one of:
+Each file is its own closure (an IIFE with `'use strict'`) and shares code only through `window.SEPTA.<file>`:
 
-- `var S=window.SEPTA;` and the import lines `var a=S.util.a,b=S.util.b;`. These copy names owned by an earlier file. They are by value, so only things that are never reassigned (functions, constants, objects such as `state`, `map`, `routesStore`) are shared this way. A variable that is reassigned after load (`inflight`, `radiusCircle`, `savedCenter`, `stopLayer`, ...) lives in the same file as every function that touches it.
-- Forward-call shims `function renderStatus(){return S.ui.renderStatus.apply(null,arguments)}` for a function owned by a later file. They look the function up at call time, so circular calls (feed calls ui, ui calls feed) work. A shim is never called while the files are loading.
-- Export lines `S.util.esc=esc;` for names another file or the test hook uses.
-- `S.halt=(typeof L==='undefined');` in `util.js` and `if(S.halt)return;` where the original script returned early because Leaflet had not loaded. The pure functions are exported before that point so the test hook still works; nothing else starts.
-- `S.started=true;` in `main.js`, and in `ui.js`/`main.js` a small `radiusCircleBounds` bridge for the one reassigned variable the start-up code reads.
+- `var S = window.SEPTA;` and import lines `var a = S.util.a, b = S.util.b;`. These copy names owned by an earlier file. They are by value, so only things that are never reassigned (functions, constants, objects such as `state`, `map`, `routesStore`) are shared this way. A variable that is reassigned after load (`inflight`, `radiusCircle`, `savedCenter`, `stopLayer`, `gmhLine`, the planner caches, ...) lives in the same file as every function that touches it.
+- Forward-call shims `function renderStatus() { return S.panel.renderStatus.apply(null, arguments); }` for a function owned by a later file. They look the function up at call time, so circular calls (feed calls map and panel, map calls panel and stops) work. A shim is never called while the files are loading.
+- Export lines `S.util.esc = esc;` for names another file or the test hook uses. Every export has at least one importer.
+- `S.halt = typeof L === 'undefined';` in `util.js` and `if (S.halt) return;` in the files that need Leaflet. The pure functions are exported before that point so the test hook still works; nothing else starts.
+- `S.started = true;` in `main.js`, and a small `S.map.radiusCircleBounds` bridge for the one reassigned variable the start-up code reads.
 
-Function bodies and every other line of code are moved unchanged. Top-level statements that run at load time (event wiring, `setInterval`, the one-time defaults migration) stay in the file that owns what they touch, in their original relative order, so timers and listeners are registered in the same order as before. The one exception is the `__SEPTA_TEST__.tripMap` assignment, which moved to `main.js` after the hook is created.
-
-The move was verified as pure at the time by a one-off checker (function names and token streams of every top-level chunk matched `index.html` at `cc22b7e`). The checker was retired in review round 2 because deliberate logic changes made its comparison meaningless; `tests/test_modules.py` keeps enforcing file size, load order, and that `window` gains only `SEPTA`.
+Top-level statements that run at load time (event wiring, `setInterval`, the one-time defaults migration) stay in the file that owns what they touch. `tests/test_modules.py` enforces file size (700 lines), load order, and that `window` gains only `SEPTA`.
 
 ### 14.3 Adding a module
 
-1. Create `js/<name>.js` with the same shape as an existing small file (`main.js` is the shortest): the IIFE, `var S=window.SEPTA;`, imports, your code, exports.
+1. Create `js/<name>.js` with the same shape as an existing small file (`main.js` is the shortest): the IIFE, `var S = window.SEPTA;`, imports, your code, exports.
 2. Add `<name>:{}` to the object in the inline script of `index.html` and a `<script src="js/<name>.js"></script>` tag. Place it after every file whose variables it needs at load time; files it only calls into later can come after it (use a shim).
-3. Add the name to `FILES` in `tests/test_modules.py`. Keep the file at 600 lines or fewer.
-4. Run `python3 tests/run.py --fast`. Tests that grep source read it through `app_source`/`app_script` in `tests/harness.py`.
+3. Add the name to `FILES` in `tests/test_modules.py`. Keep the file at 700 lines or fewer.
+4. Run `npm run lint`, `npm run format`, then `python3 tests/run.py --fast`. Tests that grep source read it through `app_source`/`app_script` in `tests/harness.py`.
 
 ### 14.4 Failure behaviour and deviations from 13.2
 
 - A script that fails to load (404, network error, blocked) triggers a capture-phase `error` listener that adds a fixed red `#loadError` banner naming the file. A final inline check does the same if `main.js` never ran, for example after a syntax error. The banner is separate from `#banner` because the app rewrites `#banner` every second.
-- Plan 13.2 had `ui.js` holding the trip UI; it became its own `trip.js` so no file passes 600 lines. `feed.js` also owns `collect`/`apply` because they read the refresh loop's `inflight` flag.
+- Plan 13.2 had `ui.js` holding the trip UI; it became its own `trip.js`. WP-F later split `ui.js` into `map.js` and `panel.js` and `planner.js` into `routing.js`, `candidates.js` and `planner.js`. `feed.js` also owns `collect`/`apply` because they read the refresh loop's `inflight` flag.
 - There is no service worker or cache list in the repo, so there was nothing to update there.
 - `tests/harness.py` already served the checkout directory, so `js/` needed no server change; it gained `app_script` and `app_source`, and the two tests that grep source (`test_single_clear_selection_and_all_paths_work`, `test_dead_code_removed`) now read through them, because the code they search is no longer in `index.html`.
 
@@ -463,3 +477,26 @@ Goals from the owner: (1) the N/E/S/W badge and the vehicle's facing show the ro
 ### 15.3 Definition of done
 
 Badge and facing follow route direction (tests with a detour heading that disagrees with the route); vertical icons on N-S routes and horizontal on E-W; every address field has a keyboard- and touch-accessible combobox; "city hall" suggests Philadelphia City Hall; title and metadata say Septer in the Helvetica-style stack; the viewport matrix passes; lint clean in CI; no file over 700 lines; full suite and CI green; independent review has no open blocker or should-fix item.
+
+### 15.4 Debt inventory after WP-F
+
+Fixed in WP-F (all behaviour-neutral): `STALE_AFTER_MS`, an unused `renderRules` parameter and an unused `base` array removed; empty `catch` blocks now say why they are empty; stale comments rewritten (file headers that called the files a "split of index.html", an `index.html` task marker in `css/panel.css`, "legacy" planner notes that are current); magic numbers given names (`M_PER_MI`, radius range and widen step with one `widenedRadius` helper instead of two copies of the same arithmetic, `NOGLIDE_MS`, `FETCH_TIMEOUT_MS`, `SCHEDULE_ONLY_LATE`, geolocation timeouts, alert limits, `MS_PER_DAY`, `M_PER_DEG`); one shadowed helper name in `syncMarkers`; three exports with no importer removed. Searched and found none: TODO/FIXME/HACK comments, functions with identical bodies, globals other than `window.SEPTA` and the Leaflet `L` (the test `test_page_adds_only_the_septa_namespace` enforces this). ESLint found no real bug; the only code findings were dead code.
+
+Left open, each with a reason:
+
+| File | Item | Why it is left |
+|------|------|----------------|
+| `js/planner.js` | `planTrips` is 299 lines, mostly one 256-line `Promise.all(...).then` body with two nested chains | The planner is the riskiest logic in the app and the planner tests are black-box; cutting it into named steps needs the callbacks' shared locals (`ctx`, `notes`, `finals`) passed explicitly. Do it in a package that owns planner behaviour, not in a no-behaviour-change pass |
+| `js/trip.js` | `tripRender` 137 lines, `startTrip` 80, `tripStep` 75 | DOM building interleaved with state changes; splitting needs new UI tests for each piece. WP-C edits this file for the autocomplete wiring, so splitting it now would only cause merge conflicts |
+| `js/candidates.js` | `buildBusCandidates` 106 lines | Pure and well covered, but its inner loops share five accumulators; extraction would change the shape of the hot loop. Leave until a planner package owns it |
+| `js/map.js` | `buildDetail` 107 lines, `syncMarkers` 62 | WP-B rewrites marker construction and the direction badge in these two functions; refactor after B merges |
+| `js/panel.js` | `renderStatusView` 100 lines, `renderGMH` 82, `renderPlaces` 69, `getMeHome` 64 | Straight-line DOM construction with many text variants; each branch is tested only through the page. Split when a package next changes the status line or Home |
+| `js/routing.js` | `routeLeg` 76 lines | Queue, cache, abort and fallback in one function by design (section 12.4); splitting risks the request-budget rules |
+| `js/planner.js`, `js/stops.js` | `assembleBus` 68, `renderStopCard` 68 | Marginally over the 60-line guide and cohesive |
+| `js/trip.js`, `js/panel.js` | 664 and 650 lines, limit 700 | WP-C adds the autocomplete wiring to both. If either passes 700, move the form (trip) or saved places and Home (panel) into their own file along the existing section comments |
+| `js/map.js`, `js/stops.js`, `js/trip.js`, `js/util.js` | Remaining unnamed numbers: marker and pin geometry (80x44 icon, 18 and 26 px pins, label widths 34/44/58, z-index offsets 400, 500, 900), `cardinal`'s 45 degree sectors, the 50 degree Home-heading tolerance in `panel.js`, the 500 ms back-off slack in `feed.js`, HTTP status lists in `routing.js` | They are layout or protocol values used once, next to the code that explains them. WP-B and WP-E rewrite the marker and layout numbers, so naming them now would be churn |
+| `js/*.js` | Forward-call shims (`function x() { return S.ns.x.apply(null, arguments); }`, 18 of them) | Needed because feed, map, panel, stops and alerts call each other at run time while loading in one fixed order. Removing them means a small event bus or merging files; neither is worth the risk before release |
+| `js/util.js`, `js/feed.js` | `state` is one mutable object written by several files | Matches the original single-script design; narrowing it to setter functions is a larger change with no user-visible gain |
+| `js/trip.js`, `js/panel.js` | Geocoding (`geocode`, 1.1 s spacing, session cache) lives in `panel.js` but is also used by `trip.js` | WP-C replaces the typed-address path with the autocomplete module, which is the natural home for it |
+| `ARCHITECTURE.md` sections 1 to 13 | Historical text still says "in `index.html`" for code that moved to `js/` in WP3 | Those sections are the record of the v1.0 plan and decisions; section 14 is the current layout |
+| `tests/*.py` | Not formatted or linted (out of scope for WP-F); a few tests grep source text, so Prettier changes to `js/` can break them | `test_modules.py` was updated for the new layout; the others pass unchanged |

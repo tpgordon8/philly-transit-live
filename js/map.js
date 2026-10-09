@@ -16,7 +16,8 @@
   }
   if (S.halt) return;
   var $ = S.util.$;
-  var MODE_NAME = S.util.MODE_NAME,
+  var M_PER_MI = S.util.M_PER_MI,
+    MODE_NAME = S.util.MODE_NAME,
     SEATS = S.util.SEATS,
     cardinal = S.util.cardinal,
     el = S.util.el,
@@ -26,6 +27,8 @@
     starKey = S.util.starKey,
     state = S.util.state;
   /* ----- Map ----- */
+  var NOGLIDE_MS = 700; /* markers jump instead of gliding while the map zooms or resizes, and this long after */
+  var GLIDE_SOON_MS = 160; /* gliding resumes this long after a zoom ends */
   var map = L.map('map', {
     zoomControl: false,
     markerZoomAnimation: false,
@@ -44,13 +47,13 @@
     clearTimeout(glideTimer);
     glideTimer = setTimeout(function () {
       mapEl.classList.remove('noglide');
-    }, 700);
+    }, NOGLIDE_MS);
   }
   function glideSoon() {
     clearTimeout(glideTimer);
     glideTimer = setTimeout(function () {
       mapEl.classList.remove('noglide');
-    }, 160);
+    }, GLIDE_SOON_MS);
   }
   map.on('zoomstart viewreset resize', noGlide);
   map.on('zoomend', glideSoon);
@@ -59,7 +62,7 @@
     homePin = null;
   function drawCenter() {
     var ll = [state.center.lat, state.center.lng],
-      m = state.radius * 1609.344;
+      m = state.radius * M_PER_MI;
     if (!radiusCircle) {
       radiusCircle = L.circle(ll, { radius: m, className: 'rad', interactive: false }).addTo(map);
     } else {
@@ -194,11 +197,11 @@
         var ll = m.getLatLng();
         /* setLatLng moves the existing element, so the CSS transition glides it. Zoom and pan are untouched. */
         if (ll.lat !== v.lat || ll.lng !== v.lng) m.setLatLng([v.lat, v.lng]);
-        var el = m.getElement();
-        if (el && el.dataset.sig !== vehSig(v)) {
-          el.className = el.className.replace(/\bk-(bus|trolley|subway|train)\b/g, '') + ' k-' + v.kind;
-          el.innerHTML = vehInner(v);
-          el.dataset.sig = vehSig(v);
+        var node = m.getElement();
+        if (node && node.dataset.sig !== vehSig(v)) {
+          node.className = node.className.replace(/\bk-(bus|trolley|subway|train)\b/g, '') + ' k-' + v.kind;
+          node.innerHTML = vehInner(v);
+          node.dataset.sig = vehSig(v);
         }
       }
       var el2 = m.getElement();
@@ -436,7 +439,6 @@
   S.map.drawHome = drawHome;
   S.map.fitRadius = fitRadius;
   S.map.syncMarkers = syncMarkers;
-  S.map.markers = markers;
   S.map.select = select;
   S.map.clearSelection = clearSelection;
   S.map.renderDetail = renderDetail;

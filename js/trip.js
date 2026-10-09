@@ -1,4 +1,4 @@
-/* js/trip.js: trip planner interface: form, results list and map drawing. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */
+/* js/trip.js: trip planner interface: form, results list and map drawing. */
 (function () {
   'use strict';
   var S = window.SEPTA;
@@ -7,7 +7,8 @@
     el = S.util.el,
     fmtMi = S.util.fmtMi,
     isNum = S.util.isNum,
-    state = S.util.state;
+    state = S.util.state,
+    M_PER_MI = S.util.M_PER_MI;
   var NARROW = S.map.NARROW,
     geocode = S.panel.geocode,
     getPosition = S.panel.getPosition,
@@ -360,7 +361,7 @@
   }
   function tripStep(l, asOf) {
     var li = el('li'),
-      mi = fmtMi(l.meters / 1609.344),
+      mi = fmtMi(l.meters / M_PER_MI),
       a = l.from.name || 'start',
       b = l.to.name || 'end';
     function sub(t) {

@@ -1,4 +1,4 @@
-/* js/stops.js: stop-board ETA math, stop links, stop card and live stop board. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */
+/* js/stops.js: stop-board ETA math, stop links, stop card and live stop board. */
 (function () {
   'use strict';
   var S = window.SEPTA;
@@ -21,7 +21,8 @@
     STILL_MPS = 0.9,
     MAX_MPS = 31,
     ROAD_PAD = 1.15,
-    ROUGH_DEG = 45;
+    ROUGH_DEG = 45,
+    ROUGH_MAX_MI = 1.5; /* a rough ETA is offered only within this distance of the stop */
   /* Keep a short GPS history per vehicle: only new timestamps, only the last 120 s of feed time, at most 6 samples,
    and nothing for vehicles that left the feed. Called with every vehicle from each successful TransitView refresh. */
   function updateSpeedHist(list) {
@@ -73,7 +74,10 @@
     if (!isNext) {
       var d = distMi(v, stop);
       rough =
-        !!v.nextId && d <= 1.5 && v.heading != null && angDiff(v.heading, bearing(v, stop)) <= ROUGH_DEG;
+        !!v.nextId &&
+        d <= ROUGH_MAX_MI &&
+        v.heading != null &&
+        angDiff(v.heading, bearing(v, stop)) <= ROUGH_DEG;
       if (!rough) return { min: null, note: 'not its next stop yet', rough: false };
     }
     var sp = speedMps(v.key);

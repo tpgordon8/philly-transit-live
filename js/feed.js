@@ -1,4 +1,4 @@
-/* js/feed.js: vehicle feed: ghost filter and normalisers, fetch through the Worker, idle pause, refresh loop and the collect/apply render pipeline. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */
+/* js/feed.js: vehicle feed: ghost filter and normalisers, fetch through the Worker, idle pause, refresh loop and the collect/apply render pipeline. */
 (function () {
   'use strict';
   var S = window.SEPTA;
@@ -35,6 +35,7 @@
   function renderAlerts() {
     return S.alerts.renderAlerts.apply(null, arguments);
   }
+  var SCHEDULE_ONLY_LATE = 998; /* SEPTA's late value for a trip with no live vehicle behind it */
   var GHOST_MAX_S = S.util.GHOST_MAX_S,
     headingVal = S.util.headingVal,
     kindOf = S.util.kindOf,
@@ -65,7 +66,7 @@
         lbl = String(b.label == null ? '' : b.label).trim();
       if (!vid || vid === 'None' || !lbl || lbl === 'None') continue;
       /* late:998 marks a schedule-only trip (no live vehicle behind it); 999 only means no delay data and is kept. */
-      if (Number(b.late) === 998) continue;
+      if (Number(b.late) === SCHEDULE_ONLY_LATE) continue;
       if (ts > newest) newest = ts;
       cand.push({ b: b, ts: ts, lat: lat, lng: lng, vid: vid });
     }
@@ -145,6 +146,7 @@
   var $ = S.util.$,
     DROP_AFTER_MS = S.util.DROP_AFTER_MS,
     REFRESH_MS = S.util.REFRESH_MS,
+    widenedRadius = S.util.widenedRadius,
     distMi = S.util.distMi,
     esc = S.util.esc,
     isStarred = S.util.isStarred;
@@ -154,6 +156,8 @@
   /* ----- Network: SEPTA's API sends no CORS headers, so every call goes through our own Cloudflare Worker.
    The Worker forwards an allowlist of SEPTA feeds and a few validated query endpoints, and adds CORS; the list changes
    with the Worker version, so see ARCHITECTURE.md section 2 for the current endpoints. Retry once on failure. ----- */
+  var FETCH_TIMEOUT_MS = 15000; /* one request to the Worker */
+  var FETCH_RETRY_MS = 1500; /* pause before the single retry */
   var WORKER = 'https://septa-proxy.tpgordon8.workers.dev';
   /* ----- Idle pause (ARCHITECTURE.md section 2): after an hour without a real user interaction the page makes no
    requests at all. Only pointerdown, keydown, touchstart, wheel, focus and becoming visible count; timers and fetches do not. ----- */
@@ -205,7 +209,7 @@
     var ctl = new AbortController(),
       t = setTimeout(function () {
         ctl.abort();
-      }, 15000);
+      }, FETCH_TIMEOUT_MS);
     return fetch(WORKER + '/' + name, { signal: ctl.signal, cache: 'no-store' })
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -220,7 +224,7 @@
     var name = path.indexOf('?') >= 0 ? path : path.split('/')[0];
     return fetchOnce(name).catch(function () {
       return new Promise(function (res) {
-        setTimeout(res, 1500);
+        setTimeout(res, FETCH_RETRY_MS);
       }).then(function () {
         return fetchOnce(name);
       });
@@ -303,7 +307,7 @@
         ? '<button class="btn primary" type="button" id="emptyAct" data-act="modes">Show all modes</button>'
         : canWiden
           ? '<button class="btn primary" type="button" id="emptyAct" data-act="widen">Widen to ' +
-            Math.min(5, r + 1.5) +
+            widenedRadius(r) +
             ' mi</button>'
           : '<p style="margin:0">Try searching a different address.</p>');
   }

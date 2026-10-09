@@ -1,4 +1,4 @@
-/* js/alerts.js: service alerts and leave-now alert rules. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */
+/* js/alerts.js: service alerts and leave-now alert rules. */
 (function () {
   'use strict';
   var S = window.SEPTA;
@@ -8,6 +8,15 @@
   /* ----- Leave-now rules. A rule may fire only from a numeric, non-rough etaFor result for a bus whose very next stop is the
    rule's stop, while the bus source is fresh. `src` is {ok,stale} for the bus source (defaults to the live one). ----- */
   var RULE_DEDUPE_MS = 15 * 60000;
+  /* A saved rule alerts between these many minutes away; the stop card preselects the default. */
+  var MIN_ALERT_MIN = 2;
+  var MAX_ALERT_MIN = 30;
+  var DEFAULT_ALERT_MIN = 8;
+  /* Toasts kept on screen. On a phone only the newest shows (CSS) and the rest wait, so more are kept. */
+  var MAX_TOASTS_DESKTOP = 3;
+  var MAX_TOASTS_PHONE = 20;
+  var MAX_STOP_NAME_LEN = 80;
+  var MAX_ALERT_TEXT_LEN = 320; /* service alert text is cut to this many characters */
   function evalRule(rule, vehicles, now, src) {
     if (!rule || rule.enabled === false) return { state: 'paused' };
     if (src === undefined) src = typeof state !== 'undefined' && state && state.src ? state.src.bus : null;
@@ -81,7 +90,7 @@
               ? 'Route ' + a.route
               : a.route_name || a.route;
       function push(type, text, until) {
-        text = shortText(stripHTML(text), 320);
+        text = shortText(stripHTML(text), MAX_ALERT_TEXT_LEN);
         if (!text) return;
         items.push({ key: key, label: label, mode: a.mode, type: type, text: text, until: until || null });
       }
@@ -188,13 +197,14 @@
   $('#scopeAll').addEventListener('click', function () {
     setScope('all');
   });
+  var ALERTS_POLL_MS = 5 * 60000; /* service alerts are re-fetched this often while the page is visible */
   setInterval(function () {
     if (idleNow()) {
       pauseNow();
       return;
     }
     if (!document.hidden) loadAlerts();
-  }, 300000);
+  }, ALERTS_POLL_MS);
   /* ----- Leave-now alerts: rules in localStorage (septa.rules.v1), evaluated in the page on every apply() ----- */
   var MAX_RULES = 10,
     RULES_KEY = 'septa.rules.v1',
@@ -210,7 +220,12 @@
       if (typeof r.id !== 'string' || !RULE_ID_RE.test(r.id) || ids[r.id]) return;
       if (typeof r.route !== 'string' || !STOP_RT_RE.test(r.route)) return;
       if (typeof r.stopId !== 'string' || !STOP_ID_RE.test(r.stopId)) return;
-      if (typeof r.minutes !== 'number' || !Number.isInteger(r.minutes) || r.minutes < 2 || r.minutes > 30)
+      if (
+        typeof r.minutes !== 'number' ||
+        !Number.isInteger(r.minutes) ||
+        r.minutes < MIN_ALERT_MIN ||
+        r.minutes > MAX_ALERT_MIN
+      )
         return;
       if (typeof r.lat !== 'number' || typeof r.lng !== 'number' || !isFinite(r.lat) || !isFinite(r.lng))
         return;
@@ -289,7 +304,8 @@
       t.appendChild(b);
       box.appendChild(t);
       /* Desktop shows up to 3 and drops the oldest. On a phone only the newest shows and the rest wait (CSS), so keep up to 20. */
-      while (box.children.length > (NARROW.matches ? 20 : 3)) box.firstChild.remove();
+      while (box.children.length > (NARROW.matches ? MAX_TOASTS_PHONE : MAX_TOASTS_DESKTOP))
+        box.firstChild.remove();
     } catch (e) {
       /* a toast is best effort */
     }
@@ -388,7 +404,7 @@
     ALERT_MINS.forEach(function (m) {
       var o = el('option', null, String(m));
       o.value = String(m);
-      if (m === 8) o.selected = true;
+      if (m === DEFAULT_ALERT_MIN) o.selected = true;
       sel.appendChild(o);
     });
     row.appendChild(sel);
@@ -418,7 +434,7 @@
         id: newRuleId(),
         route: s.route,
         stopId: s.id,
-        stopName: shortText(s.name, 80),
+        stopName: shortText(s.name, MAX_STOP_NAME_LEN),
         lat: s.lat,
         lng: s.lng,
         minutes: m,

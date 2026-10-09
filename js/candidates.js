@@ -6,13 +6,15 @@
     cellOf = S.routing.cellOf;
   var distM = S.util.distM,
     toRad = S.util.toRad;
+  var M_PER_DEG = 111195; /* metres per degree of latitude */
+  var MIN_COS_LAT = 0.2; /* floor for cos(latitude) when widening the longitude box */
   /* ----- Pure planner functions ----- */
   function stPt(s) {
     return { lat: s.lat, lng: s.lon != null ? s.lon : s.lng, name: s.name };
   }
   function nearbyStops(index, point, meters) {
-    var dLat = meters / 111195,
-      dLng = meters / (111195 * Math.max(0.2, Math.cos(toRad(point.lat)))),
+    var dLat = meters / M_PER_DEG,
+      dLng = meters / (M_PER_DEG * Math.max(MIN_COS_LAT, Math.cos(toRad(point.lat)))),
       out = [];
     for (var i = cellOf(point.lat - dLat); i <= cellOf(point.lat + dLat); i++)
       for (var j = cellOf(point.lng - dLng); j <= cellOf(point.lng + dLng); j++) {

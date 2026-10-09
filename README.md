@@ -12,12 +12,30 @@ caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md). By defau
 
 ## Code layout
 
-`index.html` holds the markup, the styles and a short loader. The application code is eight classic scripts in `js/`,
+`index.html` holds the markup and a short loader. The styles are eight plain stylesheets in `css/`, linked in this
+order: `leaflet` (the Leaflet stylesheet), `base` (tokens, reset, header), `layout` (app shell, responsive rules), `map`
+(markers, pins, vehicle card), `panel` (sidebar sections), `trip` (trip planner), `stops` (stop card and board) and
+`alerts` (service alerts, leave-now rules, toasts, banners). The application code is eleven classic scripts in `js/`,
 loaded with ordinary `<script src>` tags in dependency order: `util` (helpers, storage, shared state), `feed` (vehicle
-feed, ghost filter, idle pause, refresh), `ui` (map, markers, detail panel, places), `stops` (stop links, stop board,
-ETA), `alerts` (service alerts, leave-now rules), `planner` (trip planner core), `trip` (trip planner interface) and
-`main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else is global. If a file fails to load, a red banner at the
-top of the page names it. How the files fit together and how to add one: [ARCHITECTURE.md](ARCHITECTURE.md) section 14.
+feed, ghost filter, idle pause, refresh), `map` (Leaflet map, markers, vehicle card), `panel` (sidebar: status, search,
+saved places, Home, radius, filters), `stops` (stop links, stop board, ETA), `alerts` (service alerts, leave-now rules),
+`routing` (trip planner data clients), `candidates` (bus candidates), `planner` (trip planner), `trip` (trip planner
+interface) and `main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else
+is global. If a file fails to load, a red banner at the top of the page names it. How the files fit together and how to
+add one: [ARCHITECTURE.md](ARCHITECTURE.md) section 14. There is no build step; GitHub Pages serves the files as they are.
+
+## Lint and format
+
+The app itself needs no tooling, but `js/` and `worker/worker.js` are checked with ESLint and Prettier (dev tools only,
+pinned in `package-lock.json`). Needs Node 20.19 or newer.
+
+    npm ci                # once
+    npm run lint          # ESLint over js/ and worker/ (flat config in eslint.config.js)
+    npm run format        # Prettier rewrites js/, worker/worker.js and eslint.config.js (.prettierrc)
+    npm run format:check  # the same check CI runs, without writing
+
+CI runs `npx prettier --check` and `npx eslint .` as its own job on every pull request and on `main`. The style is
+ES5 on purpose (`var`, classic scripts); Prettier only changes layout, so format before you commit.
 
 ## Run the tests
 
@@ -54,7 +72,7 @@ the counts, update the baseline in the same commit.
 
 ## Continuous integration and data refresh
 
-`.github/workflows/ci.yml` runs the fast suite (which includes the Worker unit test) on every pull request and on pushes to
+`.github/workflows/ci.yml` runs lint and the Prettier check, the fast suite (which includes the Worker unit test) on every pull request and on pushes to
 `main`, and the full suite on `main`. A branch with an open pull request is tested once, and a newer push cancels the older run. `.github/workflows/refresh-bus-network.yml` runs monthly (and on demand from the Actions tab): it rebuilds
 `data/bus-network.json` with `tools/build_network.py` from SEPTA's GTFS zip, and only if the feed's validity dates
 changed opens a pull request with the new file and the data test results. The repository setting "Allow GitHub
@@ -100,13 +118,15 @@ Routing requests are spaced at least 250 ms apart with at most two in flight, an
 
 ## Contributing
 
+**Lint and format.** `npm run lint` and `npm run format` (see above) before every push.
+
 **Run the tests.** `python3 tests/run.py --fast` for the quick gate before every push, `python3 tests/run.py` for the whole
 suite before merging (several minutes). `--only <text>` narrows to matching tests; the Playwright version CI uses is
 pinned in `.github/workflows/ci.yml`.
 
 **Add a module.** Follow ARCHITECTURE.md section 14.3: a new `js/<name>.js` shaped like `js/main.js`, a `<name>:{}` entry in
 the inline namespace object and a `<script src>` tag in `index.html`, the name in `FILES` in `tests/test_modules.py`, at
-most 600 lines. Then run the fast suite.
+most 700 lines. Then run the fast suite.
 
 **Regenerate the bus data.** The monthly workflow does it for you. By hand: `python3 tools/build_network.py --zip-url
 https://www3.septa.org/developer/gtfs_public.zip`, then `python3 tests/run.py --only network_data` and `--only data_sanity`.

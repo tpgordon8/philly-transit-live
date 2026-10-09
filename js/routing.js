@@ -2,7 +2,8 @@
 (function () {
   'use strict';
   var S = window.SEPTA;
-  var isNum = S.util.isNum;
+  var isNum = S.util.isNum,
+    M_PER_MI = S.util.M_PER_MI;
   /* ===== Trip planner core (ARCHITECTURE.md section 12) =====
    Data clients and planner functions only: no DOM, no storage. Routing and Indego go through the Worker first. The ONLY cases that
    fall back (once) to the direct provider URL are a network error, a Worker 404 (an older Worker) and a Worker 500/502/503/504; any other
@@ -14,9 +15,9 @@
     WALK_MPS: 1.25,
     BIKE_MPS: 3.6,
     CIRC: 1.3,
-    WALK_MAX_M: 0.6 * 1609.344,
-    BIKE_MAX_M: 2.0 * 1609.344,
-    STN_NEAR_M: 0.15 * 1609.344,
+    WALK_MAX_M: 0.6 * M_PER_MI,
+    BIKE_MAX_M: 2.0 * M_PER_MI,
+    STN_NEAR_M: 0.15 * M_PER_MI,
     STN_START_M: 1200,
     UNLOCK_S: 90,
     DOCK_S: 60,

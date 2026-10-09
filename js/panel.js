@@ -7,7 +7,8 @@
   }
   if (S.halt) return;
   var $ = S.util.$;
-  var CARD = S.util.CARD,
+  var widenedRadius = S.util.widenedRadius,
+    CARD = S.util.CARD,
     CARD_LONG = S.util.CARD_LONG,
     DROP_AFTER_MS = S.util.DROP_AFTER_MS,
     PHILLY = S.util.PHILLY,
@@ -46,7 +47,7 @@
     var b = e.target.closest('#emptyAct');
     if (!b) return;
     if (b.dataset.act === 'widen') {
-      setRadius(Math.min(5, state.radius + 1.5), true);
+      setRadius(widenedRadius(state.radius), true);
     } else if (b.dataset.act === 'routes') {
       routesStore.onlyMine = false;
       saveRoutes();
@@ -301,7 +302,9 @@
    memory for the page session; failures are not kept. */
   var GEO_URL =
     'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&viewbox=-75.80,40.30,-74.60,39.70&q=';
-  var GEO_GAP_MS = 1100,
+  var GEO_TIMEOUT_MS = 9000 /* browser location request: give up after this long */,
+    GEO_MAX_AGE_MS = 30000 /* and accept a cached fix this old */,
+    GEO_GAP_MS = 1100,
     geoNext = 0,
     geoCache = {};
   function geocode(q, opts) {
@@ -369,8 +372,8 @@
       }
       navigator.geolocation.getCurrentPosition(res, rej, {
         enableHighAccuracy: true,
-        timeout: 9000,
-        maximumAge: 30000
+        timeout: GEO_TIMEOUT_MS,
+        maximumAge: GEO_MAX_AGE_MS
       });
     });
   }
@@ -637,8 +640,6 @@
   S.panel.renderMyRoutes = renderMyRoutes;
   S.panel.renderStatus = renderStatus;
   S.panel.setCenter = setCenter;
-  S.panel.setRadius = setRadius;
-  S.panel.savePrefs = savePrefs;
   S.panel.syncModeChips = syncModeChips;
   S.panel.geocode = geocode;
   S.panel.getPosition = getPosition;

@@ -32,12 +32,11 @@ select{min-height:40px}
 .chip:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .chip .n{font:500 12px var(--f-mono);color:var(--mute)}
 .k-bus{--c:var(--bus)} .k-trolley{--c:var(--trolley)} .k-train{--c:var(--train)}
-/* === BEGIN subway kind (robustness pass, task 5) === */
+/* Subway kind colour. */
 :root{--subway:#7b3fb3}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--subway:#c28cf5}}
 :root[data-theme="dark"]{--subway:#c28cf5}
 .k-subway{--c:var(--subway)}
-/* === END subway kind === */
 
 .home{width:100%;padding:12px 14px;border-radius:8px;border:0;background:var(--accent);color:var(--accent-ink);font:700 19px/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .home small{font:500 12px var(--f-body);letter-spacing:0;text-transform:none;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}

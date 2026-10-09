@@ -1,4 +1,4 @@
-/* js/main.js: test hook and application start. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */
+/* js/main.js: test hook and application start. */
 (function () {
   'use strict';
   var S = window.SEPTA;

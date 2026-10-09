@@ -1,4 +1,4 @@
-/* js/util.js: constants, formatting and geometry helpers, DOM shortcuts, localStorage store, saved preferences, places, starred routes and the shared state object. Part of the classic-script split of index.html (ARCHITECTURE.md section 14). */
+/* js/util.js: constants, formatting and geometry helpers, DOM shortcuts, localStorage store, saved preferences, places, starred routes and the shared state object. */
 (function () {
   'use strict';
   var S = window.SEPTA;
@@ -6,6 +6,16 @@
   var REFRESH_MS = 15000,
     GHOST_MAX_S = 150,
     DROP_AFTER_MS = 120000;
+  var M_PER_MI = 1609.344; /* metres in a statute mile */
+  /* The radius slider's range (index.html) and what the empty-state "Widen" button adds. */
+  var MIN_RADIUS_MI = 0.25;
+  var MAX_RADIUS_MI = 5;
+  var WIDEN_STEP_MI = 1.5;
+  function widenedRadius(r) {
+    return Math.min(MAX_RADIUS_MI, r + WIDEN_STEP_MI);
+  }
+  var MAX_PLACES = 50; /* saved places kept */
+  var MAX_STAR_KEY_LEN = 64; /* longest starred-route key kept */
   var TROLLEY = new Set([
     '10',
     '101',
@@ -84,9 +94,10 @@
     return m < 0.1 ? '<0.1 mi' : m.toFixed(1) + ' mi';
   }
   /* SEPTA uses late:999 for "no delay data". It is never a real delay. */
+  var LATE_NO_DATA_MIN = 900; /* a late value this large is a marker (998, 999), never a delay */
   function lateVal(v) {
     var n = Number(v);
-    return v == null || v === '' || !isFinite(n) || n >= 900 ? null : n;
+    return v == null || v === '' || !isFinite(n) || n >= LATE_NO_DATA_MIN ? null : n;
   }
   function lateInfo(n) {
     if (n == null) return { txt: 'Delay data unavailable', cls: 'unk' };
@@ -116,7 +127,7 @@
     return s.length > n ? s.slice(0, n - 1).replace(/\s+\S*$/, '') + '…' : s;
   }
   function distM(a, b) {
-    return distMi(a, b) * 1609.344;
+    return distMi(a, b) * M_PER_MI;
   }
   /* Stored and fetched values are untrusted: a usable number is a finite number. */
   function isNum(x) {
@@ -165,6 +176,8 @@
   S.util.REFRESH_MS = REFRESH_MS;
   S.util.GHOST_MAX_S = GHOST_MAX_S;
   S.util.DROP_AFTER_MS = DROP_AFTER_MS;
+  S.util.M_PER_MI = M_PER_MI;
+  S.util.widenedRadius = widenedRadius;
   S.util.kindOf = kindOf;
   S.util.CARD = CARD;
   S.util.CARD_LONG = CARD_LONG;
@@ -216,7 +229,8 @@
         Math.abs(c.lng) <= 180
           ? { lat: c.lat, lng: c.lng, label: typeof c.label === 'string' ? c.label : '' }
           : PHILLY,
-      radius: isNum(o.radius) && o.radius >= 0.25 && o.radius <= 5 ? o.radius : DEFAULT_RADIUS,
+      radius:
+        isNum(o.radius) && o.radius >= MIN_RADIUS_MI && o.radius <= MAX_RADIUS_MI ? o.radius : DEFAULT_RADIUS,
       filters: filters
     };
   }
@@ -233,7 +247,7 @@
       list = [];
     if (Array.isArray(o.list))
       o.list.forEach(function (x) {
-        if (list.length >= 50) return;
+        if (list.length >= MAX_PLACES) return;
         var c = cleanPlace(x, true);
         if (c) list.push({ id: c.id, name: c.name, lat: c.lat, lng: c.lng });
       });
@@ -268,7 +282,7 @@
       seen = {};
     if (r && typeof r === 'object' && Array.isArray(r.stars))
       r.stars.forEach(function (k) {
-        if (typeof k === 'string' && k && k.length <= 64 && !seen[k]) {
+        if (typeof k === 'string' && k && k.length <= MAX_STAR_KEY_LEN && !seen[k]) {
           seen[k] = 1;
           stars.push(k);
         }

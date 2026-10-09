@@ -15,6 +15,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: Lint and format check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install lint tools (package-lock.json is the pin)
+        run: npm ci
+      - name: Prettier (js/ and worker/)
+        run: npx prettier --check "js/*.js" worker/worker.js eslint.config.js
+      - name: ESLint
+        run: npx eslint .
+
   fast:
     name: Fast suite and Worker tests
     runs-on: ubuntu-latest

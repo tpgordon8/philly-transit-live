@@ -6,6 +6,7 @@
     distM = S.util.distM,
     isNum = S.util.isNum,
     state = S.util.state;
+  var MS_PER_DAY = 864e5;
   var TP = S.routing.TP,
     cancelPlan = S.routing.cancelPlan,
     inRegion = S.routing.inRegion,
@@ -178,13 +179,13 @@
   /* 'Today' as a day number. Injectable for tests: opts.today or TP.today, as 'YYYYMMDD' or epoch ms; default is the local date. */
   function ymdIdx(s) {
     var m = /^(\d{4})(\d{2})(\d{2})$/.exec(String(s));
-    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 864e5 : null;
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / MS_PER_DAY : null;
   }
   function tpTodayIdx(inj) {
     var v = inj != null ? inj : TP.today;
     if (typeof v === 'string' && ymdIdx(v) != null) return ymdIdx(v);
     var d = isNum(v) ? new Date(v) : new Date();
-    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5;
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / MS_PER_DAY;
   }
   /* The bus schedule's validity against today: null when fine, else {state:'expired'|'expiring', end, days}. */
   function scheduleState(feed, today) {
@@ -243,7 +244,7 @@
     if (!isNum(ctx.calls)) ctx.calls = 0;
     var notes = [];
     var today = tpTodayIdx(opts.today);
-    /* Planner notes are structured: {code, ...data}. The UI words them. Legacy availability notes carry a ready-made `text`. */
+    /* Planner notes are structured: {code, ...data}. The UI words them; availability notes also carry a ready-made `text`. */
     function note(code, extra) {
       for (var i = 0; i < notes.length; i++) if (notes[i].code === code) return;
       notes.push(Object.assign({ code: code }, extra || {}));
