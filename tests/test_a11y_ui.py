@@ -3,7 +3,7 @@ touch targets, focus management, empty-state vs zoom control, badge contrast, cl
 import json
 import re
 
-from harness import FIX, Session
+from harness import FIX, Session, app_script, app_source
 
 # Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
 FAST = {
@@ -498,9 +498,9 @@ def test_direction_badge_contrast_aa_light_and_dark(root):
 # ------------------------------------------------------------------ 10. one clearSelection()
 
 def test_single_clear_selection_and_all_paths_work(root):
-    src = (s_root := __import__("pathlib").Path(root) / "index.html").read_text()
+    src = app_source(root)
     assert len(re.findall(r"function clearSelection\s*\(", src)) == 1
-    script = src[src.index("<script>\n(function"):]
+    script = app_script(root)
     assert max(len(l) for l in script.splitlines()) < 400
     assert len(re.findall(r"classList\.remove\('sel'\)", script)) == 1, "selection cleanup must live only in clearSelection()"
     with Session(root) as s:

@@ -6,9 +6,18 @@ https://tpgordon8.github.io/philly-transit-live/
 
 ## How data flows
 
-The page is a single static `index.html` served by GitHub Pages. It asks a small Cloudflare Worker (`worker/worker.js`)
+The page is a static `index.html` plus plain script files under `js/` (no build step), served by GitHub Pages. It asks a small Cloudflare Worker (`worker/worker.js`)
 for SEPTA's public feeds, because SEPTA's API sends no CORS headers; the Worker allowlists a handful of endpoints and
 caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md). By default the page shows only buses within 0.5 mi, which also skips the Regional Rail request and roughly halves Worker traffic.
+
+## Code layout
+
+`index.html` holds the markup, the styles and a short loader. The application code is eight classic scripts in `js/`,
+loaded with ordinary `<script src>` tags in dependency order: `util` (helpers, storage, shared state), `feed` (vehicle
+feed, ghost filter, idle pause, refresh), `ui` (map, markers, detail panel, places), `stops` (stop links, stop board,
+ETA), `alerts` (service alerts, leave-now rules), `planner` (trip planner core), `trip` (trip planner interface) and
+`main` (test hook and start). Each file adds only `window.SEPTA.<name>`. If a file fails to load, a red banner at the
+top of the page names it. How the files fit together and how to add one: [ARCHITECTURE.md](ARCHITECTURE.md) section 14.
 
 ## Run the tests
 
@@ -34,6 +43,11 @@ Every other `test_*` function in the file is full-only. Put a test in `FAST` whe
 set would otherwise miss or is the cheapest test of that area; keep the fast run near 90 seconds. `run.py` stops with
 an error if `FAST` is missing or names a test that does not exist. The Worker unit test (`tests/test_worker.mjs`) is
 always in the fast set.
+
+`tests/test_modules.py` covers the script split: a blocked `js/` file shows the error banner, `window` gains only
+`SEPTA`, and file sizes and load order stay as documented. Tests that grep the source use `app_source(root)` or
+`app_script(root)` from `tests/harness.py`, which read `index.html` plus the `js/` files. `python3 tools/check_split.py`
+compares the `js/` files with the last single-file `index.html` (commit `cc22b7e`) and fails unless the move was pure.
 
 `tests/test_data_sanity.py` guards `data/bus-network.json`: route, stop and pattern counts within 10 percent of
 `tests/data_baseline.json`, file under 1.5 MB, feed end date still in the future. If a regenerated feed really changes

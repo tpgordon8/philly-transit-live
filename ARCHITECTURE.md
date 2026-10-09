@@ -1,6 +1,6 @@
 # Philly Transit Live — architecture
 
-Status: Phase 0 audit, approved by the architect. Source of truth is this repo; `index.html` is canonical.
+Status: Phase 0 audit, approved by the architect. Source of truth is this repo; `index.html` plus the scripts in `js/` are canonical (section 14).
 Copies of the app outside the repo (for example a published artifact) are stale and may not work.
 
 ## 1. Data flow
@@ -103,7 +103,7 @@ SEPTA public hackathon API (no key, no CORS headers)
   default pages left open around the clock reach the 100,000 limit. Browsers that saved the old defaults are moved
   to the new ones once (`septa.defaults.v2`, section 6).
 
-## 3. Ghost-bus filter (`normBuses` in `index.html`)
+## 3. Ghost-bus filter (`normBuses` in `js/feed.js`)
 
 A bus is kept only if all of these hold:
 
@@ -293,7 +293,7 @@ extracted bus feed). Standard library only, about 5 s; stop_times.txt is streame
 extracted to a temp directory; nothing downloaded is executed. Then run `python3 tests/run.py --only network_data`
 and commit `data/bus-network.json`.
 
-### 12.3 Planner algorithm (pure functions in `index.html`, exposed on `window.__SEPTA_TEST__`)
+### 12.3 Planner algorithm (pure functions in `js/planner.js`, exposed on `window.__SEPTA_TEST__`)
 Inputs: origin O, destination D, `now`, the network JSON, Indego info and status, live buses (`collect()`).
 1. Always compute WALK (foot route O to D), CAR (car route), and BIKE: nearest rentable station S1 to O with at least
    one bike (rank by straight-line distance, consider the nearest 3), nearest station S2 to D with at least one free
@@ -389,3 +389,50 @@ Goal: leave no known debt before the next feature. Every package keeps behaviour
 ### 13.4 Definition of debt free
 
 Every register item closed with a test; fast suite under 90 s; CI green on main; Worker v3 live and smoke-tested; no direct third-party call from the page when the Worker is healthy; no script block over 600 lines; a monthly job keeps schedule data fresh; this document lists no open items.
+
+## 14. Code layout after the WP3 split (D8)
+
+`index.html` keeps the markup, the styles, the Leaflet tag (with its SRI hash, unchanged) and 18 lines of inline script. The 2,000-line application script became eight classic scripts. There is no bundler, no ES modules and no build step; GitHub Pages serves the files as they are.
+
+### 14.1 Files and load order
+
+| File | Lines | Holds |
+|------|-------|-------|
+| `js/util.js` | 135 | constants, formatting and geometry, `$`, the `localStorage` wrapper, saved preferences, places, starred routes, the shared `state` object, the Leaflet-missing banner |
+| `js/feed.js` | 212 | `normBuses` (ghost filter), `normTrains`, `septa()` fetch through the Worker, idle pause, `refresh`, and `collect`/`apply`, the pipeline that turns feed data into what is drawn |
+| `js/ui.js` | 493 | the Leaflet map, vehicle markers, status line, vehicle detail panel, location search, saved places, `setCenter`/`setRadius` |
+| `js/stops.js` | 238 | speed history and `etaFor`, stop links, stop card and live stop board |
+| `js/alerts.js` | 252 | service alerts and the leave-now rules (`evalRule`, `evalRules`, `notify`) |
+| `js/planner.js` | 465 | trip planner core: bus network, Indego, routing, `planTrips` (no DOM) |
+| `js/trip.js` | 302 | trip planner interface: form, results, map drawing |
+| `js/main.js` | 36 | the `window.__SEPTA_TEST__` hook and the start-up calls |
+
+The inline script before them creates `window.SEPTA` (one object per file, plus `failed` and `loadFailed`) and the load-error listener. `index.html` then loads `util`, `feed`, `ui`, `stops`, `alerts`, `planner`, `trip`, `main` in that order, then a one-line check that `main.js` ran.
+
+### 14.2 How the files share code
+
+The old script was one closure, so every function saw every other function and variable. Each file is now its own closure (an IIFE with `'use strict'`) and shares code only through `window.SEPTA.<file>`. Every line that is not original code ends in `/*@split*/` and is one of:
+
+- `var S=window.SEPTA;` and the import lines `var a=S.util.a,b=S.util.b;`. These copy names owned by an earlier file. They are by value, so only things that are never reassigned (functions, constants, objects such as `state`, `map`, `routesStore`) are shared this way. A variable that is reassigned after load (`inflight`, `radiusCircle`, `savedCenter`, `stopLayer`, ...) lives in the same file as every function that touches it.
+- Forward-call shims `function renderStatus(){return S.ui.renderStatus.apply(null,arguments)}` for a function owned by a later file. They look the function up at call time, so circular calls (feed calls ui, ui calls feed) work. A shim is never called while the files are loading.
+- Export lines `S.util.esc=esc;` for names another file or the test hook uses.
+- `S.halt=(typeof L==='undefined');` in `util.js` and `if(S.halt)return;` where the original script returned early because Leaflet had not loaded. The pure functions are exported before that point so the test hook still works; nothing else starts.
+- `S.started=true;` in `main.js`, and in `ui.js`/`main.js` a small `radiusCircleBounds` bridge for the one reassigned variable the start-up code reads.
+
+Function bodies and every other line of code are moved unchanged. Top-level statements that run at load time (event wiring, `setInterval`, the one-time defaults migration) stay in the file that owns what they touch, in their original relative order, so timers and listeners are registered in the same order as before. The one exception is the `__SEPTA_TEST__.tripMap` assignment, which moved to `main.js` after the hook is created.
+
+`python3 tools/check_split.py` proves the move was pure: it removes the wrapper lines and compares the remaining code with `index.html` at `cc22b7e` as sorted function names, sorted var names, and the multiset of top-level code chunks as token streams. It also fails on a file over 600 lines, 60 or more inline lines, or a stray `window` assignment.
+
+### 14.3 Adding a module
+
+1. Create `js/<name>.js` with the same shape as an existing small file (`main.js` is the shortest): the IIFE, `var S=window.SEPTA;`, imports, your code, exports.
+2. Add `<name>:{}` to the object in the inline script of `index.html` and a `<script src="js/<name>.js"></script>` tag. Place it after every file whose variables it needs at load time; files it only calls into later can come after it (use a shim).
+3. Add the name to `FILES` in `tests/test_modules.py`. Keep the file at 600 lines or fewer.
+4. Run `python3 tests/run.py --fast`. Tests that grep source read it through `app_source`/`app_script` in `tests/harness.py`.
+
+### 14.4 Failure behaviour and deviations from 13.2
+
+- A script that fails to load (404, network error, blocked) triggers a capture-phase `error` listener that adds a fixed red `#loadError` banner naming the file. A final inline check does the same if `main.js` never ran, for example after a syntax error. The banner is separate from `#banner` because the app rewrites `#banner` every second.
+- Plan 13.2 had `ui.js` holding the trip UI; it became its own `trip.js` so no file passes 600 lines. `feed.js` also owns `collect`/`apply` because they read the refresh loop's `inflight` flag.
+- There is no service worker or cache list in the repo, so there was nothing to update there.
+- `tests/harness.py` already served the checkout directory, so `js/` needed no server change; it gained `app_script` and `app_source`, and the two tests that grep source (`test_single_clear_selection_and_all_paths_work`, `test_dead_code_removed`) now read through them, because the code they search is no longer in `index.html`.

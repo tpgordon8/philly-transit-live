@@ -41,6 +41,20 @@ LEGACY_DEFAULTS_JS = """(() => { try {
 } catch (e) {} })();"""
 
 
+def app_script(root):
+    """The application code of a checkout: every js/*.js file index.html loads, concatenated in load order.
+    (Tests that grep the source for a pattern read this instead of index.html, which keeps only markup and a small loader.)"""
+    root = pathlib.Path(root)
+    html = (root / "index.html").read_text()
+    files = re.findall(r'<script src="(js/[^"]+)"', html)
+    return "\n".join((root / f).read_text() for f in files)
+
+
+def app_source(root):
+    """index.html followed by all of its js files."""
+    return (pathlib.Path(root) / "index.html").read_text() + "\n" + app_script(root)
+
+
 def load_fixtures():
     """Parse every tests/fixtures/*.json; a file that does not parse fails loudly with its name."""
     out, bad = {}, []

@@ -2,7 +2,7 @@
 directions-link wording."""
 import json
 
-from harness import FIX, Session
+from harness import FIX, Session, app_source
 
 # Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
 FAST = {
@@ -138,7 +138,7 @@ def test_banner_reflects_each_sources_state(root):
 
 
 def test_dead_code_removed(root):
-    src = (s_root(root) / "index.html").read_text()
+    src = app_source(root)
     assert "okAny&&false" not in src and "var API=" not in src
 
 
