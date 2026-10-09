@@ -34,14 +34,15 @@ def jump(s, minutes):
     The page clock is installed running (it follows real time). Playwright's real-time driver can finish a run it started
     before a fast_forward and then set the clock back to where that run began, which silently undoes the jump (timers
     then stay dead for the next `minutes`). So stop the real-time driver first (pause_at also fast-forwards by 1 s), take
-    the jump on a paused clock, and check the clock really moved.
+    the jump on a paused clock, and check the clock really moved (a rollback loses the whole jump; the clock may land a
+    second or two short of it on a slow machine, so allow 5 s).
     """
     before = fake_now(s)
     s.page.clock.pause_at((before + 1000) / 1000)  # seconds since the epoch
     mid = fake_now(s)
     s.page.clock.fast_forward(minutes * MIN)
     after = fake_now(s)
-    assert after - mid >= minutes * MIN, ("clock jump was undone", before, mid, after)
+    assert after - mid >= minutes * MIN - 5000, ("clock jump was undone", before, mid, after)
     s.tick(15000)
 
 
