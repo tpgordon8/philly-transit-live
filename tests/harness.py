@@ -33,10 +33,14 @@ PNG = base64.b64decode(
 )
 
 
-# Pre-seeds the pre-v2 defaults (all modes on, 1.5 mi) so tests written against them keep their world. Keys that a
-# test (or an earlier init script) already set win: each is written only if absent at load.
+# Pre-seeds the pre-v2 defaults (all modes on, 1.5 mi) so tests written against them keep their world, marks the v3 defaults
+# migration (all buses, Trolley and Subway on) as done so saved routes keep the onlyMine value a test seeds, and marks the
+# welcome card and vehicle tip as seen so they do not cover or lengthen what other tests measure. Keys that a test (or an
+# earlier init script) already set win: each is written only if absent at load.
 LEGACY_DEFAULTS_JS = """(() => { try {
   if (localStorage.getItem('septa.defaults.v2') === null) localStorage.setItem('septa.defaults.v2', '1');
+  if (localStorage.getItem('septa.defaults.v3') === null) localStorage.setItem('septa.defaults.v3', '1');
+  if (localStorage.getItem('septa.seen.v1') === null) localStorage.setItem('septa.seen.v1', JSON.stringify({welcome: true, vehicleTip: true}));
   if (localStorage.getItem('septa.prefs.v1') === null)
     localStorage.setItem('septa.prefs.v1', JSON.stringify({radius: 1.5, filters: {bus: true, trolley: true, subway: true, train: true}}));
 } catch (e) {} })();"""

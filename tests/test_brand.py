@@ -1,4 +1,4 @@
-"""WP-D: the product is named Septer (ARCHITECTURE.md 15.1): title, wordmark in the Helvetica-style stack, manifest and
+"""WP-D: the product is named Septer (ARCHITECTURE.md 15.1): title, wordmark in Barlow Condensed 700, manifest and
 icons, no leftover old name in anything a person sees, and a header that never wraps."""
 import json
 import pathlib
@@ -27,9 +27,10 @@ def test_title_wordmark_and_font(root):
             " return [c.fontFamily, c.fontWeight, c.letterSpacing, c.textTransform]; })()"
         )
         family = [f.strip().strip("\"'") for f in css[0].split(",")]
-        assert family[:3] == ["Helvetica Neue", "Helvetica", "Arial"], css
-        assert int(css[1]) >= 700, css
-        assert css[2] in ("normal", "0px"), css
+        assert family[0] == "Barlow Condensed", css
+        assert int(css[1]) == 700, css
+        assert css[2] not in ("normal", "0px"), "slight letter-spacing"
+        assert 0 < float(css[2][:-2]) <= 2, css
         assert css[3] == "none", css
         for name in ("description", "application-name", "apple-mobile-web-app-title"):
             assert "Septer" in s.page.get_attribute(f"meta[name={name}]", "content"), name

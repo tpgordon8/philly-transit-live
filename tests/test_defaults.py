@@ -1,4 +1,5 @@
-"""Buses-only, 0.5 mi defaults and the one-time septa.defaults.v2 migration.
+"""Bus, Trolley and Subway on (Regional Rail off), 0.5 mi defaults and the one-time septa.defaults.v2 and v3 migrations
+(v3 is covered by tests/test_first_run.py).
 
 All sessions here use legacy_defaults=False so the harness does not pre-seed the old all-modes world.
 """
@@ -8,13 +9,14 @@ from harness import Session
 
 # Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
 FAST = {
-    "test_a_fresh_browser_is_buses_only_half_mile_no_trainview",
+    "test_a_fresh_browser_is_bus_trolley_subway_half_mile_no_trainview",
     "test_b_legacy_saved_prefs_migrate_once_keep_center",
     "test_f_empty_state_half_mile_and_widen_button",
 }
 
 PREFS, KEY = "septa.prefs.v1", "septa.defaults.v2"
-NEW = {"bus": True, "trolley": False, "subway": False, "train": False, "indego": False}  # Indego stations are off by default (js/indego.js)
+NEW = {"bus": True, "trolley": True, "subway": True, "train": False, "indego": False}  # Indego stations are off by default (js/indego.js)
+THREE = ["bus", "trolley", "subway"]
 OLD_ALL = {"bus": True, "trolley": True, "subway": True, "train": True}
 FAR = {"lat": 40.5, "lng": -75.0, "label": "Nowhere"}  # no fixture vehicle within 5 mi
 
@@ -40,14 +42,14 @@ def hits(s, name):
     return [h for h in s.worker.hits if h == name]
 
 
-def test_a_fresh_browser_is_buses_only_half_mile_no_trainview(root):
+def test_a_fresh_browser_is_bus_trolley_subway_half_mile_no_trainview(root):
     with Session(root, legacy_defaults=False) as s:
         s.open()
         s.wait_live()
-        assert chips_on(s) == ["bus"], chips_on(s)
+        assert chips_on(s) == THREE, chips_on(s)
         assert radius_ui(s) == ["0.5", "0.5 mi"], radius_ui(s)
         kinds = s.page.evaluate("[...document.querySelectorAll('.veh-wrap')].map(w => (w.className.match(/k-(\\w+)/) || [])[1])")
-        assert kinds and set(kinds) == {"bus"}, set(kinds)
+        assert kinds and set(kinds) <= {"bus", "trolley", "subway"} and "bus" in kinds, set(kinds)
         for _ in range(5):
             s.tick(15000)
         assert len(hits(s, "TransitView")) >= 5 and not hits(s, "TrainView"), s.worker.hits
@@ -60,7 +62,7 @@ def test_b_legacy_saved_prefs_migrate_once_keep_center(root):
     with Session(root, legacy_defaults=False, init_scripts=[seed_if_absent(PREFS, legacy)]) as s:
         s.open()
         s.wait_live()
-        assert chips_on(s) == ["bus"], chips_on(s)
+        assert chips_on(s) == THREE, chips_on(s)
         assert radius_ui(s) == ["0.5", "0.5 mi"], radius_ui(s)
         saved = json.loads(raw(s, PREFS))
         assert saved["center"] == center, saved
@@ -81,7 +83,7 @@ def test_c_second_load_is_not_migrated_and_rail_is_requested(root):
         s.worker.hits.clear()
         s.page.reload()
         s.wait_live()
-        assert chips_on(s) == ["bus", "train"], chips_on(s)
+        assert chips_on(s) == THREE + ["train"], chips_on(s)
         s.tick(15000)
         assert hits(s, "TrainView"), s.worker.hits
         assert json.loads(raw(s, PREFS))["filters"] == {**NEW, "train": True}
@@ -90,11 +92,11 @@ def test_c_second_load_is_not_migrated_and_rail_is_requested(root):
 
 def test_d_trolley_chip_costs_no_trainview(root):
     west = {"lat": 39.9498, "lng": -75.2019, "label": "West Philly"}  # fixture trolleys (T2) run here
-    scripts = [seed_if_absent(KEY, "1"), seed_if_absent(PREFS, {"center": west})]
+    scripts = [seed_if_absent(KEY, "1"), seed_if_absent("septa.defaults.v3", "1"), seed_if_absent(PREFS, {"center": west})]
     with Session(root, legacy_defaults=False, init_scripts=scripts) as s:
         s.open()
         s.wait_live()
-        s.page.check("#modes input[data-mode=trolley]", force=True)
+        s.page.uncheck("#modes input[data-mode=subway]", force=True)
         for _ in range(3):
             s.tick(15000)
         assert chips_on(s) == ["bus", "trolley"], chips_on(s)
@@ -113,7 +115,7 @@ def test_e_corrupt_prefs_and_missing_key_boot_with_new_defaults(root):
         with Session(root, legacy_defaults=False, init_scripts=[script]) as s:
             s.open()
             s.wait_live()
-            assert chips_on(s) == ["bus"] and radius_ui(s) == ["0.5", "0.5 mi"], (junk, chips_on(s), radius_ui(s))
+            assert chips_on(s) == THREE and radius_ui(s) == ["0.5", "0.5 mi"], (junk, chips_on(s), radius_ui(s))
             assert raw(s, KEY) is not None
             assert json.loads(raw(s, PREFS))["filters"] == NEW
             assert not s.console_errors, (junk, s.console_errors)

@@ -62,7 +62,7 @@ def test_corrupt_prefs_junk_types(root):
         s.open()
         s.wait_live()
         st = s.page.evaluate("({r: document.querySelector('#radius').value, bus: document.querySelector('[data-mode=bus]').checked, train: document.querySelector('[data-mode=train]').checked, subway: document.querySelector('[data-mode=subway]').checked})")
-        assert st["bus"] is True and st["train"] is False and st["subway"] is False, st  # missing/invalid fields fall back to the new defaults
+        assert st["bus"] is True and st["train"] is False and st["subway"] is True, st  # missing/invalid fields fall back to the defaults (Subway is on since v1.3)
         assert float(st["r"]) == 0.5, st
 
 
@@ -234,7 +234,7 @@ def test_old_saved_prefs_without_subway_still_load(root):
         s.open()
         s.wait_live()
         st = s.page.evaluate("Object.fromEntries([...document.querySelectorAll('[data-mode]')].map(i => [i.dataset.mode, i.checked]))")
-        assert st == {"bus": True, "trolley": False, "subway": False, "train": True, "indego": False}, st  # a missing key takes the new default (off)
+        assert st == {"bus": True, "trolley": False, "subway": True, "train": True, "indego": False}, st  # a missing key takes the default (Subway on since v1.3, Indego off); a saved false stays
 
 
 # ---------------------------------------------------------------- 6. request budget

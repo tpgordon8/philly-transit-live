@@ -303,8 +303,9 @@
   }
   /* Toasts: role="alert" on each one, so it is announced once when inserted. Never auto-dismissed; max 3 shown.
    `front` puts the toast before the others. A phone shows only the last toast, so a "Can't save" notice raised right after a
-   leave-now toast goes to the front and the leave-now message stays on top. */
-  function showToast(msg, front) {
+   leave-now toast goes to the front and the leave-now message stays on top. `act` ({label, run}) adds one action button
+   before Dismiss; running it also closes the toast. */
+  function showToast(msg, front, act) {
     try {
       var box = $('#toasts'),
         t = el('div', 'toast'),
@@ -320,6 +321,15 @@
         if (e.key === 'Escape') close();
       });
       t.appendChild(m);
+      if (act) {
+        var a = el('button', 'btn small primary tact', act.label);
+        a.type = 'button';
+        a.addEventListener('click', function () {
+          close();
+          act.run();
+        });
+        t.appendChild(a);
+      }
       t.appendChild(b);
       if (front) box.insertBefore(t, box.firstChild);
       else box.appendChild(t);
@@ -347,6 +357,10 @@
     showToast(msg, true);
   }
   S.util.toastHook = noticeToast;
+  /* A plain toast with one action button, for other files (js/panel.js: the first starred route). */
+  function toastAction(msg, label, run) {
+    showToast(msg, false, { label: label, run: run });
+  }
   S.util.flushToasts();
   function ruleStatusText(res) {
     switch (res.state) {
@@ -544,6 +558,7 @@
   S.alerts.hasActiveRule = hasActiveRule;
   S.alerts.evalRules = evalRules;
   S.alerts.notify = notify;
+  S.alerts.toastAction = toastAction;
   S.alerts.leaveMsg = leaveMsg;
   S.alerts.renderRules = renderRules;
   S.alerts.alertRow = alertRow;

@@ -61,7 +61,7 @@ def test_index_html_wording_and_no_jargon(root):
         assert part in html, part
     for gone in ("Nothing is stored in this page", "Make Home", "Save as Home", "Near this search", "Whole system", "Suggestions: "):
         assert gone not in html, gone
-    assert html.count('class="empty-line tp-priv"') == 1 and html.count("<details") == 1, "the long privacy text appears once"
+    assert html.count('class="empty-line tp-priv"') == 1 and html.count('<details id="privacyDetails"') == 1, "the long privacy text appears once"
     assert html.index('id="privacyDetails"') > html.index('id="h-alerts"'), "privacy sits at the end of the panel"
     visible = re.sub(r"<[^>]+>", " ", rider_html(root))
     attrs = " ".join(re.findall(r'(?:aria-label|placeholder|title)="([^"]*)"', rider_html(root)))
