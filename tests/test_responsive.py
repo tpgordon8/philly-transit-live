@@ -315,8 +315,8 @@ def test_page_is_not_left_shrunk_when_the_keyboard_goes_without_an_event(root):
     check_kb_released_without_events(root, True)
     check_kb_released_without_events(root, False)
     must_fail(lambda r: check_kb_released_without_events(r, True), root, ("js/sheet.js", "document.addEventListener('focusout', recheckKeyboard);", ""),
-              ("js/sheet.js", "!== '0px') fitKeyboard();", "!== '0px') 0;"))
-    must_fail(lambda r: check_kb_released_without_events(r, False), root, ("js/sheet.js", "!== '0px') fitKeyboard();", "!== '0px') 0;"))
+              ("js/sheet.js", "!== '0px') applyKeyboard();", "!== '0px') 0;"))
+    must_fail(lambda r: check_kb_released_without_events(r, False), root, ("js/sheet.js", "!== '0px') applyKeyboard();", "!== '0px') 0;"))
 
 
 def test_pinch_zoom_is_not_a_keyboard_and_the_handle_has_no_dangling_controls(root):

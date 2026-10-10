@@ -2,6 +2,7 @@
 Walk here into the trip planner, polling rules, failure behaviour, phone layout and badge contrast. Hermetic: the harness mocks the
 Worker's /indego/* endpoints and the direct fallback."""
 import json
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 import time
 
 from harness import Session
@@ -208,7 +209,14 @@ PICKABLE = """() => { const m = document.querySelector('#map').getBoundingClient
 
 
 def open_first(s, how="click"):
-    s.page.wait_for_function("(" + PICKABLE + ")()", timeout=15000)  # a slow runner may not have drawn the markers yet
+    try:
+        s.page.wait_for_function("(" + PICKABLE + ")()", timeout=15000)  # a slow runner may not have drawn the markers yet
+    except PlaywrightTimeout:
+        info = s.page.evaluate("""() => { const m = document.querySelector('#map').getBoundingClientRect();
+            return {map: [m.left, m.top, m.right, m.bottom], zoom: window.__SEPTA_TEST__.tripMap.getZoom(), n: document.querySelectorAll('.ind-wrap').length,
+              first: [...document.querySelectorAll('.ind-wrap')].slice(0, 4).map(e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; }),
+              vw: innerWidth, vh: innerHeight}; }""")
+        raise AssertionError(("no pickable Indego marker", info))
     nm = s.page.evaluate("() => { const e = (" + PICKABLE + ")(); e.dataset.pick = '1'; return e.getAttribute('title'); }")
     e = s.page.locator('.ind-wrap[data-pick="1"]')
     if how == "click":

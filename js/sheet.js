@@ -40,9 +40,9 @@
   /* A browser that leaves the layout alone for the keyboard (iOS) reports it only through visualViewport: shrink the page by the covered
      height so the sheet and the field being typed in end up above the keyboard. Browsers that resize the layout report 0 here.
      A pinch-zoomed page also has a shorter visual viewport but no keyboard, so --kb applies only at scale 1 with a text field focused. */
-  function fitKeyboard() {
+  function applyKeyboard() {
     var vv = window.visualViewport;
-    if (!vv) return;
+    if (!vv) return null;
     var a = document.activeElement;
     var typing = !!(a && a.matches && a.matches(FIELD));
     var unzoomed = Math.abs((vv.scale || 1) - 1) < PINCH_EPSILON;
@@ -52,7 +52,11 @@
       root.style.setProperty('--kb', kb);
       resizeMap();
     }
-    if (typing && panel.contains(a)) a.scrollIntoView({ block: 'nearest' });
+    return { typing: typing, field: a };
+  }
+  function fitKeyboard() {
+    var r = applyKeyboard();
+    if (r && r.typing && panel.contains(r.field)) r.field.scrollIntoView({ block: 'nearest' });
   }
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', fitKeyboard);
@@ -61,16 +65,16 @@
   /* iOS can drop focus after its last viewport event (Done, a swipe, a tap on the map), which would leave the page shrunk for a keyboard
      that is gone. Re-check when focus leaves, when the page returns or turns, and on a short watchdog while the page is shrunk. */
   function recheckKeyboard() {
-    fitKeyboard();
-    setTimeout(fitKeyboard, 120);
-    setTimeout(fitKeyboard, 450);
+    applyKeyboard();
+    setTimeout(applyKeyboard, 120);
+    setTimeout(applyKeyboard, 450);
   }
   document.addEventListener('focusout', recheckKeyboard);
   window.addEventListener('pageshow', recheckKeyboard);
   window.addEventListener('orientationchange', recheckKeyboard);
-  window.addEventListener('resize', fitKeyboard);
+  window.addEventListener('resize', applyKeyboard);
   setInterval(function () {
-    if ((root.style.getPropertyValue('--kb') || '0px') !== '0px') fitKeyboard();
+    if ((root.style.getPropertyValue('--kb') || '0px') !== '0px') applyKeyboard();
   }, 500);
   /* Reaching any control below the peek row (Tab, or a tap on one) opens the sheet; the peek row (search, Use my location, the My routes pill) works while it peeks.
      Once the keyboard has settled the field being typed in is scrolled into view. */
