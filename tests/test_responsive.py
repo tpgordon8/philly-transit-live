@@ -7,6 +7,7 @@ import pathlib
 import re
 
 from harness import FIX, Session
+from test_first_run import must_fail
 
 # Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
 FAST = {
@@ -289,6 +290,33 @@ def test_sheet_toggle_and_keyboard_reach(root):
         s.page.evaluate("""() => { delete window.visualViewport.height; window.visualViewport.dispatchEvent(new Event('resize')); }""")
         s.page.wait_for_timeout(150)
         assert s.page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--kb').trim()") == "0px"
+
+
+def check_kb_released_without_events(root, blur):
+    # iOS can end the keyboard without a final viewport event: the page must not stay shrunk (a blank block under the sheet)
+    kb = "getComputedStyle(document.documentElement).getPropertyValue('--kb').trim()"
+    with session(root, (390, 844)) as s:
+        boot(s)
+        s.page.focus("#addr")
+        s.page.evaluate("""() => { const vv = window.visualViewport;
+            Object.defineProperty(vv, 'height', {configurable: true, get: () => window.innerHeight - 330});
+            vv.dispatchEvent(new Event('resize')); }""")
+        s.page.wait_for_timeout(700)  # past the settle timer, so only the new paths can notice the change
+        assert s.page.evaluate(kb) == "330px"
+        s.page.evaluate("() => { delete window.visualViewport.height; }")  # the keyboard is gone; no event fires
+        if blur:
+            s.page.evaluate("document.activeElement.blur()")
+        s.page.wait_for_timeout(1100)
+        assert s.page.evaluate(kb) == "0px", "the page stayed shrunk for a keyboard that is gone"
+        assert s.page.evaluate("document.querySelector('#app').getBoundingClientRect().bottom") >= 843
+
+
+def test_page_is_not_left_shrunk_when_the_keyboard_goes_without_an_event(root):
+    check_kb_released_without_events(root, True)
+    check_kb_released_without_events(root, False)
+    must_fail(lambda r: check_kb_released_without_events(r, True), root, ("js/sheet.js", "document.addEventListener('focusout', recheckKeyboard);", ""),
+              ("js/sheet.js", "!== '0px') fitKeyboard();", "!== '0px') 0;"))
+    must_fail(lambda r: check_kb_released_without_events(r, False), root, ("js/sheet.js", "!== '0px') fitKeyboard();", "!== '0px') 0;"))
 
 
 def test_pinch_zoom_is_not_a_keyboard_and_the_handle_has_no_dangling_controls(root):

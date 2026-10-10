@@ -202,11 +202,14 @@ def test_badge_class_by_availability_names_and_zero_cue(root):
 
 # ---------------------------------------------------------------- card, directions, keyboard
 
+PICKABLE = """() => { const m = document.querySelector('#map').getBoundingClientRect();
+        return [...document.querySelectorAll('.ind-wrap')].find(e => { const r = e.getBoundingClientRect();
+          return r.left > m.left + 20 && r.right < m.right - 90 && r.top > m.top + 90 && r.bottom < m.bottom - 200; }); }"""
+
+
 def open_first(s, how="click"):
-    nm = s.page.evaluate("""() => { const m = document.querySelector('#map').getBoundingClientRect();
-        const e = [...document.querySelectorAll('.ind-wrap')].find(e => { const r = e.getBoundingClientRect();
-          return r.left > m.left + 20 && r.right < m.right - 90 && r.top > m.top + 90 && r.bottom < m.bottom - 200; });
-        e.dataset.pick = '1'; return e.getAttribute('title'); }""")
+    s.page.wait_for_function("(" + PICKABLE + ")()", timeout=15000)  # a slow runner may not have drawn the markers yet
+    nm = s.page.evaluate("() => { const e = (" + PICKABLE + ")(); e.dataset.pick = '1'; return e.getAttribute('title'); }")
     e = s.page.locator('.ind-wrap[data-pick="1"]')
     if how == "click":
         e.evaluate("e => e.click()")

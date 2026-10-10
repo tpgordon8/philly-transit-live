@@ -58,6 +58,20 @@
     window.visualViewport.addEventListener('resize', fitKeyboard);
     window.visualViewport.addEventListener('scroll', fitKeyboard);
   }
+  /* iOS can drop focus after its last viewport event (Done, a swipe, a tap on the map), which would leave the page shrunk for a keyboard
+     that is gone. Re-check when focus leaves, when the page returns or turns, and on a short watchdog while the page is shrunk. */
+  function recheckKeyboard() {
+    fitKeyboard();
+    setTimeout(fitKeyboard, 120);
+    setTimeout(fitKeyboard, 450);
+  }
+  document.addEventListener('focusout', recheckKeyboard);
+  window.addEventListener('pageshow', recheckKeyboard);
+  window.addEventListener('orientationchange', recheckKeyboard);
+  window.addEventListener('resize', fitKeyboard);
+  setInterval(function () {
+    if ((root.style.getPropertyValue('--kb') || '0px') !== '0px') fitKeyboard();
+  }, 500);
   /* Reaching any control below the peek row (Tab, or a tap on one) opens the sheet; the peek row (search, Use my location, the My routes pill) works while it peeks.
      Once the keyboard has settled the field being typed in is scrolled into view. */
   panel.addEventListener('focusin', function (e) {
