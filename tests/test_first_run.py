@@ -242,7 +242,7 @@ def marker_tap(s):
 
 
 def check_welcome(root):
-    with Session(root, viewport=PHONE, mobile=True, touch=True, legacy_defaults=False, init_scripts=[CLS]) as s:
+    with Session(root, viewport=PHONE, mobile=True, touch=True, legacy_defaults=False, init_scripts=[CLS, SHIFTS]) as s:
         boot(s)
         s.page.wait_for_timeout(600)
         card = s.page.locator("#welcome")
@@ -256,7 +256,9 @@ def check_welcome(root):
             assert not overlap(c, rect(s, sel)), sel
         zoom = rect(s, ".leaflet-control-zoom")
         assert not overlap(c, zoom), (c, zoom)
-        assert s.page.evaluate("window.__cls") == 0, s.page.evaluate("window.__cls")
+        moved = s.page.evaluate("window.__shifts")  # the status text may re-wrap by a hair when "Live" replaces "Connecting"; nothing else moves
+        assert not [m for m in moved if m in ("welcome", "welcomeOk", "addr", "btnSearch", "btnLocatePeek", "sheetHandle", "map", "stage")], moved
+        assert s.page.evaluate("window.__cls") < 0.001, s.page.evaluate("window.__cls")
         assert s.page.get_attribute("#app", "data-sheet") == "peek"
         ok.tap()
         assert card.is_hidden() and ls(s, SEEN) == {"welcome": True, "vehicleTip": False}, ls(s, SEEN)
