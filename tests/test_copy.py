@@ -49,7 +49,7 @@ def test_index_html_wording_and_no_jargon(root):
     for part in (
         "Suggestions by <a", "map data <a", "Privacy details</a>", '<summary>Privacy details</summary>', 'aria-label="Street address or intersection"',
         ">Use Home</button>", ">Set as Home</button>", ">Near here</button>", ">All of SEPTA</button>",
-        "Tap a stop on the map, then tap Add alert.",
+        "Tap a stop on the map or in Nearby stops, then tap Add alert.",
         "Walking, Indego, one bus or trolley, or driving. No subway, Regional Rank or transfers yet.".replace("Rank", "Rail"),
         "Positions from SEPTA's data, refreshed about every 15 seconds.",
         "When you type an address, the text and your approximate area (within about 1 km) are sent to Photon, a free place-search service, to suggest places.",
@@ -194,7 +194,7 @@ def test_notification_and_idle_wording(root):
         assert s.page.inner_text("#enableNotify") == "Get alerts in the background"
         s.page.click("#enableNotify")
         assert s.page.inner_text("#notifyBox") == "Notifications are blocked. Allow them for this site in your browser settings."
-        assert s.page.inner_text("#rulesEmpty") == "Tap a stop on the map, then tap Add alert."
+        assert s.page.inner_text("#rulesEmpty") == "Tap a stop on the map or in Nearby stops, then tap Add alert."
         ip.jump(s, 61)
         assert s.page.inner_text("#idleMsg").startswith("Paused after an hour of no activity. Tap Resume to keep tracking."), s.page.inner_text("#idleMsg")
         no_jargon(s.page.evaluate(VISIBLE_JS), "idle")

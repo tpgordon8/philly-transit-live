@@ -83,6 +83,7 @@
       chips = $('#tripChips');
     $('#tripFromHome').hidden = !h;
     $('#tripToHome').hidden = !h;
+    $('#btnHome').hidden = !h;
     chips.replaceChildren();
     var all = [];
     if (h) all.push({ label: 'Home', p: h, title: 'Home: ' + h.name });
@@ -125,6 +126,17 @@
         btn.disabled = false;
       });
   });
+  /* Your location, one shot, as the From point (and the From text). Rejects when location is unavailable or refused. */
+  function tripLocateFrom() {
+    return getPosition().then(function (p) {
+      var pt = { lat: p.coords.latitude, lng: p.coords.longitude, name: 'Your location' };
+      tripSetField('from', pt.name, { pt: pt });
+      return pt;
+    });
+  }
+  function tripNoStart() {
+    return { err: 'Add a start' };
+  }
   /* Resolves {pt} or {err}. Typed text is geocoded like the search box (plus ", Philadelphia, PA" when it has no comma). */
   function tripResolve(w, text) {
     var fp = fieldPt[w];
@@ -136,10 +148,7 @@
       return Promise.resolve(chk({ lat: state.center.lat, lng: state.center.lng, name: 'this location' }));
     if (fp && fp.pt) return Promise.resolve(chk(fp.pt));
     if (!text) {
-      if (w === 'from') {
-        tripSetField('from', 'This location', { kind: 'center' });
-        return Promise.resolve(chk({ lat: state.center.lat, lng: state.center.lng, name: 'this location' }));
-      }
+      if (w === 'from') return tripLocateFrom().then(chk, tripNoStart);
       return Promise.resolve({ err: "Enter where you're going." });
     }
     return geocode(text, { philly: true }).then(
@@ -684,4 +693,9 @@
   S.trip.setDestination = function (pt) {
     tripSetField('to', pt.name, { pt: { lat: pt.lat, lng: pt.lng, name: pt.name } });
   };
+  S.trip.tripSetField = tripSetField;
+  S.trip.tripErr = tripErr;
+  S.trip.tripFieldEl = tripFieldEl;
+  S.trip.tripLocateFrom = tripLocateFrom;
+  S.trip.startTrip = startTrip;
 })();

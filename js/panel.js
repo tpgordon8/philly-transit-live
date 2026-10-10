@@ -5,21 +5,17 @@
   function tripRenderPlaces() {
     return S.trip.tripRenderPlaces.apply(null, arguments);
   }
+  function nearbyStops() {
+    return S.nearby.show.apply(null, arguments);
+  }
   if (S.halt) return;
   var $ = S.util.$;
   var widenedRadius = S.util.widenedRadius,
-    CARD = S.util.CARD,
-    CARD_LONG = S.util.CARD_LONG,
     DROP_AFTER_MS = S.util.DROP_AFTER_MS,
     PHILLY = S.util.PHILLY,
-    angDiff = S.util.angDiff,
-    bearing = S.util.bearing,
-    distMi = S.util.distMi,
     el = S.util.el,
     esc = S.util.esc,
-    fmtMi = S.util.fmtMi,
     hideBanner = S.util.hideBanner,
-    lateInfo = S.util.lateInfo,
     routeFilterOn = S.util.routeFilterOn,
     routesStore = S.util.routesStore,
     saveRoutes = S.util.saveRoutes,
@@ -27,16 +23,11 @@
     state = S.util.state,
     store = S.util.store;
   var apply = S.feed.apply,
-    collect = S.feed.collect,
-    refresh = S.feed.refresh,
     wantedSources = S.feed.wantedSources;
   var clearSelection = S.map.clearSelection,
     drawCenter = S.map.drawCenter,
     drawHome = S.map.drawHome,
-    fitRadius = S.map.fitRadius,
-    map = S.map.map,
-    select = S.map.select;
-  var gmhLine = null; /* the dotted line from the search point to Home, drawn by renderGMH */
+    fitRadius = S.map.fitRadius;
   /* The center written to localStorage. A stop link moves state.center for this session only, so savePrefs
    writes savedCenter, which only setCenter() without noSave updates. */
   var savedCenter = state.center;
@@ -271,6 +262,8 @@
     if (fit) fitRadius();
     updateSaveForm();
     apply();
+    /* A stop link moves the center for the session only and does not list stops. */
+    if (!noSave) nearbyStops(state.center);
   }
   function setRadius(r, fit) {
     state.radius = r;
@@ -427,7 +420,7 @@
         btn.disabled = false;
       });
   });
-  /* ----- Saved places + Get me home ----- */
+  /* ----- Saved places ----- */
   function persistPlaces() {
     store.set('septa.places.v1', state.places);
   }
@@ -479,7 +472,6 @@
         persistPlaces();
         renderPlaces();
         drawHome();
-        $('#gmh').replaceChildren();
       });
       li.appendChild(go);
       li.appendChild(rm);
@@ -518,156 +510,39 @@
       ul.appendChild(li);
     });
     $('#placesEmpty').hidden = !!(h || state.places.list.length);
-    var hb = $('#btnHome');
-    hb.hidden = !h;
-    if (h) $('#homeName').textContent = h.name;
+    $('#homeHelp').hidden = !!h;
     tripRenderPlaces();
   }
+  /* ----- Get me home -----
+   From = Your location, To = Home, planned exactly as if both had been typed (the planner's own functions, js/trip.js). Without a
+   location nothing is guessed: the planner opens with To filled and the cursor in From. The saved search center is never written. */
   $('#btnHome').addEventListener('click', function () {
-    getMeHome();
-  });
-  function getMeHome() {
-    var home = state.places.home;
-    if (!home) return;
-    var btn = $('#btnHome');
+    var h = state.places.home,
+      btn = $('#btnHome'),
+      T = S.trip;
+    if (!h || btn.disabled) return;
     btn.disabled = true;
-    var origin = null,
-      usedGps = false;
-    getPosition()
-      .then(function (p) {
-        origin = { lat: p.coords.latitude, lng: p.coords.longitude, label: 'Your location' };
-        usedGps = true;
+    T.tripSetField('to', h.name, { pt: { lat: h.lat, lng: h.lng, name: h.name } });
+    T.tripSetField('from', '', null);
+    $('#tripLive').textContent = 'Finding your location';
+    try {
+      $('#tripSec').scrollIntoView({ block: 'start', behavior: S.map.animOK() ? 'smooth' : 'auto' });
+    } catch (e) {
+      /* scrollIntoView options are not supported everywhere; the focus below still brings From into view */
+    }
+    T.tripLocateFrom()
+      .then(function () {
+        T.startTrip(null);
       })
       .catch(function () {
-        origin = {
-          lat: state.center.lat,
-          lng: state.center.lng,
-          label: state.center.label || 'this location'
-        };
-      })
-      .then(function () {
-        state.center = { lat: origin.lat, lng: origin.lng, label: origin.label };
-        savedCenter = state.center;
-        savePrefs();
-        drawCenter();
-        updateSaveForm();
-        return refresh();
-      })
-      .then(function () {
-        var dHome = distMi(origin, home);
-        if (gmhLine) {
-          gmhLine.remove();
-          gmhLine = null;
-        }
-        gmhLine = L.polyline(
-          [
-            [origin.lat, origin.lng],
-            [home.lat, home.lng]
-          ],
-          { className: 'gmhline', interactive: false }
-        ).addTo(map);
-        map.fitBounds(
-          L.latLngBounds([
-            [origin.lat, origin.lng],
-            [home.lat, home.lng]
-          ]).pad(0.25),
-          { animate: S.map.animOK() }
-        );
-        var cands = collect()
-          .filter(function (v) {
-            if (v.stale || v.heading == null) return false;
-            if (distMi(origin, v) > state.radius) return false;
-            return angDiff(v.heading, bearing(v, home)) <= 50;
-          })
-          .sort(function (a, b) {
-            return distMi(origin, a) - distMi(origin, b);
-          })
-          .slice(0, 6);
-        renderGMH(origin, home, dHome, cands, usedGps);
-        apply();
+        $('#tripLive').textContent = '';
+        T.tripErr('from', 'Add a start to get home');
+        T.tripFieldEl('from').focus();
       })
       .finally(function () {
         btn.disabled = false;
       });
-  }
-  function renderGMH(origin, home, dHome, cands, usedGps) {
-    var box = $('#gmh');
-    box.replaceChildren();
-    var wrap = el('div', 'gmh'),
-      head = el('header');
-    var dir = CARD[Math.round(bearing(origin, home) / 45) % 8];
-    head.appendChild(
-      document.createTextNode(
-        'Home is ' + fmtMi(dHome) + ' ' + CARD_LONG[dir] + ' of ' + (usedGps ? 'you' : origin.label) + '.'
-      )
-    );
-    head.appendChild(document.createElement('br'));
-    var a = el('a', null, 'Open transit directions ↗');
-    a.href =
-      'https://www.google.com/maps/dir/?api=1&origin=' +
-      origin.lat +
-      ',' +
-      origin.lng +
-      '&destination=' +
-      home.lat +
-      ',' +
-      home.lng +
-      '&travelmode=transit';
-    a.target = '_blank';
-    a.rel = 'noopener';
-    head.appendChild(a);
-    var pn = el('span', 'dir-note', 'Opens Google Maps with your start and Home locations.');
-    pn.style.cssText = 'display:block;margin-top:2px;font-weight:400;font-size:12px;color:var(--mute)';
-    head.appendChild(pn);
-    wrap.appendChild(head);
-    if (cands.length) {
-      var ol = el('ol');
-      cands.forEach(function (v) {
-        var li = el('li'),
-          b = el('button');
-        b.type = 'button';
-        b.appendChild(el('span', 'rbadge k-' + v.kind, v.badge));
-        b.appendChild(el('span', null, 'To ' + (v.dest || 'destination not reported')));
-        var li2 = lateInfo(v.late);
-        b.appendChild(
-          el(
-            'span',
-            'meta',
-            fmtMi(distMi(origin, v)) + ' away · ' + li2.txt + (v.next ? ' · next: ' + v.next : '')
-          )
-        );
-        b.addEventListener('click', function () {
-          map.panTo([v.lat, v.lng], { animate: S.map.animOK() });
-          select(v.key);
-        });
-        li.appendChild(b);
-        ol.appendChild(li);
-      });
-      wrap.appendChild(ol);
-      wrap.appendChild(
-        el(
-          'div',
-          'fine',
-          "These are vehicles near you whose heading points toward Home. SEPTA's data has no route shapes, so check the destination before you board."
-        )
-      );
-    } else {
-      wrap.appendChild(
-        el(
-          'div',
-          'fine',
-          'No vehicle within ' +
-            state.radius +
-            ' mi is heading toward Home right now. Try a larger radius, or use the transit directions link.'
-        )
-      );
-    }
-    if (!usedGps)
-      wrap.appendChild(
-        el('div', 'fine', "Your location wasn't available, so this started from the place you last searched.")
-      );
-    box.appendChild(wrap);
-  }
+  });
   S.panel.renderMyRoutes = renderMyRoutes;
   S.panel.renderStatus = renderStatus;
   S.panel.setCenter = setCenter;

@@ -130,7 +130,7 @@ def test_a_form_labels_placement_and_geocoding(root):
                 btn: tripGo.textContent, hasLoc: !!document.querySelector('#tripLocate'), hasSwap: !!document.querySelector('#tripSwap'),
                 homeBtns: [tripFromHome.hidden, tripToHome.hidden], priv: document.querySelector('#privacyDetails .tp-priv').textContent, attr: document.querySelector('#tripAttr').textContent}; }""")
         assert info["labelled"] == "h-trip" and info["h"] == "Plan a trip"
-        assert info["prev"] == "h-find" and info["next"] == "h-places"
+        assert info["prev"] == "h-near" and info["next"] == "h-places"  # Nearby stops sits between Find and Plan a trip
         assert (info["from"], info["to"]) == ("From", "To") and info["vals"] == ["", ""]
         assert info["ph"] == ["Start: address or intersection", "Destination: address or intersection"]
         assert info["btn"] == "Plan trip" and info["hasLoc"] and info["hasSwap"] and info["homeBtns"] == [True, True]
@@ -335,21 +335,21 @@ def test_d_more_options_collapsed_by_default(root):
         assert s.page.locator("#tripMore").count() == 0
 
 
-# ------------------------------------------------------------------ (e) map center
-def test_e_empty_from_uses_map_center_without_touching_prefs(root):
-    with session() as s:
+# ------------------------------------------------------------------ (e) empty From (the empty-From failure is in test_nearest_stops)
+def test_e_empty_from_uses_your_location_without_touching_prefs(root):
+    with session(geolocation={"latitude": CENTER["lat"], "longitude": CENTER["lng"]}) as s:
         boot(s)
         prefs_before = s.page.evaluate("localStorage.getItem('septa.prefs.v1')")
         keys_before = s.page.evaluate("JSON.stringify(Object.entries(localStorage))")
         s.page.fill("#tripTo", "Dest Ave")
         s.page.click("#tripGo")
         wait_cards(s)
-        assert s.page.input_value("#tripFrom") == "This location"
+        assert s.page.input_value("#tripFrom") == "Your location"
         walk = next(h for h in s.mocks.routing_hits if h["profile"] == "foot")
         assert abs(walk["from"][0] - CENTER["lat"]) < 1e-4 and abs(walk["from"][1] - CENTER["lng"]) < 1e-4, walk
         assert s.page.evaluate("localStorage.getItem('septa.prefs.v1')") == prefs_before
         assert s.page.evaluate("JSON.stringify(Object.entries(localStorage))") == keys_before
-        assert "this location" in s.page.inner_text("#tripResults ol.tp-steps:not([hidden])")
+        assert "Your location" in s.page.inner_text("#tripResults ol.tp-steps:not([hidden])")
         # typing replaces the marker: the text is geocoded again
         s.page.fill("#tripFrom", "Origin St")
         s.page.click("#tripGo")

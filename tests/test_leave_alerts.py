@@ -307,7 +307,7 @@ def test_corrupt_storage_is_ignored(root):
             s.open()
             s.wait_live()
             assert s.page.locator("#rules li").count() == 0, js
-            assert "Tap a stop on the map, then tap Add alert." in s.page.inner_text("#h-leave ~ #rulesEmpty")
+            assert "Tap a stop on the map or in Nearby stops, then tap Add alert." in s.page.inner_text("#h-leave ~ #rulesEmpty")
             assert not s.console_errors, (js, s.console_errors)
 
 
@@ -459,7 +459,7 @@ def test_duplicates_are_not_created(root):
         # removing the rule re-enables the button
         s.page.locator("#rules .rrm").click()
         assert btn.is_enabled() and stored_rules(s) == []
-        assert "Tap a stop on the map, then tap Add alert." in s.page.inner_text("#rulesEmpty")
+        assert "Tap a stop on the map or in Nearby stops, then tap Add alert." in s.page.inner_text("#rulesEmpty")
 
 
 def test_ten_rule_cap(root):

@@ -44,9 +44,6 @@ select{min-height:44px;font-size:16px}
 :root[data-theme="dark"]{--subway:#c28cf5}
 .k-subway{--c:var(--subway)}
 
-.home{width:100%;min-height:48px;padding:12px 14px;border-radius:8px;border:0;background:var(--accent);color:var(--accent-ink);font:700 19px/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;gap:10px}
-.home small{font:500 12px var(--f-body);letter-spacing:0;text-transform:none;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.home:disabled{opacity:.6}
 .places{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
 .places li{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;min-width:0}
 .places .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
@@ -55,14 +52,6 @@ select{min-height:44px;font-size:16px}
 .saveform .row{margin-top:8px}
 .empty-line{color:var(--mute);font-size:13px;margin:10px 0 0}
 
-.gmh{margin:12px 0 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.gmh header{padding:10px 12px;background:var(--paper);font-weight:600}
-.gmh header a{color:var(--accent);font-weight:600;display:inline-block;margin-top:2px;padding:12px 0}
-.gmh ol{list-style:none;margin:0;padding:0}
-.gmh li button{width:100%;min-height:44px;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:center;text-align:left;padding:9px 12px;border:0;border-top:1px solid var(--line);background:var(--panel)}
-.gmh li button:hover{background:var(--paper)}
-.gmh .meta{grid-column:2;color:var(--mute);font-size:12.5px}
-.gmh .fine{padding:8px 12px;border-top:1px solid var(--line);color:var(--mute);font-size:12px}
 .rbadge{grid-row:span 2;min-width:38px;text-align:center;padding:3px 6px;border-radius:5px;background:var(--c);color:#fff;font:700 15px var(--f-display)}
 [data-theme="dark"] .rbadge,:root:not([data-theme="light"]) .rbadge{color:#06121f}
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .rbadge{color:#fff}}
