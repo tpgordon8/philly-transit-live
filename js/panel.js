@@ -54,7 +54,7 @@
       clearSelection();
       apply();
     } else {
-      state.filters = { bus: true, trolley: true, subway: true, train: true };
+      Object.assign(state.filters, { bus: true, trolley: true, subway: true, train: true });
       syncModeChips();
       savePrefs();
       apply();

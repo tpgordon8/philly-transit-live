@@ -14,8 +14,10 @@
     CARD_NARROW = S.map.CARD_NARROW;
   var MIN_ZOOM = 14 /* stations show from this zoom */,
     FULL_ZOOM = 16 /* from here every station in view is drawn; below it the nearest MAX_MARKERS to the centre */,
-    MAX_MARKERS = 150,
+    MAX_MARKERS = 150 /* a station not yet drawn enters at this rank (nearest the centre = 0) */,
+    KEEP_RANK = 170 /* a station already drawn stays while it ranks inside this, so panning does not flicker the edge */,
     POLL_MS = 60000 /* status refresh while the layer is on, the tab is visible and the rider is active */,
+    MAX_SKIP_TICKS = 4 /* back-off after failures: skip 1, 2, 4, 4 ... polls, so at most 5 minutes between attempts */,
     DIM_AFTER_MS = 180000; /* markers dim when the last good answer is this old and a refresh has failed */
   var stage = $('#stage'),
     chipInput = document.querySelector('#modes input[data-mode="indego"]'),
@@ -27,6 +29,9 @@
     fetchedAt = 0,
     feedAsOf = 0,
     failedAt = 0 /* time of the latest failed refresh, 0 after a good one */,
+    fails = 0 /* consecutive failed refreshes */,
+    skipTicks = 0 /* polls still to skip (back-off) */,
+    capped = false /* the last render drew fewer stations than are in view */,
     inflight = false,
     pollTimer = null,
     selected = null /* id of the station whose card is open */,
@@ -82,7 +87,8 @@
       plural(b, 'bike', 'bikes') +
       ', ' +
       plural(d, 'open dock', 'open docks') +
-      (s.installed ? '' : ', out of service')
+      (s.installed ? '' : ', out of service') +
+      (isDim() ? ', may be out of date' : '')
     );
   }
   function isDim() {
@@ -100,9 +106,11 @@
   /* ----- Markers ----- */
   function applyDim() {
     var d = isDim();
-    markers.forEach(function (m) {
+    markers.forEach(function (m, id) {
       var e = m.getElement();
-      if (e) e.classList.toggle('stale', d);
+      if (!e) return;
+      e.classList.toggle('stale', d);
+      if (byId[id]) setLabel(e, byId[id]);
     });
   }
   function makeMarker(s) {
@@ -135,11 +143,14 @@
     }
     return m;
   }
+  function setLabel(e, s) {
+    var lbl = labelOf(s);
+    if (e.getAttribute('aria-label') !== lbl) e.setAttribute('aria-label', lbl);
+  }
   function updateMarker(m, s) {
     var e = m.getElement();
     if (!e) return;
-    var lbl = labelOf(s);
-    if (e.getAttribute('aria-label') !== lbl) e.setAttribute('aria-label', lbl);
+    setLabel(e, s);
     if (e.getAttribute('title') !== s.name) e.setAttribute('title', s.name);
     var sig = sigOf(s);
     if (e.dataset.sig !== sig) {
@@ -179,13 +190,15 @@
           dy = s.lat - c.lat;
         return dx * dx + dy * dy;
       };
-      show = view
-        .slice()
-        .sort(function (a, z) {
-          return dist(a) - dist(z);
-        })
-        .slice(0, MAX_MARKERS);
+      var ranked = view.slice().sort(function (a, z) {
+        return dist(a) - dist(z);
+      });
+      /* Hysteresis: a station already on the map stays while it ranks inside KEEP_RANK, a new one needs rank MAX_MARKERS. */
+      show = ranked.filter(function (s, i) {
+        return i < MAX_MARKERS || (i < KEEP_RANK && markers.has(s.id));
+      });
     }
+    capped = show.length < view.length;
     var keep = new Set();
     show.forEach(function (s) {
       keep.add(s.id);
@@ -219,8 +232,9 @@
   function hintText() {
     if (!isOn()) return '';
     if (!zoomOK()) return 'Zoom in to see Indego stations';
-    if (failedAt && !data) return 'Indego bike data unavailable';
-    if (failedAt) return 'Indego bike data unavailable. Showing the last known bikes.';
+    if (failedAt && !data) return 'Indego data unavailable right now';
+    if (failedAt) return 'Indego data unavailable right now. Showing the last known bikes.';
+    if (capped) return 'Zoom in to see all Indego stations';
     return '';
   }
   function renderHint() {
@@ -236,6 +250,9 @@
     S.routing.loadIndego(fresh === true).then(
       function (list) {
         inflight = false;
+        if (!Array.isArray(list) || !list.length) return failed();
+        fails = 0;
+        skipTicks = 0;
         data = list;
         byId = {};
         list.forEach(function (s) {
@@ -248,16 +265,23 @@
             ? Math.min(list.asOf, fetchedAt)
             : fetchedAt;
         failedAt = 0;
+        if (selected && !byId[selected]) closeCard();
         render();
         if (selected) fillCard();
       },
       function () {
         inflight = false;
-        failedAt = Date.now();
-        render();
-        if (selected) fillCard();
+        failed();
       }
     );
+  }
+  /* A failed or unusable answer: keep the last stations, note it, and back off (skip 1, 2, 4 polls, then 4 each time). */
+  function failed() {
+    failedAt = Date.now();
+    fails++;
+    skipTicks = Math.min(Math.pow(2, fails - 1), MAX_SKIP_TICKS);
+    render();
+    if (selected) fillCard();
   }
   function wantPoll() {
     return isOn() && zoomOK() && !document.hidden && !S.feed.idleNow();
@@ -268,10 +292,11 @@
     if (wantPoll()) {
       if (!pollTimer) {
         pollTimer = setInterval(function () {
-          if (wantPoll()) load(true);
-          else syncPolling();
+          if (!wantPoll()) syncPolling();
+          else if (skipTicks > 0) skipTicks--;
+          else load(true);
         }, POLL_MS);
-        load(false);
+        if (!skipTicks) load(false);
       }
     } else if (pollTimer) {
       clearInterval(pollTimer);
@@ -353,8 +378,12 @@
     f.badge.className = 'ind-b ind-badge ' + availCls(b);
     f.badge.innerHTML = markerInner(s);
     f.sum.textContent = plural(b, 'bike', 'bikes') + ', ' + plural(d, 'open dock', 'open docks');
-    var split = s.ebikes + s.classic === s.bikes && b > 0;
-    f.types.textContent = split ? s.ebikes + ' electric, ' + s.classic + ' classic' : '';
+    var parts = [];
+    if (s.ebikes) parts.push(s.ebikes + ' electric');
+    if (s.classic) parts.push(s.classic + ' classic');
+    if (s.smart) parts.push(s.smart + ' smart');
+    var split = s.ebikes + s.classic + s.smart === s.bikes && b > 0;
+    f.types.textContent = split ? parts.join(', ') : '';
     f.types.hidden = !split;
     f.note.textContent = !s.installed
       ? 'This station is out of service right now.'
@@ -418,10 +447,11 @@
     card.replaceChildren();
     live.textContent = '';
     var m = markers.get(id);
-    if (m) updateMarker(m, byId[id]);
+    if (m && byId[id]) updateMarker(m, byId[id]);
     if (had || (opts && opts.focus)) {
-      var e = m && m.getElement();
-      if (e) e.focus({ preventScroll: true });
+      /* The marker keeps focus only if it will still be on the map; otherwise (zoomed out, chip off, station gone) the map does. */
+      var e = m && byId[id] && isOn() && zoomOK() ? m.getElement() : null;
+      (e || mapEl).focus({ preventScroll: true });
     }
   }
   function directions() {
@@ -469,7 +499,7 @@
       if (n) mo.observe(n, { attributes: true, attributeFilter: ['hidden'] });
     });
   }
-  /* A once-a-second check: the chip can also change without a click (Show all modes), dimming and the card's age move with the clock,
+  /* A once-a-second check: the chip can also change without a click (saved prefs applied by other code), dimming and the card's age move with the clock,
      and polling restarts when the rider comes back from an idle pause. No network here. */
   setInterval(function () {
     if (isOn() !== lastOn) sync();

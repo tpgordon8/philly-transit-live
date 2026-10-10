@@ -227,22 +227,31 @@
   function mergeIndego(info, status) {
     var st = {},
       out = [];
+    var str = function (v) {
+      return typeof v === 'string' && v.trim() ? v : '';
+    };
+    var idOk = function (v) {
+      return (typeof v === 'string' && v !== '') || isNum(v);
+    };
     ((status && status.data && status.data.stations) || []).forEach(function (s) {
-      st[s.station_id] = s;
+      if (s && typeof s === 'object' && idOk(s.station_id)) st[s.station_id] = s;
     });
     ((info && info.data && info.data.stations) || []).forEach(function (i) {
+      if (!i || typeof i !== 'object' || !idOk(i.station_id)) return;
       var s = st[i.station_id];
       if (!s || !isNum(i.lat) || !isNum(i.lon)) return;
-      var t = s.num_bikes_available_types || {},
-        inst = s.is_installed === 1 || s.is_installed === true;
+      var t = s.num_bikes_available_types;
+      if (!t || typeof t !== 'object') t = {};
+      var inst = s.is_installed === 1 || s.is_installed === true;
       out.push({
         id: i.station_id,
-        name: i.name || '',
+        name: str(i.name) || str(i.address),
         lat: i.lat,
         lon: i.lon,
         bikes: s.num_bikes_available | 0,
         ebikes: t.electric | 0,
         classic: t.classic | 0,
+        smart: t.smart | 0,
         docks: s.num_docks_available | 0,
         installed: inst,
         renting: inst && (s.is_renting === 1 || s.is_renting === true),
@@ -252,6 +261,10 @@
     });
     out.asOf = ((status && status.last_updated) || 0) * 1000;
     return out;
+  }
+  /* A usable answer holds data.stations as a non-empty array; anything else is a bad answer, not "0 stations". */
+  function hasStations(j) {
+    return !!(j && j.data && Array.isArray(j.data.stations) && j.data.stations.length);
   }
   function loadIndego(fresh) {
     var now = Date.now();
@@ -274,14 +287,26 @@
       );
       tpStatus = ps;
     }
-    return Promise.all([tpInfo, tpStatus.p]).then(
-      function (r) {
-        return mergeIndego(r[0], r[1]);
-      },
-      function () {
+    var infoP = tpInfo,
+      statusP = tpStatus;
+    return Promise.all([infoP, statusP.p])
+      .then(function (r) {
+        var out = hasStations(r[0]) && hasStations(r[1]) ? mergeIndego(r[0], r[1]) : [];
+        if (!out.length) {
+          /* Forget the bad answer so the next call asks again instead of serving it for the whole page. */
+          if (!hasStations(r[0]) && tpInfo === infoP) tpInfo = null;
+          if (!hasStations(r[1]) && tpStatus === statusP) tpStatus = null;
+          if (hasStations(r[0]) && hasStations(r[1])) {
+            if (tpInfo === infoP) tpInfo = null;
+            if (tpStatus === statusP) tpStatus = null;
+          }
+          throw 0;
+        }
+        return out;
+      })
+      .catch(function () {
         throw tpFail('indego_unavailable', 'Indego bike data could not be loaded.');
-      }
-    );
+      });
   }
   /* ----- Routing client: at most 2 requests in flight and at least 250 ms between starts (the OSM routing service asks for about
    one request per second per client; most plan legs are served from the Worker's cache, which does not reach that service),

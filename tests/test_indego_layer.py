@@ -123,16 +123,14 @@ def test_markers_follow_zoom_and_are_capped(root):
         # zoom 14: a wide view holds more than 150 stations, so the cap applies; the nearest to the centre stay
         view(s, 14)
         assert in_bounds(s) > 150, in_bounds(s)
-        assert n_markers(s) == 150, n_markers(s)
-        far = s.page.evaluate("""() => { const m = window.__SEPTA_TEST__.tripMap, c = m.getCenter(); let worst = 0, ok = 0;
-          document.querySelectorAll('.ind-wrap').forEach(e => { const r = e.getBoundingClientRect(), mr = m.getContainer().getBoundingClientRect();
-            const d = Math.hypot(r.left + 22 - mr.left - mr.width / 2, r.top + 38 - mr.top - mr.height / 2); worst = Math.max(worst, d); ok++; }); return worst; }""")
-        near_unshown = s.page.evaluate("""(st) => { const m = window.__SEPTA_TEST__.tripMap, mr = m.getContainer().getBoundingClientRect(); const shown = new Set();
-          document.querySelectorAll('.ind-wrap').forEach(e => shown.add(e.getAttribute('title')));
-          let best = 1e9; st.forEach(s => { if (shown.has(s.name)) return; const p = m.latLngToContainerPoint([s.lat, s.lon]); if (!m.getBounds().contains([s.lat, s.lon])) return;
-            best = Math.min(best, Math.hypot(p.x - mr.width / 2, p.y - mr.height / 2)); }); return best; }""",
-                                      [{"lat": x["lat"], "lon": x["lon"], "name": x["name"]} for x in s.mocks.stations()])
-        assert near_unshown >= far - 3, ("a nearer station was left out", near_unshown, far)
+        # 150 to 170 are drawn: the nearest 150 always, plus markers kept from zoom 15 that still rank inside 170
+        assert 150 <= n_markers(s) <= 170, n_markers(s)
+        left_out = s.page.evaluate("""(st) => { const m = window.__SEPTA_TEST__.tripMap, c = m.getCenter(), k = Math.cos(c.lat * Math.PI / 180), b = m.getBounds().pad(0.05);
+          const shown = new Set(); document.querySelectorAll('.ind-wrap').forEach(e => shown.add(e.getAttribute('title')));
+          const near = st.filter(s => b.contains([s.lat, s.lon])).sort((a, z) => ((a.lon - c.lng) * k) ** 2 + (a.lat - c.lat) ** 2 - (((z.lon - c.lng) * k) ** 2 + (z.lat - c.lat) ** 2));
+          return near.slice(0, 150).filter(s => !shown.has(s.name)).length; }""",
+                                  [{"lat": x["lat"], "lon": x["lon"], "name": x["name"]} for x in s.mocks.stations()])
+        assert left_out == 0, ("a station among the nearest 150 was left out", left_out)
         # zoom 16 and closer: every station in the bounds
         view(s, 16)
         assert n_markers(s) == in_bounds(s) and n_markers(s) > 0
@@ -142,7 +140,12 @@ def test_markers_follow_zoom_and_are_capped(root):
         assert s.page.is_visible("#indegoHint") and s.page.inner_text("#indegoHint") == "Zoom in to see Indego stations"
         assert s.page.inner_text("#indegoN") == ""
         view(s, 14)
-        assert n_markers(s) > 0 and s.page.is_hidden("#indegoHint")
+        assert n_markers(s) > 0
+        # more stations in view than drawn: the chip counts the view and the pill says how to see the rest
+        assert int(s.page.inner_text("#indegoN")) > n_markers(s)
+        assert s.page.inner_text("#indegoHint") == "Zoom in to see all Indego stations"
+        view(s, 16)
+        assert s.page.is_hidden("#indegoHint")
         assert not s.console_errors, s.console_errors
 
 
@@ -228,8 +231,9 @@ def test_card_directions_escape_and_keyboard(root):
         b, d = st["num_bikes_available"], st["num_docks_available"]
         assert f"{b} bike{'' if b == 1 else 's'}, {d} open dock{'' if d == 1 else 's'}" in card, card
         t = st["num_bikes_available_types"]
-        if t["electric"] + t["classic"] == b and b:
-            assert f"{t['electric']} electric, {t['classic']} classic" in card, card
+        if t["electric"] + t["classic"] + t["smart"] == b and b:
+            want = [f"{t[k]} {k}" for k in ("electric", "classic", "smart") if t[k]]
+            assert ", ".join(want) in card, (want, card)
         import re
         age = re.search(r"Updated (\d+) s ago", card)
         assert age and 35 <= int(age.group(1)) <= 60, card
@@ -366,14 +370,15 @@ def test_failure_keeps_last_markers_dims_after_three_minutes_and_recovers(root):
         s.tick(5000)
         s.page.wait_for_timeout(300)
         assert n_markers(s) == n0, "last data stays on the map"
-        assert s.page.is_visible("#indegoHint") and "Indego bike data unavailable" in s.page.inner_text("#indegoHint")
+        assert s.page.is_visible("#indegoHint") and "Indego data unavailable right now" in s.page.inner_text("#indegoHint")
         assert s.page.evaluate("document.querySelectorAll('.ind-wrap.stale').length") == 0, "not dimmed yet"
         for _ in range(4):
             s.tick(MIN)
         s.tick(5000)
         assert n_markers(s) == n0
         assert s.page.evaluate("document.querySelectorAll('.ind-wrap.stale').length") == n0, "dimmed after three minutes"
-        assert s.page.evaluate("getComputedStyle(document.querySelector('.ind-wrap')).opacity") != "1"
+        lbl = s.page.evaluate("document.querySelector('.ind-wrap').getAttribute('aria-label')")
+        assert lbl.endswith(", may be out of date"), lbl
         # a card shows the age and the warning
         open_first(s)
         assert "May be out of date" in s.page.inner_text("#indegoCard")
@@ -395,7 +400,7 @@ def test_failure_on_first_load_says_so_and_never_throws(root):
         view(s, 15)
         s.tick(5000)
         s.page.wait_for_selector("#indegoHint:not([hidden])", timeout=8000)
-        assert s.page.inner_text("#indegoHint") == "Indego bike data unavailable"
+        assert s.page.inner_text("#indegoHint") == "Indego data unavailable right now"
         assert n_markers(s) == 0
         assert not any("pageerror" in e for e in s.console_errors), s.console_errors
 
@@ -452,3 +457,249 @@ def test_reduced_motion_adds_no_animation(root):
         for sel in (".ind-wrap", "#indegoCard", "#indegoHint"):
             t = s.page.evaluate("(sel) => { const e = document.querySelector(sel); const cs = getComputedStyle(e); return [cs.transitionDuration, cs.animationName]; }", sel)
             assert t[0] in ("0s", "0s, 0s") and t[1] == "none", (sel, t)
+
+
+# ---------------------------------------------------------------- v13 review fixes
+
+def nearest(s, k=1):
+    return sorted(s.mocks.stations(), key=lambda x: (x["lat"] - CC[0]) ** 2 + ((x["lon"] - CC[1]) * 0.77) ** 2)[:k]
+
+
+def open_named(s, nm):
+    s.page.evaluate("(nm) => [...document.querySelectorAll('.ind-wrap')].find(e => e.getAttribute('title') === nm).click()", nm)
+    s.page.wait_for_selector("#indegoCard:not([hidden])")
+    s.page.wait_for_timeout(300)
+
+
+def failing_boot(s, zoom=15):
+    s.open()
+    s.wait_live()
+    view(s, zoom)
+    s.page.wait_for_selector("#indegoHint:not([hidden])", timeout=8000)
+
+
+def no_page_errors(s):
+    assert not any("pageerror" in e for e in s.console_errors), s.console_errors
+
+
+BAD_ANSWERS = {
+    "no stations key": {"data": {}},
+    "no data": {},
+    "stations not an array": {"data": {"stations": {"a": 1}}},
+    "empty stations": {"data": {"stations": []}},
+}
+
+
+def test_malformed_status_is_a_failure_not_zero_stations(root):
+    for label, bad in BAD_ANSWERS.items():
+        with start(root) as s:
+            good = s.mocks.indego_status
+            s.mocks.indego_status = bad
+            failing_boot(s)
+            assert s.page.inner_text("#indegoHint") == "Indego data unavailable right now", label
+            assert s.page.inner_text("#indegoN") == "" and n_markers(s) == 0, label
+            s.mocks.indego_status = good
+            s.tick(2 * MIN)
+            s.page.wait_for_function("document.querySelectorAll('.ind-wrap').length > 0", timeout=8000)
+            assert s.page.is_hidden("#indegoHint") and s.page.inner_text("#indegoN") != "", label
+            no_page_errors(s)
+
+
+def test_malformed_information_is_a_failure_and_is_not_cached(root):
+    for label, bad in BAD_ANSWERS.items():
+        with start(root) as s:
+            good = s.mocks.indego_info
+            s.mocks.indego_info = bad
+            failing_boot(s)
+            assert s.page.inner_text("#indegoHint") == "Indego data unavailable right now", label
+            assert s.page.inner_text("#indegoN") == "" and n_markers(s) == 0, label
+            assert info_hits(s) == 1
+            s.mocks.indego_info = good
+            s.tick(2 * MIN)
+            s.page.wait_for_function("document.querySelectorAll('.ind-wrap').length > 0", timeout=8000)
+            assert info_hits(s) == 2, ("the bad information answer must not be cached for the page", label, info_hits(s))
+            no_page_errors(s)
+
+
+def test_malformed_answer_keeps_last_stations_and_the_planner_still_reports_unavailable(root):
+    with start(root) as s:
+        boot(s, 15)
+        n0 = n_markers(s)
+        s.mocks.indego_status = {"data": {"stations": []}}
+        s.tick(MIN)
+        s.page.wait_for_timeout(300)
+        assert n_markers(s) == n0 and s.page.inner_text("#indegoN") != "0"
+        assert s.page.inner_text("#indegoHint") == "Indego data unavailable right now. Showing the last known bikes."
+        code = s.page.evaluate("""() => window.SEPTA.routing.loadIndego(true).then(() => 'ok', e => e && e.code)""")
+        assert code == "indego_unavailable", code
+        no_page_errors(s)
+
+
+def test_outage_backs_off_1_2_4_ticks_and_resets_on_success(root):
+    with start(root) as s:
+        boot(s, 15)
+        s.mocks.indego_mode = "http500"
+        s.mocks.worker_indego_hits.clear()
+        attempts = []
+        for minute in range(1, 17):
+            before = status_hits(s)
+            s.tick(MIN)
+            if status_hits(s) > before:
+                attempts.append(minute)
+        assert attempts == [1, 3, 6, 11, 16], ("1, 2, 4, 4 ticks skipped between attempts", attempts)
+        assert info_hits(s) == 0
+        # the feed returns: the next attempt (minute 21) succeeds and the one-a-minute rhythm is back at once
+        s.mocks.indego_mode = "ok"
+        for _ in range(5):
+            s.tick(MIN)
+        s.page.wait_for_timeout(300)
+        assert s.page.is_hidden("#indegoHint")
+        s.mocks.worker_indego_hits.clear()
+        s.tick(3 * MIN)
+        assert status_hits(s) == 3, status_hits(s)
+        no_page_errors(s)
+
+
+def test_card_split_counts_smart_bikes_and_hides_when_it_does_not_add_up(root):
+    with start(root) as s:
+        a, b, c = nearest(s, 3)
+        names = [x["name"] for x in (a, b, c)]
+        s.mocks.set_station(a["station_id"], bikes=6, docks=4)
+        s.mocks._status(a["station_id"])["num_bikes_available_types"] = {"electric": 2, "smart": 1, "classic": 3}
+        s.mocks.set_station(b["station_id"], bikes=4, docks=4)
+        s.mocks._status(b["station_id"])["num_bikes_available_types"] = {"electric": 0, "smart": 0, "classic": 4}
+        s.mocks.set_station(c["station_id"], bikes=5, docks=4)
+        s.mocks._status(c["station_id"])["num_bikes_available_types"] = {"electric": 1, "smart": 1, "classic": 1}
+        boot(s, 17)
+        open_named(s, names[0])
+        assert "2 electric, 3 classic, 1 smart" in s.page.inner_text("#indegoCard")
+        open_named(s, names[1])
+        assert s.page.inner_text("#indegoTypes") == "4 classic"
+        open_named(s, names[2])
+        assert s.page.is_hidden("#indegoTypes"), "3 of 5 is no split"
+        no_page_errors(s)
+
+
+def test_non_string_names_do_not_throw(root):
+    with start(root) as s:
+        a, b, c = nearest(s, 3)
+        a["name"], a["address"] = 12345, "1 Test St"
+        b["name"] = {"x": 1}
+        b.pop("address", None)
+        c["name"] = None
+        c["address"] = ["x"]
+        boot(s, 17)
+        titles = s.page.evaluate("[...document.querySelectorAll('.ind-wrap')].map(e => e.getAttribute('title'))")
+        assert "1 Test St" in titles and titles.count("Indego station") >= 2, titles[:10]
+        assert "12345" not in titles
+        no_page_errors(s)
+
+
+ALL_OFF_BUT_INDEGO = """(() => { try { localStorage.setItem('septa.prefs.v1', JSON.stringify({radius: 5,
+  filters: {bus: false, trolley: false, subway: false, train: false, indego: INDEGO}})); } catch (e) {} })();"""
+
+
+def test_show_all_modes_leaves_indego_as_it_was(root):
+    for want in (True, False):
+        with Session(root, viewport=(1280, 800), init_scripts=[HOOK, ALL_OFF_BUT_INDEGO.replace("INDEGO", "true" if want else "false")]) as s:
+            s.open()
+            view(s, 15)
+            # The mock feed always has vehicles in range, so the empty state cannot be reached naturally; put its button in and click it.
+            s.page.evaluate("""() => { const b = document.querySelector('#empty'); b.hidden = false;
+                b.innerHTML = '<button class="btn primary" type="button" id="emptyAct" data-act="modes">Show all modes</button>'; }""")
+            s.page.click("#emptyAct")
+            s.page.wait_for_timeout(300)
+            f = json.loads(s.page.evaluate("localStorage.getItem('septa.prefs.v1')"))["filters"]
+            assert f == {"bus": True, "trolley": True, "subway": True, "train": True, "indego": want}, f
+            assert s.page.locator('#modes input[data-mode="indego"]').is_checked() is want
+            if want:
+                s.page.wait_for_function("document.querySelectorAll('.ind-wrap').length > 0", timeout=8000)
+            else:
+                assert n_markers(s) == 0
+            no_page_errors(s)
+
+
+def test_card_closes_when_a_refresh_drops_its_station(root):
+    with start(root) as s:
+        boot(s, 16)
+        nm = open_first(s)
+        sid = next(x["station_id"] for x in s.mocks.stations() if x["name"] == nm)
+        s.page.focus("#indegoHead")
+        st = s.mocks.indego_status["data"]["stations"]
+        s.mocks.indego_status["data"]["stations"] = [x for x in st if x["station_id"] != sid]
+        s.tick(MIN)
+        s.page.wait_for_timeout(300)
+        assert s.page.is_hidden("#indegoCard"), "the card must not stay up for a station that is gone"
+        assert s.page.evaluate("document.querySelector('#indegoLive').textContent") == ""
+        assert s.page.evaluate("document.activeElement.classList.contains('leaflet-container')"), "focus goes to the map, not a removed marker"
+        assert n_markers(s) > 0
+        no_page_errors(s)
+
+
+def test_zoom_out_closing_the_card_moves_focus_to_the_map(root):
+    with start(root) as s:
+        boot(s, 15)
+        open_first(s, "Enter")
+        assert s.page.evaluate("document.activeElement.id") == "indegoHead"
+        view(s, 13)
+        assert s.page.is_hidden("#indegoCard") and n_markers(s) == 0
+        assert s.page.evaluate("document.activeElement.classList.contains('leaflet-container')"), s.page.evaluate("document.activeElement.outerHTML.slice(0, 80)")
+        no_page_errors(s)
+
+
+def _contrast_js():
+    return """() => { const lum = (rgb) => { const c = rgb.match(/[\\d.]+/g).slice(0, 3).map(Number).map(v => v / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+      const w = document.querySelector('.ind-wrap.stale'); if (!w) return null; const b = w.querySelector('.ind-b'), cs = getComputedStyle(b);
+      const a = lum(cs.color), c = lum(cs.backgroundColor);
+      return {ratio: (Math.max(a, c) + 0.05) / (Math.min(a, c) + 0.05), wrap: getComputedStyle(w).opacity, badge: cs.opacity, bg: cs.backgroundColor}; }"""
+
+
+def test_stale_markers_keep_readable_text_and_say_so(root):
+    for scheme in ("light", "dark"):
+        with start(root, color_scheme=scheme) as s:
+            boot(s, 16)
+            s.mocks.indego_mode = "http500"
+            for _ in range(6):
+                s.tick(MIN)
+            s.tick(3000)
+            s.page.wait_for_function("document.querySelectorAll('.ind-wrap.stale').length > 0", timeout=5000)
+            r = s.page.evaluate(_contrast_js())
+            assert r and r["ratio"] >= 4.5, (scheme, r)
+            assert r["wrap"] == "1" and r["badge"] == "1", ("only the background is dimmed, never the number", r)
+            labels = s.page.evaluate("[...document.querySelectorAll('.ind-wrap')].map(e => e.getAttribute('aria-label'))")
+            assert labels and all(x.endswith(", may be out of date") for x in labels), labels[:3]
+            s.mocks.indego_mode = "ok"
+            for _ in range(6):
+                s.tick(MIN)
+            s.page.wait_for_function("document.querySelectorAll('.ind-wrap.stale').length === 0", timeout=5000)
+            labels = s.page.evaluate("[...document.querySelectorAll('.ind-wrap')].map(e => e.getAttribute('aria-label'))")
+            assert not any("out of date" in x for x in labels)
+
+
+def test_panning_at_zoom_14_keeps_drawn_markers_until_they_rank_past_170(root):
+    probe = """() => { const m = window.__SEPTA_TEST__.tripMap, c = m.getCenter(), k = Math.cos(c.lat * Math.PI / 180);
+        const st = [...document.querySelectorAll('.ind-wrap')].map(e => e.getAttribute('title'));
+        return {drawn: st, centre: [c.lat, c.lng], k: k}; }"""
+    with start(root, vp=(1600, 1100)) as s:
+        boot(s, 14)
+        stn = [(x["name"], x["lat"], x["lon"]) for x in s.mocks.stations()]
+        beyond = 0
+        for dx, dy in ((0.004, 0), (0.0, 0.003), (-0.003, 0.002), (0.002, -0.004), (0.003, 0.003), (-0.004, -0.002)):
+            before = set(s.page.evaluate(probe)["drawn"])
+            c = s.page.evaluate("(() => { const c = window.__SEPTA_TEST__.tripMap.getCenter(); return [c.lat, c.lng]; })()")
+            view(s, 14, (c[0] + dy, c[1] + dx))
+            now = s.page.evaluate(probe)
+            after = set(now["drawn"])
+            lat0, lng0 = now["centre"]
+            inb = s.page.evaluate("""(st) => { const b = window.__SEPTA_TEST__.tripMap.getBounds().pad(0.05); return st.filter(p => b.contains([p[1], p[2]])).map(p => p[0]); }""", stn)
+            d = {n: (la - lat0) ** 2 + ((lo - lng0) * now["k"]) ** 2 for n, la, lo in stn if n in set(inb)}
+            rank = {n: i for i, n in enumerate(sorted(d, key=d.get))}
+            assert len(after) <= 170, len(after)
+            for n in before & set(d):
+                if rank[n] < 170:
+                    assert n in after, ("a drawn marker inside the nearest 170 must stay", n, rank[n])
+            for n in after - before:
+                assert rank[n] < 150, ("a new marker enters only inside the nearest 150", n, rank[n])
+            beyond += sum(1 for n in after if rank[n] >= 150)
+        assert beyond > 0, "the pans never exercised the keep band"
+        no_page_errors(s)
