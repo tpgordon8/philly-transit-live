@@ -18,6 +18,8 @@ FAST = {
     "test_leave_states_table",
     "test_pins_caps_duplicates_and_updates",
     "test_pin_button_flow",
+    "test_pending_far_and_place_removed_rows",
+    "test_unchanged_position_keeps_counting_down",
 }
 
 KEY = "septa.board.v1"
@@ -140,16 +142,21 @@ def check_pins(root):
         assert js(s, ADD, dict(base, placeId="home")) == {"ok": False, "reason": "duplicate"}, "a duplicate on a full board is reported as a duplicate"
         # update
         B = "window.SEPTA.board"
-        assert js(s, f"({B}.updatePin('{first}', {{walkMin: 61}}))") is False
-        assert js(s, f"({B}.updatePin('{first}', {{walkMin: 0}}))") is False
-        assert js(s, f"({B}.updatePin('{first}', {{placeId: 'ghost'}}))") is False
-        assert js(s, f"({B}.updatePin('{first}', {{placeId: 'p1'}}))") is False, "moving onto an existing pin would duplicate it"
-        assert js(s, f"({B}.updatePin('nope', {{walkMin: 3}}))") is False
-        assert js(s, f"({B}.updatePin('{first}', {{walkMin: 9, label: 'Bus to work'}}))") is True
+        INV, UNK, OK = {"ok": False, "reason": "invalid"}, {"ok": False, "reason": "unknown"}, {"ok": True}
+        assert js(s, f"({B}.updatePin('{first}', {{walkMin: 61}}))") == INV
+        assert js(s, f"({B}.updatePin('{first}', {{walkMin: 0}}))") == INV
+        assert js(s, f"({B}.updatePin('{first}', {{walkMin: 2.5}}))") == INV
+        assert js(s, f"({B}.updatePin('{first}', {{placeId: 'ghost'}}))") == INV
+        assert js(s, f"({B}.updatePin('{first}', {{placeId: 'p1'}}))") == INV, "moving onto an existing pin would duplicate it"
+        assert js(s, f"({B}.updatePin('nope', {{walkMin: 3}}))") == UNK
+        assert js(s, f"({B}.updatePin('{first}', null))") == INV
+        assert js(s, f"({B}.updatePin('{first}', {{walkMin: 9}}))") == OK
         got = next(p for p in js(s, B + ".pins()") if p["id"] == first)
-        assert got["walkMin"] == 9 and got["label"] == "Bus to work"
-        assert js(s, f"({B}.updatePin('{first}', {{walkMin: null}}))") is True
+        assert got["walkMin"] == 9
+        assert js(s, f"({B}.updatePin('{first}', {{walkMin: null}}))") == OK
         assert next(p for p in ls(s, KEY)["pins"] if p["id"] == first)["walkMin"] is None
+        assert js(s, f"({B}.updatePin('{first}', {{placeId: null}}))") == INV, "the no-place pin for this stop already exists"
+        assert js(s, f"({B}.updatePin('{first}', {{placeId: 'home'}}))") == OK, "the same place again is not a duplicate of itself"
         # pins() returns copies
         js(s, f"{B}.pins()[0].label = 'hacked'")
         assert js(s, B + ".pins()[0].label") != "hacked"
@@ -250,6 +257,12 @@ TABLE = [
     ([9], 5, 2, False, ("soon", 2, 0)),
     ([8], 5, 2, False, ("soon", 1, 0)),
     ([7], 5, 2, False, ("now", 0, 0)),        # leaveIn 0
+    ([7.5], 5, 2, False, ("now", 0, 0)),      # leaveIn 0.5: under a minute is "now" (it used to read soon, 1)
+    ([7.99], 5, 2, False, ("now", 0, 0)),
+    ([8.9], 5, 2, False, ("soon", 1, 0)),     # leaveIn 1.9 shows 1, never 2
+    ([10.5], 5, 2, False, ("later", 3, 0)),   # leaveIn 3.5 is later but shows 3: rounded down
+    ([10.99], 5, 2, False, ("later", 3, 0)),
+    ([12.9], 5, 2, False, ("later", 5, 0)),
     ([5], 5, 2, False, ("now", 0, 0)),        # leaveIn -2, but arriving as the walk ends: still makeable
     ([4], 5, 2, False, ("missed", 0, 0)),     # bus comes before you could get there
     ([4, 15], 5, 2, False, ("later", 8, 1)),  # first is missed, the next one counts and is named
@@ -264,20 +277,30 @@ TABLE = [
     ([8], 1, 0, True, ("soon", 3, 0)),        # 8 - 1 - 4 = 3
     ([9], 1, 0, True, ("later", 4, 0)),
     ([30], 60, 2, False, ("missed", 0, 0)),
+    ([50], 60, 2, False, None),               # the first arrival is 45+ minutes away: no advice from a time that uncertain
+    ([46, 60], 5, 2, False, None),
+    ([45], 5, 2, False, ("later", 38, 0)),    # exactly 45 is not far
+    ([4, 50], 5, 2, False, None),             # the only bus that could be made is far: no advice either
 ]
 
 
 def check_table(root):
     with Session(root, init_scripts=[seed("septa.places.v1", PLACES)]) as s:
         boot(s)
-        for mins, walk, buf, bad, (state, in_min, idx) in TABLE:
+        for mins, walk, buf, bad, want in TABLE:
             arrivals = [{"key": f"k{i}", "min": m} for i, m in enumerate(mins)]
             pid = js(s, SETUP, {"arrivals": arrivals, "t0": T0, "walk": walk, "buffer": buf, "bad": bad})
             row = js(s, "(t) => window.SEPTA.board.rows(t)", T0)[0]
             case = (mins, walk, buf, bad, row["leave"])
+            assert [bool(a.get("far")) for a in row["arrivals"]] == [m > 45 for m in mins][: len(row["arrivals"])], case
+            if want is None:
+                assert row["leave"] is None and row["arrivals"], case
+                continue
+            state, in_min, idx = want
             assert row["pin"]["id"] == pid and row["walkMin"] == walk and row["source"] == "live", case
             assert row["leave"] is not None, case
             assert row["leave"]["state"] == state and row["leave"]["inMin"] == in_min and row["leave"]["forKey"] == f"k{idx}", case
+            assert row["leave"]["inMin"] == int(row["leave"]["inMin"]) and row["pending"] == 0 and row["note"] == "", case
             assert [a["key"] for a in row["arrivals"]] == [f"k{i}" for i in range(len(mins))] and len(row["arrivals"]) <= 2, case
         # nothing measurable: no leave advice
         js(s, SETUP, {"arrivals": [], "t0": T0, "walk": 5, "buffer": 2, "bad": False})
@@ -294,13 +317,18 @@ def check_table(root):
 
 def test_leave_states_table(root):
     check_table(root)
-    must_fail(check_table, root, ("js/board.js", "Math.ceil(pick.etaMin - walk - extra)", "Math.ceil(pick.etaMin + walk - extra)"))
-    must_fail(check_table, root, ("js/board.js", "state: leaveState(pick.etaMin - walk - extra)", "state: leaveState(pick.etaMin + walk - extra)"))
+    must_fail(check_table, root, ("js/board.js", "Math.floor(leaveIn)", "Math.ceil(leaveIn)"))
+    must_fail(check_table, root, ("js/board.js", "Math.floor(leaveIn)", "Math.floor(leaveIn + walk + walk)"))
+    must_fail(check_table, root, ("js/board.js", "leaveIn >= 1 ? 'soon'", "leaveIn > 0 ? 'soon'"))
+    must_fail(check_table, root, ("js/board.js", "leaveIn > SOON_MIN ? 'later'", "leaveIn >= SOON_MIN ? 'later'"))
+    must_fail(check_table, root, ("js/board.js", "if (left > FAR_MIN) a.far = true;", ""))
+    must_fail(check_table, root, ("js/board.js", "return a.key === leave.forKey && a.far;", "return false;"))
+    must_fail(check_table, root, ("js/board.js", "state: leaveState(leaveIn)", "state: leaveState(leaveIn + walk + walk)"))
     must_fail(check_table, root, ("js/board.js", "(board.bad ? BAD_EXTRA_MIN : 0)", "0"))
     must_fail(check_table, root, ("js/board.js", "} else if (arrivals.length) leave = { inMin: 0, state: 'missed', forKey: arrivals[0].key };", "}"))
 
 
-def test_countdown_ticks_between_refreshes_and_drops_old_data(root):
+def check_countdown(root):
     with Session(root, init_scripts=[seed("septa.places.v1", PLACES)]) as s:
         boot(s)
         R = "(t) => window.SEPTA.board.rows(t)"
@@ -310,7 +338,7 @@ def test_countdown_ticks_between_refreshes_and_drops_old_data(root):
         assert abs(r0["arrivals"][0]["etaMin"] - 6) < 1e-6 and abs(r1["arrivals"][0]["etaMin"] - 5.5) < 1e-6, (r0, r1)
         assert abs(r2["arrivals"][0]["etaMin"] - 4.5) < 1e-6 and abs(r2["arrivals"][1]["etaMin"] - 23.5) < 1e-6, r2
         got = [(r["leave"]["state"], r["leave"]["inMin"]) for r in (r0, r1, r2)]
-        assert got == [("soon", 1), ("soon", 1), ("now", 0)], got  # 1.0, 0.5 and -0.5 minutes to leave
+        assert got == [("soon", 1), ("now", 0), ("now", 0)], got  # 1.0, 0.5 (under a minute: now) and -0.5 minutes to leave
         assert js(s, R, T0 - 60_000)[0]["arrivals"][0]["etaMin"] == 6, "an earlier time than the capture never adds minutes"
         # a bus that is due and past is dropped; the next one is named
         js(s, SETUP, {"arrivals": [{"key": "a", "min": 1}, {"key": "b", "min": 9}], "t0": T0, "walk": 1, "buffer": 0, "bad": False})
@@ -331,6 +359,14 @@ def test_countdown_ticks_between_refreshes_and_drops_old_data(root):
         assert js(s, R, T0)[0]["source"] == "down", "never loaded"
 
 
+def test_countdown_ticks_between_refreshes_and_drops_old_data(root):
+    check_countdown(root)
+    must_fail(check_countdown, root, ("js/board.js", "Math.max(0, nowMs - c.at) / 60000", "0"))
+    must_fail(check_countdown, root, ("js/board.js", "if (left >= 0) {", "if (true) {"))
+    must_fail(check_countdown, root, ("js/board.js", "nowMs - b.ok > DROP_AFTER_MS", "false"))
+    must_fail(check_countdown, root, ("js/board.js", "source: down ? 'down' : b.stale ? 'stale' : 'live'", "source: down ? 'down' : 'live'"))
+
+
 # ---------------------------------------------------------------- the real mock feed
 def arrivals_now(s, pid=None):
     return js(s, "(() => { const r = window.SEPTA.board.rows(Date.now())[0]; return r ? {source: r.source, arrivals: r.arrivals, leave: r.leave} : null; })()")
@@ -347,7 +383,7 @@ def measured_board(s):
     return r["pin"]["id"]
 
 
-def test_feed_live_stale_down_and_vehicle_leaving(root):
+def check_feed(root):
     with Session(root) as s:
         measured_board(s)
         st = arrivals_now(s)
@@ -375,6 +411,13 @@ def test_feed_live_stale_down_and_vehicle_leaving(root):
             if arrivals_now(s)["source"] == "live":
                 break
         assert arrivals_now(s)["source"] == "live"
+
+
+def test_feed_live_stale_down_and_vehicle_leaving(root):
+    check_feed(root)
+    must_fail(check_feed, root, ("js/board.js", "if (!down)\n        cap.list", "if (false)\n        cap.list"))
+    must_fail(check_feed, root, ("js/board.js", "captured = next;", "if (!Object.keys(captured).length) captured = next;"))
+    must_fail(check_feed, root, ("js/board.js", "source: down ? 'down' : b.stale ? 'stale' : 'live'", "source: down ? 'down' : 'live'"))
 
 
 # ---------------------------------------------------------------- Pin to board on the stop card
@@ -439,3 +482,131 @@ def check_pin_button(root):
 def test_pin_button_flow(root):
     check_pin_button(root)
     must_fail(check_pin_button, root, ("js/stops.js", "if (live) live.textContent = r.msg;", ""))
+
+
+# ---------------------------------------------------------------- pending, far, removed places, walk cap, backup of altered pins
+SETUP2 = """(cfg) => {
+  const S = window.SEPTA, B = S.board;
+  S.stops.boardRows = () => ({ a: cfg.arrivals.map(x => ({ v: { key: x.key }, d: 0.1, eta: { min: x.min, rough: false } })), b: [] });
+  S.util.state.src.bus.ok = cfg.t0; S.util.state.src.bus.stale = false;
+  S.feed.collect = () => [];
+  B.pins().forEach(p => B.removePin(p.id));
+  cfg.pins.forEach(o => { const r = B.addPin(Object.assign({ route: '21', stopId: '14880', stopName: 'Market', lat: 39.95, lng: -75.16 }, o)); if (!r.ok) throw new Error(JSON.stringify(r)); });
+  B.refresh();
+}"""
+ROWS = "(t) => window.SEPTA.board.rows(t)"
+
+
+def check_extras(root):
+    with Session(root, init_scripts=[seed("septa.places.v1", PLACES)]) as s:
+        boot(s)
+        # buses heading here with no measured time (stopped, unknown speed) are counted, not shown as arrivals
+        js(s, SETUP2, {"t0": T0, "pins": [{"walkMin": 3}], "arrivals": [{"key": "stopped", "min": None}, {"key": "unknown", "min": None}]})
+        row = js(s, ROWS, T0)[0]
+        assert row["arrivals"] == [] and row["pending"] == 2 and row["leave"] is None and row["note"] == "", row
+        js(s, SETUP2, {"t0": T0, "pins": [{"walkMin": 3}], "arrivals": [{"key": "stopped", "min": None}, {"key": "m", "min": 12}]})
+        row = js(s, ROWS, T0)[0]
+        assert [a["key"] for a in row["arrivals"]] == ["m"] and row["pending"] == 1, row
+        assert js(s, ROWS, T0 + 121_000)[0]["pending"] == 0, "no data: nothing pending either"
+        js(s, "window.SEPTA.util.state.src.bus.stale = true")
+        assert js(s, ROWS, T0)[0]["pending"] == 1, "stale data keeps its last count"
+        # far: kept in arrivals, flagged, and no leave advice from it
+        js(s, SETUP2, {"t0": T0, "pins": [{"walkMin": 3}], "arrivals": [{"key": "f", "min": 52}]})
+        row = js(s, ROWS, T0)[0]
+        assert row["arrivals"][0].get("far") is True and row["leave"] is None, row
+        js(s, "(t) => { window.SEPTA.util.state.src.bus.ok = t; }", T0 + 7 * 60_000)  # a later good feed time keeps the capture usable
+        row = js(s, ROWS, T0 + 7 * 60_000)[0]  # 45 minutes left: no longer far, advice returns
+        assert not row["arrivals"][0].get("far") and row["leave"]["state"] == "later", row
+        # a deleted place: the pin stays, walk falls back to 5 (or its own value), note says so
+        js(s, SETUP2, {"t0": T0, "arrivals": [], "pins": [
+            {"stopId": "1", "placeId": "p1"}, {"stopId": "2", "placeId": "p1", "walkMin": 7}, {"stopId": "3", "placeId": "home"}, {"stopId": "4"}]})
+        rows = js(s, ROWS, T0)
+        assert [r["note"] for r in rows] == ["", "", "", ""] and rows[0]["placeName"] == "Gym", rows
+        js(s, "(() => { const st = window.SEPTA.util.state; st.places.list.length = 0; st.places.home = null; })()")
+        rows = js(s, ROWS, T0)
+        assert len(rows) == 4, "pins of a deleted place are not dropped"
+        assert [r["note"] for r in rows] == ["place-removed", "place-removed", "place-removed", ""], rows
+        assert [r["walkMin"] for r in rows] == [5, 7, 5, 5] and all(r["placeName"] is None for r in rows), rows
+    # a stored pin whose place no longer exists is kept as stored and read as removed
+    stored = json.dumps({"pins": [pin(0, placeId="gone")], "bufferMin": 2, "bad": False})
+    with Session(root, init_scripts=[seed(KEY, stored)]) as s:
+        boot(s)
+        r = js(s, ROWS, T0)[0]
+        assert r["note"] == "place-removed" and r["walkMin"] == 5 and r["pin"]["placeId"] == "gone", r
+
+
+def test_pending_far_and_place_removed_rows(root):
+    check_extras(root)
+    must_fail(check_extras, root, ("js/board.js", "pending++;", ""))
+    must_fail(check_extras, root, ("js/board.js", "note: pin.placeId && !pl ? 'place-removed' : ''", "note: ''"))
+    must_fail(check_extras, root, ("js/board.js", "pending: down ? 0 : cap.pending", "pending: cap.pending"))
+    must_fail(check_extras, root, ("js/board.js", "if (left > FAR_MIN) a.far = true;", ""))
+
+
+def check_walk_cap(root):
+    home = PLACES["home"]
+    with Session(root, init_scripts=[seed("septa.places.v1", PLACES)]) as s:
+        boot(s)
+        out = js(s, """(h) => { const B = window.SEPTA.board;
+            const far = B.addPin({route: '21', stopId: '700', stopName: 'Far', lat: h.lat + 0.2, lng: h.lng, placeId: 'home'}).pin;  // about 22 km
+            const mid = B.addPin({route: '21', stopId: '701', stopName: 'Mid', lat: h.lat + 0.02, lng: h.lng, placeId: 'home'}).pin;  // about 2.2 km
+            return { far: B.walkMin(far), mid: B.walkMin(mid), cap: B.MAX_WALK_MIN, buf: B.MAX_BUFFER_MIN, bad: B.BAD_EXTRA_MIN, row: B.rows(Date.now())[0].walkMin }; }""", home)
+        assert out["far"] == 60 and out["row"] == 60 and out["cap"] == 60 and out["buf"] == 15 and out["bad"] == 4, out
+        assert 30 < out["mid"] < 60, out
+
+
+def test_walk_estimate_is_capped_at_an_hour(root):
+    check_walk_cap(root)
+    must_fail(check_walk_cap, root, ("js/board.js", "Math.min(MAX_WALK_MIN, Math.max(1,", "(Math.max(1,"))
+
+
+def check_backup_altered(root):
+    base = [pin(0, label="x" * 80), pin(1, stopId="101", placeId=12345), pin(2, stopId="102", stopName="y" * 90)]
+    for one in base:
+        raw = json.dumps({"pins": [one], "bufferMin": 2, "bad": False})
+        with Session(root, init_scripts=[seed(KEY, raw)]) as s:
+            boot(s)
+            assert js(s, "window.SEPTA.board.pins().length") == 1
+            assert stored_raw(s, KEY + ".bak") == raw, ("a pin changed by validation keeps the original text", one["id"])
+    # nothing altered (no label stored, an unknown extra field, a place that was deleted later): no backup
+    plain = {k: v for k, v in pin(3, placeId="gone").items() if k != "label"}
+    plain["extra"] = "ignored"
+    raw = json.dumps({"pins": [plain], "bufferMin": 2, "bad": False})
+    with Session(root, init_scripts=[seed(KEY, raw)]) as s:
+        boot(s)
+        assert js(s, "window.SEPTA.board.pins().length") == 1 and stored_raw(s, KEY + ".bak") is None
+
+
+def test_altered_pins_are_backed_up(root):
+    check_backup_altered(root)
+    must_fail(check_backup_altered, root, ("js/board.js", "altered(r, c) ||", ""))
+    must_fail(check_backup_altered, root, ("js/board.js", "(o.placeId != null && o.placeId !== p.placeId)", "false"))
+    must_fail(check_backup_altered, root, ("js/board.js", "o.stopName !== p.stopName", "false"))
+
+
+# ---------------------------------------------------------------- a bus whose position is served again keeps counting down
+def eta_now(s, key="b3678"):
+    return js(s, "(k) => { const a = window.SEPTA.board.rows(Date.now())[0].arrivals.find(x => x.key === k); return a ? a.etaMin : null; }", key)
+
+
+def check_unchanged(root):
+    with Session(root) as s:
+        measured_board(s)
+        prev = eta_now(s)
+        assert prev is not None and prev > 1, prev
+        for i in range(3):
+            # bus 3678 reports nothing new (same position, same GPS time) while the rest of the feed moves on 15 s
+            for b in buses(s):
+                if str(b["VehicleID"]) != "3678":
+                    b["timestamp"] = int(b["timestamp"]) + 15
+            s.tick(15000)
+            cur = eta_now(s)
+            assert cur is not None and cur <= prev - 0.2, (i, prev, cur)  # about 15 s = 0.25 min less, never more
+            prev = cur
+        assert not s.console_errors, s.console_errors
+
+
+def test_unchanged_position_keeps_counting_down(root):
+    check_unchanged(root)
+    must_fail(check_unchanged, root, ("js/board.js", "at: b.ok - lag", "at: b.ok"))
+    must_fail(check_unchanged, root, ("js/board.js", "Math.max(0, newest - r.v.ts) * 1000", "0"))

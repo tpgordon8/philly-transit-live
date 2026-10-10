@@ -15,11 +15,12 @@
     MAX_LABEL = 30,
     MAX_STOP_NAME = 60,
     BUFFER_DEFAULT = 2,
-    BUFFER_MAX = 15,
+    MAX_BUFFER_MIN = 15,
     BAD_EXTRA_MIN = 4,
-    WALK_MAX = 60,
+    MAX_WALK_MIN = 60,
     NO_PLACE_WALK = 5,
     SOON_MIN = 3,
+    FAR_MIN = 45 /* an arrival further away than this is too uncertain to plan a departure from */,
     DETOUR = 1.3,
     WALK_MPS = 1.25,
     ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
@@ -39,7 +40,7 @@
     if (typeof p.route !== 'string' || !STOP_RT_RE.test(p.route)) return null;
     if (typeof p.stopId !== 'string' || !STOP_ID_RE.test(p.stopId)) return null;
     if (!isFin(p.lat) || !isFin(p.lng)) return null;
-    if (p.walkMin != null && !isInt(p.walkMin, 1, WALK_MAX)) return null;
+    if (p.walkMin != null && !isInt(p.walkMin, 1, MAX_WALK_MIN)) return null;
     var placeId = typeof p.placeId === 'string' && p.placeId && p.placeId.length <= 64 ? p.placeId : null,
       name = shortText(
         typeof p.stopName === 'string' && p.stopName ? p.stopName : 'Stop ' + p.stopId,
@@ -70,21 +71,37 @@
     });
     return {
       pins: pins,
-      bufferMin: isInt(o.bufferMin, 0, BUFFER_MAX) ? o.bufferMin : BUFFER_DEFAULT,
+      bufferMin: isInt(o.bufferMin, 0, MAX_BUFFER_MIN) ? o.bufferMin : BUFFER_DEFAULT,
       bad: o.bad === true
     };
+  }
+  /* True when validation changed a kept pin: a label or stop name cut, or a place id that was not usable turned into null. */
+  function altered(r, c) {
+    return c.pins.some(function (p) {
+      var o = r.pins.find(function (x) {
+        return S.util.isObj(x) && x.id === p.id;
+      });
+      return (
+        !!o &&
+        ((typeof o.label === 'string' && o.label !== '' && o.label !== p.label) ||
+          (typeof o.stopName === 'string' && o.stopName !== '' && o.stopName !== p.stopName) ||
+          (o.placeId != null && o.placeId !== p.placeId))
+      );
+    });
   }
   var board = S.util.loadChecked(KEY, cleanBoard, function (r, c) {
     return (
       !S.util.isObj(r) ||
       !Array.isArray(r.pins) ||
       r.pins.length !== c.pins.length ||
+      altered(r, c) ||
       (r.bufferMin != null && r.bufferMin !== c.bufferMin) ||
       (r.bad != null && typeof r.bad !== 'boolean')
     );
   });
   var listeners = [],
-    captured = {}; /* pin id -> [{key, etaMin, rough, at}], soonest first */
+    captured =
+      {}; /* pin id -> {list: [{key, etaMin, rough, at}] soonest first, pending: count of approaching buses with no measured time} */
   function emit() {
     listeners.slice().forEach(function (fn) {
       try {
@@ -112,7 +129,7 @@
   }
   function setSettings(patch) {
     if (!patch || typeof patch !== 'object') return false;
-    if ('bufferMin' in patch && !isInt(patch.bufferMin, 0, BUFFER_MAX)) return false;
+    if ('bufferMin' in patch && !isInt(patch.bufferMin, 0, MAX_BUFFER_MIN)) return false;
     if ('bad' in patch && typeof patch.bad !== 'boolean') return false;
     if ('bufferMin' in patch) board.bufferMin = patch.bufferMin;
     if ('bad' in patch) board.bad = patch.bad;
@@ -131,12 +148,12 @@
     var p = pin && placeById(pin.placeId);
     return p ? { name: p.name, lat: p.lat, lng: p.lng } : null;
   }
-  /* The set walking time, else straight line x 1.3 at 1.25 m/s (at least 1 min), else 5 min when there is no place. */
+  /* The set walking time, else straight line x 1.3 at 1.25 m/s (1 to 60 min), else 5 min when there is no place. */
   function walkMin(pin) {
     if (pin.walkMin != null) return pin.walkMin;
     var pl = placeFor(pin);
     if (!pl) return NO_PLACE_WALK;
-    return Math.max(1, Math.ceil((distM(pl, pin) * DETOUR) / WALK_MPS / 60));
+    return Math.min(MAX_WALK_MIN, Math.max(1, Math.ceil((distM(pl, pin) * DETOUR) / WALK_MPS / 60)));
   }
   /* ----- Pins ----- */
   function hasPin(route, stopId, placeId) {
@@ -159,7 +176,7 @@
       !isFin(o.lat) ||
       !isFin(o.lng) ||
       (placeId !== null && (typeof placeId !== 'string' || !placeById(placeId))) ||
-      (o.walkMin != null && !isInt(o.walkMin, 1, WALK_MAX))
+      (o.walkMin != null && !isInt(o.walkMin, 1, MAX_WALK_MIN))
     )
       return { ok: false, reason: 'invalid' };
     if (hasPin(route, stopId, placeId)) return { ok: false, reason: 'duplicate' };
@@ -189,24 +206,25 @@
       }
     return false;
   }
+  /* patch: {walkMin} (1-60 or null for automatic) and/or {placeId}. Answers {ok:true} or {ok:false, reason:'invalid'|'unknown'}. */
   function updatePin(id, patch) {
     var pin = null;
     board.pins.forEach(function (p) {
       if (p.id === id) pin = p;
     });
-    if (!pin || !patch || typeof patch !== 'object') return false;
-    if ('walkMin' in patch && patch.walkMin != null && !isInt(patch.walkMin, 1, WALK_MAX)) return false;
-    if ('label' in patch && typeof patch.label !== 'string') return false;
+    if (!pin) return { ok: false, reason: 'unknown' };
+    var bad = { ok: false, reason: 'invalid' };
+    if (!patch || typeof patch !== 'object') return bad;
+    if ('walkMin' in patch && patch.walkMin != null && !isInt(patch.walkMin, 1, MAX_WALK_MIN)) return bad;
     if ('placeId' in patch) {
       var pid = patch.placeId == null ? null : patch.placeId;
-      if (pid !== null && (typeof pid !== 'string' || !placeById(pid))) return false;
-      if (pid !== pin.placeId && hasPin(pin.route, pin.stopId, pid)) return false;
+      if (pid !== null && (typeof pid !== 'string' || !placeById(pid))) return bad;
+      if (pid !== pin.placeId && hasPin(pin.route, pin.stopId, pid)) return bad;
     }
     if ('walkMin' in patch) pin.walkMin = patch.walkMin == null ? null : patch.walkMin;
-    if ('label' in patch) pin.label = shortText(patch.label, MAX_LABEL) || shortText(pin.stopName, MAX_LABEL);
     if ('placeId' in patch) pin.placeId = patch.placeId == null ? null : patch.placeId;
     save();
-    return true;
+    return { ok: true };
   }
   /* The choices the stop card offers: Home and each saved place, then "No place". Only "No place" when nothing is saved. */
   function pinOptions() {
@@ -245,29 +263,41 @@
     r.msg = pinMessage(r);
     return r;
   }
-  /* ----- Captured arrivals. Called after each feed apply. The estimate is stamped with the time of the positions it came from
-   (state.src.bus.ok), so a stale list re-captured later does not restart the countdown. ----- */
+  /* ----- Captured arrivals. Called after each feed apply. Each estimate is dated by its bus's OWN report: the feed fetch time minus
+   how far that bus's GPS time is behind the newest report in this refresh (the feed's clock, so the device clock does not matter).
+   A bus whose position is simply served again therefore keeps counting down instead of restarting at the fetch time. ----- */
   function refresh() {
     var b = state.src.bus,
       all = S.feed.collect(),
+      newest = 0,
       next = {};
+    all.forEach(function (v) {
+      if (isFin(v.ts) && v.ts > newest) newest = v.ts;
+    });
     board.pins.forEach(function (p) {
       var stop = { id: p.stopId, name: p.stopName, lat: p.lat, lng: p.lng, route: p.route },
         rows = S.stops.boardRows(stop, all),
-        list = [];
+        list = [],
+        pending = 0;
       rows.a.concat(rows.b).forEach(function (r) {
-        if (r.eta.min != null) list.push({ key: r.v.key, etaMin: r.eta.min, rough: !!r.eta.rough, at: b.ok });
+        if (r.eta.min == null) {
+          pending++;
+          return;
+        }
+        var lag = isFin(r.v.ts) && newest ? Math.max(0, newest - r.v.ts) * 1000 : 0;
+        list.push({ key: r.v.key, etaMin: r.eta.min, rough: !!r.eta.rough, at: b.ok - lag });
       });
       list.sort(function (x, y) {
         return x.etaMin - y.etaMin;
       });
-      next[p.id] = list.slice(0, 2);
+      next[p.id] = { list: list.slice(0, 2), pending: pending };
     });
     captured = next;
     emit();
   }
-  function leaveState(inMin) {
-    return inMin > SOON_MIN ? 'later' : inMin > 0 ? 'soon' : 'now';
+  /* Decided on the exact value, shown rounded down (never promises more time than there is): later > 3, soon 1 to 3, else now. */
+  function leaveState(leaveIn) {
+    return leaveIn > SOON_MIN ? 'later' : leaveIn >= 1 ? 'soon' : 'now';
   }
   function rows(nowMs) {
     nowMs = isFin(nowMs) ? nowMs : Date.now();
@@ -277,11 +307,16 @@
     return board.pins.map(function (pin) {
       var walk = walkMin(pin),
         pl = placeFor(pin),
+        cap = captured[pin.id] || { list: [], pending: 0 },
         arrivals = [];
       if (!down)
-        (captured[pin.id] || []).forEach(function (c) {
+        cap.list.forEach(function (c) {
           var left = c.etaMin - Math.max(0, nowMs - c.at) / 60000;
-          if (left >= 0) arrivals.push({ key: c.key, etaMin: left, rough: c.rough });
+          if (left >= 0) {
+            var a = { key: c.key, etaMin: left, rough: c.rough };
+            if (left > FAR_MIN) a.far = true;
+            arrivals.push(a);
+          }
         });
       var leave = null,
         pick = null;
@@ -289,19 +324,24 @@
         if (!pick && a.etaMin >= walk) pick = a;
       });
       if (pick) {
-        var inMin = Math.ceil(pick.etaMin - walk - extra);
-        leave = {
-          inMin: Math.max(0, inMin),
-          state: leaveState(pick.etaMin - walk - extra),
-          forKey: pick.key
-        };
+        var leaveIn = pick.etaMin - walk - extra;
+        leave = { inMin: Math.max(0, Math.floor(leaveIn)), state: leaveState(leaveIn), forKey: pick.key };
       } else if (arrivals.length) leave = { inMin: 0, state: 'missed', forKey: arrivals[0].key };
+      if (
+        leave &&
+        arrivals.some(function (a) {
+          return a.key === leave.forKey && a.far;
+        })
+      )
+        leave = null;
       return {
         pin: Object.assign({}, pin),
         placeName: pl ? pl.name : null,
         walkMin: walk,
         source: down ? 'down' : b.stale ? 'stale' : 'live',
         arrivals: arrivals,
+        pending: down ? 0 : cap.pending,
+        note: pin.placeId && !pl ? 'place-removed' : '',
         leave: leave
       };
     });
@@ -313,6 +353,9 @@
   S.board.KEY = KEY;
   S.board.MAX_PINS = MAX_PINS;
   S.board.BAD_EXTRA_MIN = BAD_EXTRA_MIN;
+  S.board.MAX_WALK_MIN = MAX_WALK_MIN;
+  S.board.MAX_BUFFER_MIN = MAX_BUFFER_MIN;
+  S.board.FAR_MIN = FAR_MIN;
   S.board.pins = pins;
   S.board.addPin = addPin;
   S.board.removePin = removePin;

@@ -1,11 +1,12 @@
 """My stops board, logic and view together (no fakes): pin a stop from its card, open the board, and check that the row on screen
 shows the same numbers S.board.rows() computes from the live mock feed, that they tick, and that removing the pin empties the board."""
+import json
 import re
 
 from harness import Session
 from test_first_run import must_fail, seed
 from test_stop_board import SID, SROUTE, setup_moving, step
-from test_board_logic import PLACES, js
+from test_board_logic import KEY, PLACES, SETUP2, T0, js, pin
 
 FAST = {"test_pin_a_stop_and_see_it_on_the_board"}
 HASH = f"#stop={SID}&route={SROUTE}"
@@ -46,3 +47,61 @@ def check_pin_and_see_it(root):
 def test_pin_a_stop_and_see_it_on_the_board(root):
     check_pin_and_see_it(root)
     must_fail(check_pin_and_see_it, root, ("js/board.js", "S.board.rows = rows;", "S.board.rows = function () { return []; };"))
+
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# The three tests below are written against the FIX CONTRACT (tests fix brief, review items 6, 7 and 10) and read the REAL view
+# (js/boardview.js from the view lane): "Place removed" for a deleted place, "Bus nearby" for buses with no measured time yet and
+# "45+" for an arrival more than 45 minutes away. They fail until the view lane is merged; the architect runs them after the merge.
+# They are deliberately not in FAST.
+# ---------------------------------------------------------------------------------------------------------------------------
+def board_text(s):
+    s.page.evaluate("location.hash = '#board'")
+    s.page.wait_for_selector("#boardView", state="visible")
+    s.settle()
+    return s.page.locator("#boardView li").first.inner_text()
+
+
+def check_removed_place_on_screen(root):
+    stored = json.dumps({"pins": [pin(0, placeId="gone", stopName="Market St & 15th", walkMin=None)], "bufferMin": 2, "bad": False})
+    with Session(root, viewport=(1133, 744), init_scripts=[seed(KEY, stored)]) as s:
+        s.open()
+        s.wait_live()
+        s.settle()
+        txt = board_text(s)
+        assert "Place removed" in txt and "5 min" in txt, txt
+        assert js(s, "window.SEPTA.board.pins().length") == 1, "the pin is not dropped"
+        assert not s.console_errors, s.console_errors
+
+
+def check_far_and_pending_on_screen(root):
+    two = json.dumps({"pins": [pin(0, walkMin=3), pin(1, stopId="101", walkMin=3)], "bufferMin": 2, "bad": False})
+    with Session(root, viewport=(1133, 744), init_scripts=[seed(KEY, two)]) as s:
+        s.open()
+        s.wait_live()
+        s.settle()
+        # pin 0: one bus 52 minutes away; pin 1: two buses heading here with no measured time
+        js(s, """() => { const S = window.SEPTA;
+            S.stops.boardRows = (stop) => ({ a: (stop.id === '100' ? [{ key: 'far', min: 52 }] : [{ key: 'x', min: null }, { key: 'y', min: null }])
+                .map(x => ({ v: { key: x.key }, d: 0.1, eta: { min: x.min, rough: false } })), b: [] });
+            S.board.refresh(); }""")
+        s.page.evaluate("location.hash = '#board'")
+        s.page.wait_for_selector("#boardView", state="visible")
+        s.settle()
+        rows = s.page.locator("#boardView li")
+        assert rows.count() == 2, rows.count()
+        far, pending = rows.nth(0).inner_text(), rows.nth(1).inner_text()
+        assert "45+" in far and not re.search(r"LEAVE NOW|SOON|LATER|MISSED", far), far
+        assert "Bus nearby" in pending and "time not known yet" in pending, pending
+        assert not s.console_errors, s.console_errors
+
+
+def test_removed_place_is_shown_on_the_board(root):
+    check_removed_place_on_screen(root)
+    must_fail(check_removed_place_on_screen, root, ("js/board.js", "note: pin.placeId && !pl ? 'place-removed' : ''", "note: ''"))
+
+
+def test_far_and_pending_arrivals_are_shown_on_the_board(root):
+    check_far_and_pending_on_screen(root)
+    must_fail(check_far_and_pending_on_screen, root, ("js/board.js", "pending++;", ""))
+    must_fail(check_far_and_pending_on_screen, root, ("js/board.js", "if (left > FAR_MIN) a.far = true;", ""))
