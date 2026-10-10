@@ -60,10 +60,15 @@ FAKE = r"""(function () {
       });
     }
   };
+  /* js/board.js (the real module) assigns onto S.board when it loads; the fake ignores those writes so the view is tested alone. */
+  var locked = {};
+  Object.keys(fb.api).forEach(function (k) { Object.defineProperty(locked, k, { enumerable: true, get: function () { return fb.api[k]; }, set: function () {} }); });
   var ns;
-  Object.defineProperty(window, 'SEPTA', { configurable: true, get: function () { return ns; }, set: function (v) { ns = v; v.board = fb.api; } });
+  Object.defineProperty(window, 'SEPTA', { configurable: true, get: function () { return ns; }, set: function (v) { ns = v; v.board = locked; } });
 })();"""
-HOOK_NOBOARD = ""
+# The real js/board.js would fill S.board, so "no board" is a namespace slot that swallows its writes.
+NOBOARD = """(function () { var ns; Object.defineProperty(window, 'SEPTA', { configurable: true, get: function () { return ns; },
+  set: function (v) { ns = v; v.board = new Proxy({}, { set: function () { return true; }, get: function () { return undefined; } }); } }); })();"""
 
 # walk 4 + buffer 2 = 6 minutes of lead time; ETA minus 6 is the leave-in value.
 FIXTURE = {
@@ -86,7 +91,7 @@ PORTRAIT, LANDSCAPE, PHONE, SMALL = (744, 1133), (1133, 744), (390, 844), (320, 
 
 
 def sess(root, viewport=(1133, 744), extra=(), board=True, **kw):
-    scripts = ([FAKE] if board else []) + list(extra)
+    scripts = [FAKE if board else NOBOARD] + list(extra)
     return Session(root, viewport=viewport, init_scripts=scripts, **kw)
 
 
