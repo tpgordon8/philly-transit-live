@@ -30,7 +30,7 @@ def check_pin_and_see_it(root):
         rows = s.page.locator("#boardView li")
         assert rows.count() == 1, rows.count()
         txt = rows.first.inner_text()
-        assert "21" in txt and "Home" in txt and re.search(r"Bus in\s*\d+\s*min|about\s*\d+", txt, re.I), txt
+        assert "21" in txt and "Home" in txt and re.search(r"Bus in \(estimate\)\s*\d+\s*min|about\s*\d+", txt, re.I), txt
         assert re.search(r"LATER|SOON|LEAVE NOW|MISSED", txt), txt
         r = js(s, "window.SEPTA.board.rows(Date.now())[0]")
         eta = r["arrivals"][0]["etaMin"]

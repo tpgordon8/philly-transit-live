@@ -180,7 +180,8 @@
   var IDLE_MS = 60 * 60 * 1000,
     lastUse = Date.now();
   /* The wall board (js/boardview.js) sets `awake` while it shows: the page then never idles, never slows down and always wants buses. */
-  var awake = false;
+  var awake = false,
+    awakeDim = false; /* the board is dimmed (night): refresh every 30 s instead of 15 s */
   function idleNow() {
     return !awake && Date.now() - lastUse >= IDLE_MS;
   }
@@ -354,7 +355,7 @@
     var f = state.filters;
     return {
       bus: !!(f.bus || f.trolley || f.subway || hasActiveRule() || state.stop || awake),
-      train: !!f.train
+      train: !awake && !!f.train /* the board shows buses only */
     };
   }
   function refresh(force) {
@@ -413,7 +414,7 @@
       return;
     }
     if (!document.hidden) {
-      if (isQuiet() && Date.now() - lastStart < SLOW_REFRESH_MS - REFRESH_MS / 2) return;
+      if ((isQuiet() || awakeDim) && Date.now() - lastStart < SLOW_REFRESH_MS - REFRESH_MS / 2) return;
       refresh();
       return;
     }
@@ -428,9 +429,11 @@
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden && Date.now() - state.fetchedAt > REFRESH_MS) refresh();
   });
-  S.feed.setAwake = function (on) {
+  S.feed.setAwake = function (on, dim) {
+    var was = awake;
     awake = !!on;
-    if (awake) markUse();
+    awakeDim = awake && !!dim;
+    if (awake && !was) markUse();
   };
   S.feed.idleNow = idleNow;
   S.feed.pauseNow = pauseNow;

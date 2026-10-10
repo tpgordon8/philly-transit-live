@@ -14,9 +14,12 @@
     DIM_TO = 6; /* night dimming: 10 PM up to 6 AM local */
   var RELOAD_AFTER_MS = 12 * 3600000,
     RELOAD_QUIET_MS = 10 * 60000,
-    RELOAD_HOUR = 4;
-  var BUF_MAX = 15,
-    WALK_MAX = 60;
+    RELOAD_RETRY_MS = 10 * 60000,
+    RELOAD_HOUR = 4,
+    RELOAD_END = 6; /* the refresh happens from 4 AM up to 6 AM local, never in the daytime */
+  var CHECK_MS = 8000; /* "Checking live data" for this long after opening, until the first fetch lands */
+  var FAR_MIN = 45,
+    SPOKEN_MS = 2 * 60000; /* a bus may be announced again after this long out of "leave now" */
   var root = $('#boardView'),
     app = $('#app'),
     list = $('#bvList'),
@@ -33,9 +36,16 @@
     loadedAt = Date.now(),
     lastInput = Date.now(),
     lock = null,
+    reqSeq = 0,
+    openedAt = 0,
+    reloadTry = 0,
+    reloadBusy = false,
+    dimmed = null,
     pending = null,
     rowEls = {},
     prevState = {},
+    spoken = {},
+    saying = [],
     hooked = false;
 
   /* ----- Saved choice: night dimming (default on). Corrupt text is backed up and the default is used. ----- */
@@ -53,14 +63,22 @@
   function board() {
     return S.board && typeof S.board.rows === 'function' ? S.board : null;
   }
+  /* The limits belong to S.board; the fallbacks only matter when it is missing. */
+  function lim(name, fallback) {
+    var v = S.board && S.board[name];
+    return typeof v === 'number' ? v : fallback;
+  }
 
   /* ----- Words ----- */
   function mins(n) {
     return n + (n === 1 ? ' minute' : ' minutes');
   }
-  function etaText(m) {
-    var r = Math.round(m);
-    return r < 1 ? '<1 min' : r + ' min';
+  /* Times are shown rounded down, so the board never promises more time than there is. */
+  function whole(m) {
+    return Math.max(0, Math.floor(m));
+  }
+  function etaText(a) {
+    return a.far ? FAR_MIN + '+ min' : whole(a.etaMin) < 1 ? 'due' : whole(a.etaMin) + ' min';
   }
   /* A big value is the number with its small unit (and "about") beside it, so even a narrow phone keeps the number at full size. */
   function setValue(node, pre, num, unit) {
@@ -72,10 +90,11 @@
     node.appendChild(document.createTextNode(num));
     if (unit) node.appendChild(el('span', 'bv-u', ' ' + unit));
   }
-  function minValue(node, pre, m) {
-    var r = Math.round(m);
-    if (r < 1) setValue(node, pre, '<1', 'min');
-    else setValue(node, pre, String(r), 'min');
+  function busValue(node, a) {
+    var pre = a.rough ? 'about' : '';
+    if (a.far) setValue(node, pre, FAR_MIN + '+', 'min');
+    else if (whole(a.etaMin) < 1) setValue(node, pre, 'Due', '');
+    else setValue(node, pre, String(whole(a.etaMin)), 'min');
   }
   function clockText(d) {
     var h = d.getHours(),
@@ -122,7 +141,9 @@
       [bus, 'Bus in'],
       [lv, 'Leave in']
     ].forEach(function (p) {
-      p[0].appendChild(el('span', 'bv-k', p[1]));
+      var k = el('span', 'bv-k', p[1]);
+      if (p[0] === bus) k.appendChild(el('span', 'bv-est', ' (estimate)'));
+      p[0].appendChild(k);
       p[0].appendChild(el('span', 'bv-v'));
       p[0].appendChild(el('span', 'bv-x'));
     });
@@ -135,21 +156,26 @@
     li.appendChild(el('div', 'bv-none'));
     return li;
   }
-  function describe(r, eta, lv) {
+  function describe(r, eta, lv, checking) {
     var t = 'Route ' + r.pin.route + ' at ' + r.pin.stopName;
-    if (r.source === 'down') return t + ', times hidden, live data unavailable';
-    if (!eta) return t + ', no bus heading here right now';
-    t +=
-      ', bus in ' +
-      (eta.rough ? 'about ' : '') +
-      (Math.round(eta.etaMin) < 1 ? 'less than a minute' : mins(Math.round(eta.etaMin)));
-    if (eta.rough) t += ' (estimate)';
+    if (r.note === 'place-removed') t += ', place removed, walk set to ' + r.walkMin + ' minutes';
+    if (r.source === 'down')
+      return t + (checking ? ', checking live data' : ', times hidden, live data unavailable');
+    if (!eta)
+      return (
+        t + (r.pending > 0 ? ', a bus is nearby, time not known yet' : ', no bus heading here right now')
+      );
+    var w = whole(eta.etaMin);
+    t += eta.far
+      ? ', bus in more than ' + FAR_MIN + ' minutes'
+      : ', bus in ' + (eta.rough ? 'about ' : '') + (w < 1 ? 'less than a minute' : mins(w));
+    t += ' (estimate)';
     if (!lv) return t;
     if (lv.state === 'now') return t + ', leave now';
     if (lv.state === 'missed') return t + ', you will miss this bus';
     return t + ', leave in ' + mins(lv.inMin);
   }
-  function fillRow(li, r) {
+  function fillRow(li, r, checking) {
     var a = r.arrivals || [],
       lv = r.leave,
       down = r.source === 'down',
@@ -159,8 +185,6 @@
     if (lv && first && then && lv.forKey === then.key && lv.forKey !== first.key) {
       first = then;
       then = null;
-    } else if (lv && first && lv.forKey === first.key) {
-      then = a[1] || null;
     }
     var st = !down && first && lv ? lv.state : null;
     var kids = li.children,
@@ -169,37 +193,51 @@
       lvEl = kids[2],
       none = kids[3];
     setText(where.firstChild, r.pin.stopName);
-    var from = r.placeName ? 'from ' + r.placeName + ' · ' : '';
-    setText(where.lastChild, from + r.walkMin + ' min walk');
+    setText(
+      where.lastChild,
+      r.note === 'place-removed'
+        ? 'Place removed, walk set to ' + r.walkMin + ' min'
+        : (r.placeName ? 'from ' + r.placeName + ' · ' : '') + r.walkMin + ' min walk'
+    );
     var hasNums = !down && !!first;
     bus.hidden = lvEl.hidden = !hasNums;
     none.hidden = hasNums;
-    setText(none, down ? 'Times hidden' : 'No bus heading here right now');
+    setText(
+      none,
+      down
+        ? checking
+          ? 'Checking live data'
+          : 'Times hidden'
+        : r.pending > 0
+          ? 'Bus nearby, time not known yet'
+          : 'No bus heading here right now'
+    );
     if (hasNums) {
-      var bv = bus.children[1],
-        bx = bus.children[2];
-      minValue(bv, first.rough ? 'about' : '', first.etaMin);
-      var sig = (first.rough ? 'r' : '') + '|' + (then ? etaText(then.etaMin) : '');
+      var bx = bus.children[2];
+      busValue(bus.children[1], first);
+      var sig = (first.rough ? 'r' : '') + '|' + (then ? etaText(then) : '');
       if (bx.dataset.sig !== sig) {
         bx.dataset.sig = sig;
         bx.replaceChildren();
         if (first.rough) bx.appendChild(el('span', 'bv-tag', 'estimate'));
-        if (then) bx.appendChild(el('span', null, 'then ' + etaText(then.etaMin)));
+        if (then) bx.appendChild(el('span', null, 'then ' + etaText(then)));
       }
-      if (then && bx.lastChild && bx.lastChild.textContent !== 'then ' + etaText(then.etaMin))
-        bx.lastChild.textContent = 'then ' + etaText(then.etaMin);
-      var v = lvEl.children[1];
-      if (!lv || lv.state === 'missed') setValue(v, '', '\u2014', '');
+      var v = lvEl.children[1],
+        slot = lvEl.children[2];
+      if (!lv) setValue(v, '', '—', '');
+      else if (lv.state === 'missed') setValue(v, '', '—', '');
       else if (lv.state === 'now') setValue(v, '', 'Now', '');
       else setValue(v, '', String(lv.inMin), 'min');
-      if ((lvEl.children[2].dataset.s || '') !== (st || '')) {
-        lvEl.children[2].replaceChildren();
-        lvEl.children[2].dataset.s = st || '';
-        if (st) lvEl.children[2].appendChild(stateEl(st));
+      var skey = st || (lv ? '' : 'far');
+      if ((slot.dataset.s || '') !== skey) {
+        slot.replaceChildren();
+        slot.dataset.s = skey;
+        if (st) slot.appendChild(stateEl(st));
+        else if (skey === 'far') slot.appendChild(el('span', null, 'Too far ahead to say'));
       }
     }
     li.dataset.state = st || '';
-    var label = describe(r, first, lv);
+    var label = describe(r, first, lv, checking);
     if (li.getAttribute('aria-label') !== label) li.setAttribute('aria-label', label);
   }
   function render() {
@@ -211,7 +249,8 @@
       /* a failing board shows as empty */
     }
     var ids = {},
-      src = 'live';
+      src = 'live',
+      checking = !state.src.bus.ok && Date.now() - openedAt < CHECK_MS;
     rows.forEach(function (r) {
       if (r.source === 'down') src = 'down';
       else if (r.source === 'stale' && src !== 'down') src = 'stale';
@@ -221,24 +260,27 @@
     list.hidden = !rows.length;
     var msg =
       src === 'down'
-        ? 'Live data unavailable. Times hidden.'
+        ? checking
+          ? 'Checking live data'
+          : 'Live data unavailable. Times hidden.'
         : src === 'stale'
           ? 'Positions may be out of date'
           : '';
     banner.hidden = !msg;
-    banner.classList.toggle('down', src === 'down');
+    banner.classList.toggle('down', src === 'down' && !checking);
     setText(banner, msg);
-    var i = 0;
+    var i = 0,
+      nowKeys = {};
     rows.forEach(function (r) {
       var id = r.pin.id;
       ids[id] = 1;
       var li = rowEls[id];
       if (!li) li = rowEls[id] = makeRow(r.pin);
-      fillRow(li, r);
+      fillRow(li, r, checking);
       var cur = list.children[i];
       if (cur !== li) list.insertBefore(li, cur || null);
       i++;
-      announce(r, id);
+      announce(r, id, nowKeys);
     });
     Object.keys(rowEls).forEach(function (id) {
       if (ids[id]) return;
@@ -246,220 +288,67 @@
       delete rowEls[id];
       delete prevState[id];
     });
+    forgetSpoken(nowKeys);
   }
-  /* The live region speaks only when a row newly reaches "leave now", never for the countdown itself. */
-  function announce(r, id) {
-    var st = r.source !== 'down' && r.leave && r.arrivals && r.arrivals.length ? r.leave.state : null;
-    if (prevState[id] !== undefined && prevState[id] !== 'now' && st === 'now')
-      live.textContent = 'Leave now for route ' + r.pin.route + ' at ' + r.pin.stopName + '.';
-    prevState[id] = st;
+  /* The live region speaks once per bus, the first time its row reaches "leave now" (never for the countdown, never on the first
+     draw). The bus is forgotten only after it has been out of "leave now" for 2 minutes, so a flicker does not say it again. */
+  function announce(r, id, nowKeys) {
+    var on = r.source !== 'down' && r.leave && r.arrivals && r.arrivals.length && r.leave.state === 'now',
+      key = on ? r.leave.forKey : null;
+    if (key) {
+      nowKeys[key] = 1;
+      if (!(key in spoken) && prevState[id] !== undefined) say('Route ' + r.pin.route + ': leave now');
+      spoken[key] = 0;
+    }
+    prevState[id] = on ? 'now' : 'other';
   }
-
-  /* ----- Settings sheet ----- */
-  function stepper(label, value, onDec, onInc, decOff, incOff, key) {
-    var s = el('span', 'bv-stepper');
-    var d = el('button', null, '−'),
-      i = el('button', null, '+');
-    d.type = i.type = 'button';
-    d.setAttribute('aria-label', 'Less ' + label);
-    i.setAttribute('aria-label', 'More ' + label);
-    d.dataset.fk = key + 'd';
-    i.dataset.fk = key + 'i';
-    d.disabled = !!decOff;
-    i.disabled = !!incOff;
-    d.addEventListener('click', onDec);
-    i.addEventListener('click', onInc);
-    var out = el('output', null, value);
-    out.setAttribute('aria-label', label);
-    s.appendChild(d);
-    s.appendChild(out);
-    s.appendChild(i);
-    return s;
-  }
-  function check(text, on, onChange, key, hint) {
-    var l = el('label', 'bv-line');
-    var t = el('span', null, text);
-    if (hint) t.appendChild(el('small', null, hint));
-    var c = el('input');
-    c.type = 'checkbox';
-    c.checked = !!on;
-    c.dataset.fk = key;
-    c.addEventListener('change', function () {
-      onChange(c.checked);
+  function forgetSpoken(nowKeys) {
+    var t = Date.now();
+    Object.keys(spoken).forEach(function (k) {
+      if (nowKeys[k]) return;
+      if (!spoken[k]) spoken[k] = t;
+      else if (t - spoken[k] >= SPOKEN_MS) delete spoken[k];
     });
-    var w = el('span', 'bv-chk');
-    w.style.flex = '0 0 auto';
-    w.appendChild(c);
-    l.appendChild(t);
-    l.appendChild(w);
-    return l;
   }
-  function renderSettings() {
-    var b = board();
-    var ae = document.activeElement,
-      fk = ae && settings.contains(ae) ? ae.dataset.fk : null;
-    settings.replaceChildren();
-    var h = el('h3', null, 'Board settings');
-    settings.appendChild(h);
-    if (b) {
-      var cfg = b.settings(),
-        line = el('div', 'bv-line');
-      var lab = el('span', null, 'Extra minutes to get ready');
-      lab.appendChild(el('small', null, 'Added to your walk before you need to leave'));
-      line.appendChild(lab);
-      line.appendChild(
-        stepper(
-          'minutes to get ready',
-          cfg.bufferMin + ' min',
-          function () {
-            b.setSettings({ bufferMin: Math.max(0, cfg.bufferMin - 1) });
-            renderSettings();
-          },
-          function () {
-            b.setSettings({ bufferMin: Math.min(BUF_MAX, cfg.bufferMin + 1) });
-            renderSettings();
-          },
-          cfg.bufferMin <= 0,
-          cfg.bufferMin >= BUF_MAX,
-          'buf'
-        )
-      );
-      settings.appendChild(line);
-      settings.appendChild(
-        check(
-          'Snow or ice: add 4 min',
-          cfg.bad,
-          function (v) {
-            b.setSettings({ bad: v });
-            renderSettings();
-          },
-          'bad'
-        )
-      );
-    }
-    settings.appendChild(
-      check(
-        'Night dimming',
-        view.dim,
-        function (v) {
-          view.dim = v;
-          saveView();
-          tick();
-        },
-        'dim',
-        'Dims the board from 10 PM to 6 AM'
-      )
-    );
-    if (b) {
-      var pins = b.pins();
-      if (pins.length) settings.appendChild(el('h3', null, 'Pinned stops'));
-      pins.forEach(function (p, n) {
-        var auto = p.walkMin == null,
-          cur = b.walkMin(p),
-          nm = 'Route ' + p.route + ' at ' + p.stopName;
-        var head = el('div', 'bv-line');
-        head.appendChild(el('span', null, nm));
-        var rm = el('button', 'bv-rm', 'Remove');
-        rm.type = 'button';
-        rm.setAttribute('aria-label', 'Remove ' + nm);
-        rm.dataset.fk = 'rm' + n;
-        rm.addEventListener('click', function () {
-          b.removePin(p.id);
-          render();
-          renderSettings();
-          var next = settings.querySelector('.bv-rm') || setBtn;
-          next.focus();
-        });
-        head.appendChild(rm);
-        settings.appendChild(head);
-        var w = el('div', 'bv-line');
-        var wl = el('span', null, 'Walk time');
-        wl.appendChild(el('small', null, auto ? 'Automatic, ' + cur + ' min' : 'You set ' + cur + ' min'));
-        w.appendChild(wl);
-        w.appendChild(
-          stepper(
-            'walk minutes for ' + nm,
-            cur + ' min',
-            function () {
-              b.updatePin(p.id, { walkMin: Math.max(1, cur - 1) });
-              renderSettings();
-            },
-            function () {
-              b.updatePin(p.id, { walkMin: Math.min(WALK_MAX, cur + 1) });
-              renderSettings();
-            },
-            cur <= 1,
-            cur >= WALK_MAX,
-            'w' + n
-          )
-        );
-        settings.appendChild(w);
-        settings.appendChild(
-          check(
-            'Automatic walk time',
-            auto,
-            function (v) {
-              b.updatePin(p.id, { walkMin: v ? null : cur });
-              renderSettings();
-            },
-            'a' + n
-          )
-        );
-      });
-    }
-    var done = el('button', 'bv-btn', 'Done');
-    done.type = 'button';
-    done.style.marginTop = '18px';
-    done.dataset.fk = 'done';
-    done.addEventListener('click', closeSettings);
-    settings.appendChild(done);
-    if (fk) {
-      var back = settings.querySelector('[data-fk="' + fk + '"]');
-      if (back && !back.disabled) back.focus();
-      else if (back) (back.parentNode.querySelector('button:not(:disabled)') || settings.firstChild).focus();
-    }
-    render();
+  /* Cleared first so the same words are announced again; messages raised together are read together. */
+  function say(msg) {
+    saying.push(msg);
+    if (saying.length > 1) return;
+    live.textContent = '';
+    setTimeout(function () {
+      live.textContent = saying.join(' ');
+      saying = [];
+    }, 50);
   }
-  function openSettings() {
-    settings.hidden = false;
-    settings.style.top =
-      $('.bv-head').getBoundingClientRect().bottom +
-      6 +
-      'px'; /* below the header, so Settings and Close stay reachable */
-    setBtn.setAttribute('aria-expanded', 'true');
-    renderSettings();
-    var f = settings.querySelector('input, button');
-    if (f) f.focus();
-  }
-  function closeSettings() {
-    if (settings.hidden) return;
-    settings.hidden = true;
-    setBtn.setAttribute('aria-expanded', 'false');
-    setBtn.focus();
-  }
-  setBtn.addEventListener('click', function () {
-    if (settings.hidden) openSettings();
-    else closeSettings();
-  });
 
-  /* ----- Screen wake lock: asked for while the board shows, asked again when the page becomes visible ----- */
+  /* ----- Screen wake lock: asked for while the board shows, asked again when the page becomes visible.
+     Each request has a number; an answer that arrives after the board closed (or after a newer request) is released at once. ----- */
+  function drop(l) {
+    try {
+      var p = l && l !== 'pending' && l.release ? l.release() : null;
+      if (p && p.catch) p.catch(function () {});
+    } catch (e) {
+      /* nothing to release */
+    }
+  }
   function wake() {
     try {
       if (!open || document.hidden || lock || !navigator.wakeLock || !navigator.wakeLock.request) return;
-      var p = navigator.wakeLock.request('screen');
+      var p = navigator.wakeLock.request('screen'),
+        mine = ++reqSeq;
       if (!p || !p.then) return;
       lock = 'pending';
       p.then(
         function (l) {
+          if (mine !== reqSeq || !open) return drop(l);
           lock = l;
           if (l && l.addEventListener)
             l.addEventListener('release', function () {
               if (lock === l) lock = null;
             });
-          if (!open) release();
         },
         function () {
-          lock = null;
+          if (mine === reqSeq) lock = null;
         }
       );
     } catch (e) {
@@ -469,14 +358,8 @@
   function release() {
     var l = lock;
     lock = null;
-    try {
-      if (l && l !== 'pending' && l.release) {
-        var p = l.release();
-        if (p && p.catch) p.catch(function () {});
-      }
-    } catch (e) {
-      /* nothing to release */
-    }
+    reqSeq++;
+    drop(l);
   }
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) wake();
@@ -494,8 +377,24 @@
     if (d.getTime() < loadedAt + RELOAD_AFTER_MS) d.setDate(d.getDate() + 1);
     return d.getTime();
   }
+  /* Reload only between 4 and 6 AM, after 12 hours open and 10 quiet minutes, and only when the page can really be fetched again:
+     a reload offline would replace a working board with an error page. A failed check is retried every 10 minutes until 6 AM. */
   function maybeReload(now) {
-    if (now >= reloadAt() && now - lastInput >= RELOAD_QUIET_MS) api.reload();
+    var h = new Date(now).getHours();
+    if (reloadBusy || now < reloadAt() || now - lastInput < RELOAD_QUIET_MS) return;
+    if (h < RELOAD_HOUR || h >= RELOAD_END || now < reloadTry) return;
+    reloadTry = now + RELOAD_RETRY_MS;
+    if (navigator.onLine === false || typeof fetch !== 'function') return;
+    reloadBusy = true;
+    fetch(location.href.split('#')[0], { cache: 'no-store' }).then(
+      function (r) {
+        reloadBusy = false;
+        if (r && r.ok) api.reload();
+      },
+      function () {
+        reloadBusy = false;
+      }
+    );
   }
   ['pointerdown', 'touchstart', 'keydown', 'wheel'].forEach(function (t) {
     document.addEventListener(
@@ -508,10 +407,13 @@
   });
   function tick() {
     if (!open) return;
-    var d = new Date();
+    var d = new Date(),
+      dim = view.dim && isNight(d);
     setText(clockEl, clockText(d));
     setText(updEl, updText());
-    root.classList.toggle('dim', view.dim && isNight(d));
+    root.classList.toggle('dim', dim);
+    /* a dimmed board is a bedroom wall at night: the feed slows to every 30 s (js/feed.js) */
+    if (dim !== dimmed && S.feed.setAwake) S.feed.setAwake(true, (dimmed = dim));
     render();
     maybeReload(d.getTime());
   }
@@ -536,6 +438,8 @@
     document.body.classList.add('board-on');
     app.inert = true;
     app.setAttribute('aria-hidden', 'true');
+    openedAt = Date.now();
+    dimmed = null; /* tick() tells the feed whether the board is dimmed */
     if (S.feed.setAwake) S.feed.setAwake(true);
     if (!hooked && board() && board().onChange) {
       hooked = true;
@@ -570,7 +474,10 @@
     } catch (e) {
       /* the map redraws on its next resize */
     }
-    var back = opener && document.contains(opener) && opener.focus ? opener : $('#addr');
+    var back =
+      opener && document.contains(opener) && opener.focus
+        ? opener
+        : $('#btnBoard'); /* a button, so no keyboard rises */
     opener = null;
     if (back) back.focus({ preventScroll: true });
   }
@@ -597,12 +504,14 @@
     pending = $('#btnBoard');
     location.hash = '#board';
   });
+  /* A toast has its own Escape handler (js/alerts.js, on the toast itself): while one shows, this handler leaves the key alone so
+     that Escape closes the toast first and the board on the next press. */
   document.addEventListener(
     'keydown',
     function (e) {
-      if (e.key !== 'Escape' || !open) return;
+      if (e.key !== 'Escape' || !open || document.querySelector('#toasts .toast')) return;
       e.stopImmediatePropagation();
-      if (!settings.hidden) closeSettings();
+      if (!settings.hidden) S.boardsettings.close();
       else close();
     },
     true
@@ -617,5 +526,17 @@
   api.hide = hide;
   api.render = render;
   api.isNight = isNight;
+  api.board = board;
+  api.lim = lim;
+  api.say = say;
+  api.tick = tick;
+  api.dim = function (on) {
+    if (typeof on === 'boolean') {
+      view.dim = on;
+      saveView();
+      tick();
+    }
+    return view.dim;
+  };
   sync();
 })();

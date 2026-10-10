@@ -17,13 +17,12 @@ caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md). By defau
 
 `index.html` holds the markup and a short loader. The styles are twelve plain stylesheets in `css/`, linked in this
 order: `leaflet` (the Leaflet stylesheet), `base` (tokens, reset, header), `layout` (app shell, responsive rules), `map`
-(markers, pins, vehicle card), `panel` (sidebar sections), `trip` (trip planner), `suggest` (place and address suggestions), `stops` (stop card and board), `nearby` (Nearby stops list) and
-`alerts` (service alerts, leave-now rules, toasts, banners). The application code is eighteen classic scripts in `js/`,
+(markers, pins, vehicle card), `panel` (sidebar sections), `trip` (trip planner), `suggest` (place and address suggestions), `stops` (stop card and board), `alerts` (service alerts, leave-now rules, toasts, banners), `nearby` (Nearby stops list), `indego` (Indego stations and card) and `board` (the My stops board). The application code is nineteen classic scripts in `js/`,
 loaded with ordinary `<script src>` tags in dependency order: `util` (helpers, storage, shared state), `feed` (vehicle
 feed, ghost filter, idle pause, refresh), `map` (Leaflet map, markers, vehicle card), `landmarks` (about 40 well-known Philadelphia places), `suggest` (place and address suggestions as you type), `panel` (sidebar: status, search,
 saved places, Home, radius, filters), `stops` (stop links, stop board, ETA), `alerts` (service alerts, leave-now rules), `board` (My stops board logic),
 `routing` (trip planner data clients), `candidates` (bus candidates), `planner` (trip planner), `trip` (trip planner
-interface), `nearby` (Nearby stops under the search area; Get me home is in `panel`), `sheet` (phone bottom sheet, on-screen keyboard) and `main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else
+interface), `nearby` (Nearby stops under the search area; Get me home is in `panel`), `boardview` (the My stops board screen), `boardsettings` (its settings sheet), `sheet` (phone bottom sheet, on-screen keyboard), `indego` (Indego bike stations) and `main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else
 is global. If a file fails to load, a red banner at the top of the page tells the visitor to reload (the file names go to the browser console and `SEPTA.failed`). How the files fit together and how to
 add one: [ARCHITECTURE.md](ARCHITECTURE.md) section 14. There is no build step; GitHub Pages serves the files as they are.
 
