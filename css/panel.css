@@ -92,8 +92,8 @@ select{min-height:44px;font-size:16px}
 #welcome[hidden]{display:none}
 #welcome p{flex:1;margin:0;font-weight:600}
 @media (max-width:760px){
-  #welcome{position:fixed;z-index:1090;left:8px;right:64px;bottom:calc(var(--peek) + 8px);margin:0;border-color:var(--line);box-shadow:var(--shadow)}
-  #app[data-sheet=open] #welcome,#app:has(#detail:not([hidden])) #welcome,#app:has(#stopCard:not([hidden])) #welcome{display:none}
+  #welcome{position:fixed;z-index:1090;left:8px;right:64px;bottom:calc(var(--peek) + 24px);margin:0;border-color:var(--line);box-shadow:var(--shadow)}
+  #app[data-sheet=open] #welcome,#app:has(#detail:not([hidden])) #welcome,#app:has(#stopCard:not([hidden])) #welcome,#app:has(#indegoCard:not([hidden])) #welcome,#app:has(#panel :is(input,select,textarea):focus) #welcome{display:none}
 }
 @media (max-width:760px) and (max-height:500px) and (orientation:landscape){
   #welcome{position:static;margin:10px 18px 0;box-shadow:none}

@@ -113,12 +113,7 @@
     var btn = $('#tripLocate');
     btn.disabled = true;
     tripErr('from', '');
-    getPosition()
-      .then(function (p) {
-        tripSetField('from', 'Your location', {
-          pt: { lat: p.coords.latitude, lng: p.coords.longitude, name: 'Your location' }
-        });
-      })
+    tripLocateFrom()
       .catch(function () {
         tripErr('from', "Location isn't available here. Type an address instead.");
       })

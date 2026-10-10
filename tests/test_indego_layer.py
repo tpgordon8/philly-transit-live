@@ -97,7 +97,7 @@ def test_chip_is_off_by_default_persists_and_asks_for_nothing_while_off(root):
 
 def test_saved_prefs_without_the_indego_key_are_kept_and_mean_off(root):
     old = {"radius": 2, "filters": {"bus": True, "trolley": True, "subway": False, "train": True}}
-    pre = "localStorage.setItem('septa.prefs.v1', %s); localStorage.setItem('septa.defaults.v2', '1');" % json.dumps(json.dumps(old))
+    pre = "localStorage.setItem('septa.prefs.v1', %s); localStorage.setItem('septa.defaults.v2', '1'); localStorage.setItem('septa.defaults.v3', '1');" % json.dumps(json.dumps(old))
     with Session(root, legacy_defaults=False, init_scripts=[HOOK, "(() => { try { if (!localStorage.getItem('septa.prefs.v1')) { " + pre + " } } catch (e) {} })();"]) as s:
         s.open()
         s.wait_live()

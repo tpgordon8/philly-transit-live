@@ -1,6 +1,6 @@
 /* js/nearby.js: Nearby stops. After a search or Use my location, the nearest bus and trolley stops are listed under the search area.
    The stops come from data/bus-network.json (the planner's file), loaded through S.routing.loadNetwork on the first such search, never at
-   page load, and kept in memory for the session (one fetch, about 279 KB gzipped). A row opens the existing stop card. */
+   page load, and kept in memory for the session (one fetch, about 275 KB gzipped). A row opens the existing stop card. */
 (function () {
   'use strict';
   var S = window.SEPTA;
@@ -134,12 +134,12 @@
     if (rows.length) status(rows.length + (rows.length === 1 ? ' nearby stop' : ' nearby stops'), false);
     else status('No bus or trolley stops within a mile of here', true);
   }
-  /* c: the new search point. Called whenever the saved search location changes (panel.js setCenter). */
-  function show(c) {
-    var mine = ++seq;
-    $('#nearSec').hidden = false;
-    $('#nearList').replaceChildren();
-    $('#nearHint').hidden = true;
+  /* With Data Saver on (navigator.connection.saveData) the 275 KB network file is not fetched on its own: one button in the section loads it. */
+  function dataSaver() {
+    var cn = navigator.connection;
+    return !!(cn && cn.saveData);
+  }
+  function load(c, mine) {
     status('Finding nearby stops', true);
     S.routing.loadNetwork().then(
       function (n) {
@@ -150,6 +150,28 @@
         status('Nearby stops unavailable right now', true);
       }
     );
+  }
+  /* c: the new search point. Called whenever the saved search location changes (panel.js setCenter). */
+  function show(c) {
+    var mine = ++seq,
+      old = $('#nearLoad');
+    if (old) old.remove();
+    $('#nearSec').hidden = false;
+    $('#nearList').replaceChildren();
+    $('#nearHint').hidden = true;
+    if (dataSaver() && !S.routing.networkRequested()) {
+      var b = el('button', 'btn near-load', 'Show nearby stops (about 275 KB)');
+      b.id = 'nearLoad';
+      b.type = 'button';
+      b.addEventListener('click', function () {
+        b.remove();
+        load(c, mine);
+      });
+      status('', false);
+      $('#nearList').before(b);
+      return;
+    }
+    load(c, mine);
   }
   S.nearby.show = show;
 })();

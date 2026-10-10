@@ -467,6 +467,9 @@
   S.routing.inRegion = inRegion;
   S.routing.loadIndego = loadIndego;
   S.routing.loadNetwork = loadNetwork;
+  S.routing.networkRequested = function () {
+    return !!tpNet;
+  };
   S.routing.resetPlannerCaches = resetPlannerCaches;
   S.routing.routeKey = routeKey;
   S.routing.routeLeg = routeLeg;

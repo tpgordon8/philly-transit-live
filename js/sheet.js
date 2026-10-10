@@ -86,7 +86,9 @@
   /* The header pill shows while the My routes filter is on, so the filter is never a surprise and one tap turns it off. */
   function syncPill() {
     var on = util.routeFilterOn();
-    if (pillRow.hidden === on) pillRow.hidden = !on;
+    if (pillRow.hidden !== on) return;
+    pillRow.hidden = !on;
+    resizeMap(); /* in peek the row changes the map row's height by --pillrow */
   }
   pill.addEventListener('click', function () {
     setOnlyMine(false);
@@ -125,13 +127,38 @@
   if (util.firstVisit && !util.seen.welcome) welcome.hidden = false;
   function dismissWelcome() {
     if (welcome.hidden) return;
+    var inside = welcome.contains(document.activeElement);
     util.markSeen('welcome');
     welcome.hidden = true;
+    /* the focused button just vanished: keep keyboard focus somewhere useful */
+    if (inside) $('#addr').focus();
   }
   $('#welcomeOk').addEventListener('click', dismissWelcome);
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !welcome.hidden && !e.defaultPrevented) dismissWelcome();
-  });
+  /* Escape dismisses the card only when it is the thing Escape is meant for: focus is inside it, or it is on screen and nothing else
+     that Escape closes is open (vehicle, stop and Indego cards, a toast) and focus is on the page itself. It listens in the capture
+     phase: the other handlers close their card on this same keypress, and the check must see the page as it was before them. */
+  document.addEventListener(
+    'keydown',
+    function (e) {
+      if (e.key !== 'Escape' || welcome.hidden || e.defaultPrevented) return;
+      var a = document.activeElement,
+        mine = welcome.contains(a),
+        idle = !a || a === document.body || a === document.documentElement;
+      if (
+        !mine &&
+        !(
+          idle &&
+          welcome.getClientRects().length &&
+          !document.querySelector(
+            '#detail:not([hidden]), #stopCard:not([hidden]), #indegoCard:not([hidden]), #toasts .toast'
+          )
+        )
+      )
+        return;
+      dismissWelcome();
+    },
+    true
+  );
   syncPill(); /* before the first paint, so a saved filter never moves the map afterwards */
   setOpen(false);
   S.sheet.syncPill = syncPill;

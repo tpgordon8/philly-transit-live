@@ -8,7 +8,8 @@ import json
 import math
 
 from harness import Session, photon_feature as F
-from test_trip_ui import CENTER, boot as trip_boot, session, wait_cards
+from test_first_run import must_fail
+from test_trip_ui import CENTER, HOOK, SEED_PREFS, boot as trip_boot, session, wait_cards
 
 # Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
 FAST = {
@@ -177,6 +178,36 @@ def test_loading_line_and_live_region(root):
         s.page.wait_for_selector("#nearList .near-row")
         assert st.text_content() == "5 nearby stops" and "sr-only" in st.get_attribute("class") and s.page.locator("#nearHint").is_visible()
         assert len(held) == 1 and s.mocks.network_hits == 1, "one fetch"
+
+
+SAVE_DATA = "Object.defineProperty(navigator, 'connection', {value: {saveData: true}, configurable: true});"
+
+
+def check_data_saver(root):
+    with search_session(root=root, init_scripts=[HOOK, SEED_PREFS, SAVE_DATA]) as s:
+        boot(s)
+        search(s)
+        btn = s.page.locator("#nearLoad")
+        btn.wait_for()
+        assert btn.inner_text() == "Show nearby stops (about 275 KB)" and s.page.locator("#nearSec").is_visible()
+        assert s.page.locator("#nearList .near-row").count() == 0 and s.mocks.network_hits == 0, "Data Saver: no automatic fetch"
+        s.page.wait_for_timeout(300)
+        assert s.mocks.network_hits == 0 and s.page.locator("#nearLoad").count() == 1
+        assert s.page.evaluate("document.querySelectorAll('#nearSec button').length") == 1, "a single button"
+        btn.click()
+        s.page.wait_for_selector("#nearList .near-row")
+        assert s.mocks.network_hits == 1 and s.page.locator("#nearLoad").count() == 0 and s.page.locator("#nearList .near-row").count() == 5
+        # a later search while the file is in memory lists stops without asking again
+        search(s)
+        s.page.wait_for_selector("#nearList .near-row")
+        assert s.page.locator("#nearLoad").count() == 0 and s.mocks.network_hits == 1
+        assert not s.console_errors, s.console_errors
+
+
+def test_data_saver_waits_for_a_tap_before_loading_the_network_file(root):
+    check_data_saver(root)
+    must_fail(check_data_saver, root, ("js/nearby.js", "if (dataSaver() &&", "if (false &&"))
+    must_fail(check_data_saver, root, ("js/nearby.js", "b.remove();\n        load(c, mine);", "b.remove();"))
 
 
 def test_load_failure_says_so_and_the_next_search_retries(root):

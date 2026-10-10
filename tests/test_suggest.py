@@ -8,6 +8,7 @@ import pathlib
 import re
 
 from harness import Session, photon_feature as F
+from test_first_run import must_fail
 from test_trip_ui import CENTER, boot, session, wait_cards
 
 # Fast subset run by `tests/run.py --fast`; every other test_* function here is full-only (see README).
@@ -180,6 +181,24 @@ def test_labels_region_filter_duplicates_and_caps(root):
         big = [o for o in opts(s) if o["label"].startswith("NNN")][0]
         assert len(big["label"]) <= 80 and len(big["sub"]) <= 100, (len(big["label"]), len(big["sub"]))
         no_page_errors(s)
+
+
+def check_same_address_in_two_towns(root):
+    with session(root=root) as s:
+        s.photon.features = [F(None, lng=-75.1500, lat=39.9400, housenumber="100", street="Main Street", type="house"),
+                             F(None, lng=-75.1199, lat=39.9448, housenumber="100", street="Main Street", city="Camden", state="New Jersey", type="house"),
+                             F(None, lng=-75.1500, lat=39.9400, housenumber="100", street="Main Street", type="house")]  # a true repeat
+        boot(s)
+        type_in(s, "#addr", "100 main street")
+        wait_live(s)
+        got = [(o["label"], o["sub"]) for o in opts(s)]
+        assert got == [("100 Main Street", "Philadelphia, PA"), ("100 Main Street", "Camden, NJ")], got
+
+
+def test_the_same_street_address_in_two_towns_is_two_results(root):
+    check_same_address_in_two_towns(root)
+    must_fail(check_same_address_in_two_towns, root,
+              ("js/suggest.js", "norm(it.label) +\n        '|' +\n        norm((it.sub || '').split(',').slice(-2).join(',')) +\n        (it.hit", "norm(it.label) +\n        (it.hit"))
 
 
 def test_photon_result_that_repeats_a_builtin_place_is_dropped(root):

@@ -20,6 +20,8 @@ FAST = {
     "test_errors_and_location_icon_in_the_phone_peek",
     "test_welcome_card_vehicle_tip_and_legend",
     "test_wordmark_font_and_more_label",
+    "test_my_routes_pill_keeps_the_map_size_and_taps_exact",
+    "test_stop_link_on_a_fresh_browser_still_shows_the_card_next_visit",
 }
 
 PREFS, ROUTES, PLACES, SEEN = "septa.prefs.v1", "septa.routes.v1", "septa.places.v1", "septa.seen.v1"
@@ -105,7 +107,7 @@ def check_v3(root):
         assert json.loads(was["prefs"])["filters"] == OLD_PREFS["filters"] and json.loads(was["routes"])["onlyMine"] is True and was["v3"] is None, was
         assert chips_on(s) == ["trolley", "subway", "train"], chips_on(s)  # Bus stays off: the saved Bus and Regional Rail choices are kept
         prefs = ls(s, PREFS)
-        assert prefs["filters"] == {"bus": False, "trolley": True, "subway": True, "train": True}, prefs
+        assert prefs["filters"] == {"bus": False, "trolley": True, "subway": True, "train": True, "indego": False}, prefs
         assert prefs["radius"] == 1.25 and prefs["center"] == OLD_PREFS["center"], prefs
         assert ls(s, ROUTES) == {"stars": ["21", "train:Paoli/Thorndale"], "onlyMine": False}, ls(s, ROUTES)
         assert ls(s, PLACES) == OLD_PLACES
@@ -134,7 +136,7 @@ def check_v3_new_and_corrupt(root):
     with Session(root, legacy_defaults=False, init_scripts=scripts) as s:
         boot(s)
         assert chips_on(s) == THREE, chips_on(s)
-        assert ls(s, PREFS)["filters"] == {"bus": True, "trolley": True, "subway": True, "train": False}
+        assert ls(s, PREFS)["filters"] == {"bus": True, "trolley": True, "subway": True, "train": False, "indego": False}
         assert ls(s, V3) in ("1", 1)
         assert not s.console_errors, s.console_errors
 
@@ -184,7 +186,7 @@ def check_star_pill(root):
 def test_star_toast_and_my_routes_pill(root):
     check_star_pill(root)
     must_fail(check_star_pill, root, ("js/panel.js", "S.sheet.starTip(k);", "0;"))
-    must_fail(check_star_pill, root, ("js/sheet.js", "if (pillRow.hidden === on) pillRow.hidden = !on;", "pillRow.hidden = true;"))
+    must_fail(check_star_pill, root, ("js/sheet.js", "pillRow.hidden = !on;", "pillRow.hidden = true;"))
     must_fail(check_star_pill, root, ("js/sheet.js", "util.routesStore.onlyMine = on;", "util.routesStore.onlyMine = true;"))
 
 
@@ -247,7 +249,7 @@ def check_welcome(root):
         s.page.wait_for_timeout(600)
         card = s.page.locator("#welcome")
         assert s.page.evaluate("localStorage.getItem('septa.seen.v1')") is None
-        assert card.is_visible() and card.locator("p").inner_text() == "Live SEPTA buses near you. Tap Use my location or type an address."
+        assert card.is_visible() and card.locator("p").inner_text() == "Live SEPTA vehicles near you. Tap Use my location or type an address."
         ok = s.page.locator("#welcomeOk")
         assert ok.inner_text() == "Got it" and rect(s, "#welcomeOk")["h"] >= 44 - 0.5
         c, panel = rect(s, "#welcome"), rect(s, "#panel")
@@ -322,8 +324,8 @@ def test_welcome_card_vehicle_tip_and_legend(root):
     check_welcome_rules(root)
     must_fail(check_welcome, root, ("js/sheet.js", "if (util.firstVisit && !util.seen.welcome) welcome.hidden = false;", "welcome.hidden = true;"))
     must_fail(check_welcome_rules, root, ("js/util.js", "!/[#&]stop=/.test(location.hash)", "true"))
-    must_fail(check_welcome_rules, root, ("js/sheet.js", "e.key === 'Escape' && ", ""))
-    must_fail(check_welcome_rules, root, ("js/util.js", "localStorage.getItem('septa.prefs.v1') === null &&", ""))
+    must_fail(check_welcome_rules, root, ("js/sheet.js", "e.key !== 'Escape' || welcome.hidden", "welcome.hidden"))
+    must_fail(check_welcome_rules, root, ("js/util.js", "var firstVisit = fresh && ", "var firstVisit = "))
     must_fail(check_welcome, root, ("js/sheet.js", "util.markSeen('welcome');", "0;"))
     must_fail(check_welcome, root, ("js/map.js", "if (!seen.vehicleTip || tipFor === state.selected) {", "if (false) {"))
     must_fail(check_welcome, root, ("js/map.js", "markSeen('vehicleTip');", "0;"))
@@ -356,7 +358,7 @@ def test_welcome_card_geometry_across_layouts(root):
     """The card never covers the search field, the sheet handle, the zoom buttons or the map's content area on wide screens, and never
     leaves the screen: at 320, 360 and 390 (sheet), 760 (the last sheet width), 768 and 1280 (side panel) and phone landscape; on a phone it steps aside for
     the vehicle card and for the open sheet."""
-    for vp in ((320, 640), (360, 740), (390, 844), (760, 900), (768, 1024), (1280, 800), (844, 390)):
+    for vp in ((320, 640), (360, 740), (390, 844), (414, 896), (760, 900), (768, 1024), (1280, 800), (844, 390)):
         phone = vp[0] <= 760 or vp[1] <= 500
         with Session(root, viewport=vp, mobile=phone, touch=phone, legacy_defaults=False, init_scripts=[CLS, SHIFTS]) as s:
             boot(s)
@@ -364,6 +366,7 @@ def test_welcome_card_geometry_across_layouts(root):
             c, panel = rect(s, "#welcome"), rect(s, "#panel")
             assert c["h"] > 0 and c["l"] >= 0 and c["r"] <= vp[0] and c["t"] >= 0 and c["b"] <= vp[1], (vp, c)
             assert not overlap(c, rect(s, ".leaflet-control-zoom")), vp
+            assert not overlap(c, rect(s, ".leaflet-control-attribution")), vp
             assert not overlap(c, rect(s, "#addr")), vp
             if vp[0] > 760 or vp[1] <= 500:
                 assert panel["l"] <= c["l"] and c["r"] <= panel["r"], (vp, c, panel)  # in the panel
@@ -449,3 +452,160 @@ def test_wordmark_contrast_in_both_themes(root):
                 fg = lum(parse(got[k]))
                 ratio = (max(fg, bg) + 0.05) / (min(fg, bg) + 0.05)
                 assert ratio >= 4.5, (scheme, k, ratio, got)
+
+
+# ---------------------------------------------------------------- 6. fix round after the independent review
+HOOK = "window.__SEPTA_TEST__ = true"
+
+
+def map_geometry(s):
+    return s.page.evaluate("""() => { const m = window.__SEPTA_TEST__.tripMap, b = m.getContainer(), z = m.getSize(), p = m.latLngToContainerPoint(m.getCenter()), c = m.getCenter();
+        return {box: [b.clientWidth, b.clientHeight], size: [z.x, z.y], mid: [p.x, p.y], lat: c.lat, lng: c.lng, zoom: m.getZoom()}; }""")
+
+
+def check_pill_resizes_the_map(root):
+    # in the closed sheet the My routes pill row changes the map's height by 34 px: Leaflet must follow, keeping the view and the tap mapping
+    with Session(root, viewport=PHONE, mobile=True, touch=True, init_scripts=[HOOK]) as s:
+        boot(s)
+        s.page.evaluate("document.querySelector('.veh-wrap').click()")
+        s.page.click("#starBtn")
+        s.page.click("#detailClose")
+        s.settle()
+        start = map_geometry(s)
+        assert start["box"] == start["size"], start
+
+        def verify(what, was):
+            s.settle()
+            g = map_geometry(s)
+            assert g["box"] == g["size"], (what, g)
+            assert abs(g["mid"][0] - g["box"][0] / 2) <= 1 and abs(g["mid"][1] - g["box"][1] / 2) <= 1, (what, g)
+            assert abs(g["lat"] - was["lat"]) < 1e-9 and abs(g["lng"] - was["lng"]) < 1e-9 and g["zoom"] == was["zoom"], (what, g, was)
+            # a tap in the middle of the visible map lands on the map's centre (markers are switched off for the tap)
+            s.page.evaluate("document.querySelector('.leaflet-marker-pane').style.pointerEvents = 'none'; window.__ll = null; window.__SEPTA_TEST__.tripMap.once('click', e => { window.__ll = e.latlng; });")
+            box = rect(s, "#map")
+            s.page.mouse.click(box["l"] + box["w"] / 2, box["t"] + box["h"] / 2)
+            ll = s.page.evaluate("window.__ll")
+            assert ll and abs(ll["lat"] - g["lat"]) < 2e-5 and abs(ll["lng"] - g["lng"]) < 2e-5, (what, ll, g)
+            return g
+
+        s.page.locator("#toasts .tact").click()
+        assert s.page.locator("#myPillRow").is_visible() and s.page.get_attribute("#app", "data-sheet") == "peek"
+        shrunk = verify("pill shown by the toast", start)
+        assert shrunk["box"][1] == start["box"][1] - 34, (start, shrunk)
+        s.page.click("#myPill")
+        assert s.page.locator("#myPillRow").is_hidden()
+        verify("pill hidden by the pill", shrunk)
+        assert not s.console_errors, s.console_errors
+
+
+def test_my_routes_pill_keeps_the_map_size_and_taps_exact(root):
+    check_pill_resizes_the_map(root)
+    must_fail(check_pill_resizes_the_map, root, ("js/sheet.js", "resizeMap(); /* in peek the row changes the map row's height by --pillrow */", ""))
+
+
+def check_escape_rules(root):
+    # Escape closes the vehicle card and leaves the welcome card alone; with focus on "Got it" it dismisses and focus moves to the search field
+    with Session(root, legacy_defaults=False) as s:
+        boot(s)
+        marker_tap(s)
+        assert s.page.locator("#detail").is_visible() and s.page.locator("#welcome").is_visible()
+        s.page.keyboard.press("Escape")
+        assert s.page.locator("#detail").is_hidden()
+        assert s.page.locator("#welcome").is_visible() and not (ls(s, SEEN) or {}).get("welcome"), "Escape that closed the vehicle card must not dismiss the welcome card"
+        s.page.focus("#welcomeOk")
+        s.page.keyboard.press("Escape")
+        assert s.page.locator("#welcome").is_hidden() and ls(s, SEEN)["welcome"] is True
+        assert s.page.evaluate("document.activeElement.id") == "addr", s.page.evaluate("document.activeElement.id")
+    with Session(root, viewport=PHONE, mobile=True, touch=True, legacy_defaults=False) as s:
+        boot(s)
+        marker_tap(s)
+        assert s.page.locator("#welcome").is_hidden(), "covered on a phone while the vehicle card shows"
+        s.page.keyboard.press("Escape")
+        assert s.page.locator("#detail").is_hidden() and s.page.locator("#welcome").is_visible() and not (ls(s, SEEN) or {}).get("welcome")
+        s.page.click("#sheetHandle")  # the open sheet hides the card; Escape with nothing focused must not dismiss what nobody sees
+        s.page.evaluate("document.activeElement.blur()")
+        assert s.page.locator("#welcome").is_hidden()
+        s.page.keyboard.press("Escape")
+        assert not (ls(s, SEEN) or {}).get("welcome"), "dismissed a card that was not on screen"
+    with Session(root, legacy_defaults=False) as s:
+        boot(s)
+        s.page.click("#welcomeOk")
+        assert s.page.evaluate("document.activeElement.id") == "addr", "after Got it focus goes to the search field"
+
+
+def test_escape_dismisses_the_welcome_card_only_when_it_is_the_target(root):
+    check_escape_rules(root)
+    must_fail(check_escape_rules, root, ("js/sheet.js", "#detail:not([hidden]), ", ""),
+              ("js/sheet.js", "    true\n  );\n  syncPill()", "    false\n  );\n  syncPill()"))
+    must_fail(check_escape_rules, root, ("js/sheet.js", "welcome.getClientRects().length &&", ""))
+    must_fail(check_escape_rules, root, ("js/sheet.js", "if (inside) $('#addr').focus();", ""))
+
+
+def check_stop_link_first(root):
+    # a fresh browser opened from a #stop= link keeps the same prefs as before, writes only the migration flags, and still sees the card next visit
+    with Session(root, legacy_defaults=False) as s:
+        s.open(hash_="#stop=2275&route=21")
+        s.wait_live()
+        assert s.page.locator("#welcome").is_hidden(), "share link"
+        assert s.page.evaluate("localStorage.getItem('septa.prefs.v1')") is None, "a share link must not make the browser look like a returning one"
+        assert s.page.evaluate("[localStorage.getItem('septa.defaults.v2'), localStorage.getItem('septa.defaults.v3')]") == ['"1"', '"1"']
+        assert chips_on(s) == THREE and s.page.input_value("#radius") == "0.5", (chips_on(s), s.page.input_value("#radius"))
+        s.page.evaluate("history.replaceState(null, '', location.pathname)")
+        s.page.reload()
+        s.wait_live()
+        assert s.page.locator("#welcome").is_visible(), "the next plain visit shows the card"
+        assert chips_on(s) == THREE and s.page.input_value("#radius") == "0.5"
+        s.page.click("#welcomeOk")
+        s.page.reload()
+        s.wait_live()
+        assert s.page.locator("#welcome").is_hidden(), "and only once"
+        assert not s.console_errors, s.console_errors
+
+
+def test_stop_link_on_a_fresh_browser_still_shows_the_card_next_visit(root):
+    check_stop_link_first(root)
+    must_fail(check_stop_link_first, root,
+              ("js/util.js", "return localStorage.getItem('septa.prefs.v1') === null;", "return localStorage.getItem('septa.prefs.v1') === null && !/[#&]stop=/.test(location.hash);"))
+
+
+def check_welcome_phone_extras(root):
+    # 390 px: clear of the map attribution, hidden by the Indego card and by the on-screen keyboard (a focused panel field)
+    with Session(root, viewport=PHONE, mobile=True, touch=True, legacy_defaults=False) as s:
+        boot(s)
+        c = rect(s, "#welcome")
+        assert not overlap(c, rect(s, ".leaflet-control-attribution")), (c, rect(s, ".leaflet-control-attribution"))
+        assert not overlap(c, rect(s, ".leaflet-control-zoom"))
+        assert abs((rect(s, "#panel")["t"] - c["b"]) - 24) <= 1, (c, rect(s, "#panel"))
+        s.page.evaluate("document.querySelector('#indegoCard').hidden = false")
+        assert s.page.locator("#welcome").is_hidden(), "Indego card"
+        s.page.evaluate("document.querySelector('#indegoCard').hidden = true")
+        assert s.page.locator("#welcome").is_visible()
+        s.page.focus("#addr")
+        assert s.page.locator("#welcome").is_hidden(), "a field in the panel is focused (keyboard)"
+        s.page.evaluate("document.activeElement.blur()")
+        assert s.page.locator("#welcome").is_visible()
+
+
+def test_welcome_card_on_a_phone_clears_attribution_indego_card_and_keyboard(root):
+    check_welcome_phone_extras(root)
+    must_fail(check_welcome_phone_extras, root, ("css/panel.css", "bottom:calc(var(--peek) + 24px)", "bottom:calc(var(--peek) + 8px)"))
+    must_fail(check_welcome_phone_extras, root, ("css/panel.css", "#app:has(#indegoCard:not([hidden])) #welcome,", ""))
+    must_fail(check_welcome_phone_extras, root, ("css/panel.css", "#app:has(#panel :is(input,select,textarea):focus) #welcome", "#app:has(#nonesuch) #welcome"))
+
+
+def check_toast_wraps(root):
+    for w in (320, 360):
+        with Session(root, viewport=(w, 640), mobile=True, touch=True) as s:
+            boot(s)
+            s.page.evaluate("document.querySelector('.veh-wrap').click()")
+            s.page.click("#starBtn")
+            msg, toast, act = rect(s, "#toasts .tmsg"), rect(s, "#toasts .toast"), rect(s, "#toasts .tact")
+            assert msg["w"] >= 150, (w, msg)
+            assert act["t"] >= msg["b"] - 0.5, (w, "the buttons sit on their own row", msg, act)
+            assert toast["l"] >= 0 and toast["r"] <= w and toast["b"] <= 640, (w, toast)
+            assert s.page.locator("#toasts .tact").inner_text() == "Show only my routes"
+
+
+def test_star_toast_gives_its_message_room_on_narrow_phones(root):
+    check_toast_wraps(root)
+    must_fail(check_toast_wraps, root, ("css/alerts.css", ".toast{flex-wrap:wrap;justify-content:flex-end}", ".toast{justify-content:flex-end}"))

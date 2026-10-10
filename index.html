@@ -26,17 +26,17 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="css/leaflet.css?v=99888de646">
-<link rel="stylesheet" href="css/base.css?v=99888de646">
-<link rel="stylesheet" href="css/layout.css?v=99888de646">
-<link rel="stylesheet" href="css/map.css?v=99888de646">
-<link rel="stylesheet" href="css/panel.css?v=99888de646">
-<link rel="stylesheet" href="css/trip.css?v=99888de646">
-<link rel="stylesheet" href="css/suggest.css?v=99888de646">
-<link rel="stylesheet" href="css/stops.css?v=99888de646">
-<link rel="stylesheet" href="css/alerts.css?v=99888de646">
-<link rel="stylesheet" href="css/nearby.css?v=99888de646">
-<link rel="stylesheet" href="css/indego.css?v=99888de646">
+<link rel="stylesheet" href="css/leaflet.css?v=138729aa68">
+<link rel="stylesheet" href="css/base.css?v=138729aa68">
+<link rel="stylesheet" href="css/layout.css?v=138729aa68">
+<link rel="stylesheet" href="css/map.css?v=138729aa68">
+<link rel="stylesheet" href="css/panel.css?v=138729aa68">
+<link rel="stylesheet" href="css/trip.css?v=138729aa68">
+<link rel="stylesheet" href="css/suggest.css?v=138729aa68">
+<link rel="stylesheet" href="css/stops.css?v=138729aa68">
+<link rel="stylesheet" href="css/alerts.css?v=138729aa68">
+<link rel="stylesheet" href="css/nearby.css?v=138729aa68">
+<link rel="stylesheet" href="css/indego.css?v=138729aa68">
 </head>
 <body>
 <div id="app" data-sheet="peek">
@@ -48,7 +48,7 @@
       <div class="pillrow" id="myPillRow" hidden><button class="mypill" id="myPill" type="button"><span>My routes only. Show all</span></button></div>
     </div>
 
-    <div id="welcome" hidden role="region" aria-label="Welcome"><p>Live SEPTA buses near you. Tap Use my location or type an address.</p><button class="btn primary" type="button" id="welcomeOk">Got it</button></div>
+    <div id="welcome" hidden role="region" aria-label="Welcome"><p>Live SEPTA vehicles near you. Tap Use my location or type an address.</p><button class="btn primary" type="button" id="welcomeOk">Got it</button></div>
 
     <section class="sec" aria-labelledby="h-find">
       <h2 id="h-find">Find vehicles near</h2>
@@ -158,7 +158,7 @@
     <div id="empty" hidden></div>
     <div id="detail" hidden role="region" aria-label="Vehicle details"></div>
     <div id="detailLive" class="sr-only" role="status" aria-live="polite"></div>
-        <div id="stopCard" hidden role="region" tabindex="-1" aria-label="Stop details"></div>
+    <div id="stopCard" hidden role="region" tabindex="-1" aria-label="Stop details"></div>
   </main>
 </div>
 <div id="toasts"></div>
@@ -184,22 +184,22 @@ window.addEventListener('error',function(e){
   if(t&&t.tagName==='SCRIPT'&&/\/js\/[^\/]+\.js/.test(t.src||''))window.SEPTA.loadFailed(t.src.split('/').pop().split('?')[0]);
 },true);
 </script>
-<script src="js/util.js?v=99888de646"></script>
-<script src="js/feed.js?v=99888de646"></script>
-<script src="js/map.js?v=99888de646"></script>
-<script src="js/landmarks.js?v=99888de646"></script>
-<script src="js/suggest.js?v=99888de646"></script>
-<script src="js/panel.js?v=99888de646"></script>
-<script src="js/stops.js?v=99888de646"></script>
-<script src="js/alerts.js?v=99888de646"></script>
-<script src="js/routing.js?v=99888de646"></script>
-<script src="js/candidates.js?v=99888de646"></script>
-<script src="js/planner.js?v=99888de646"></script>
-<script src="js/trip.js?v=99888de646"></script>
-<script src="js/nearby.js?v=99888de646"></script>
-<script src="js/sheet.js?v=99888de646"></script>
-<script src="js/indego.js?v=99888de646"></script>
-<script src="js/main.js?v=99888de646"></script>
+<script src="js/util.js?v=138729aa68"></script>
+<script src="js/feed.js?v=138729aa68"></script>
+<script src="js/map.js?v=138729aa68"></script>
+<script src="js/landmarks.js?v=138729aa68"></script>
+<script src="js/suggest.js?v=138729aa68"></script>
+<script src="js/panel.js?v=138729aa68"></script>
+<script src="js/stops.js?v=138729aa68"></script>
+<script src="js/alerts.js?v=138729aa68"></script>
+<script src="js/routing.js?v=138729aa68"></script>
+<script src="js/candidates.js?v=138729aa68"></script>
+<script src="js/planner.js?v=138729aa68"></script>
+<script src="js/trip.js?v=138729aa68"></script>
+<script src="js/nearby.js?v=138729aa68"></script>
+<script src="js/sheet.js?v=138729aa68"></script>
+<script src="js/indego.js?v=138729aa68"></script>
+<script src="js/main.js?v=138729aa68"></script>
 <script>if(!window.SEPTA.started&&window.SEPTA.failed.indexOf('main.js')<0)window.SEPTA.loadFailed('main.js (the app did not start)');</script>
 
 </body>

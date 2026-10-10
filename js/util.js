@@ -306,15 +306,18 @@
       });
     return { home: cleanPlace(o.home, false), list: list };
   }
-  /* A first visit: nothing saved yet (no prefs; the welcome flag is checked separately) and the page was not opened from a #stop= share link.
-     Captured before the migrations below, which must not make a fresh browser look like a returning one. */
-  var firstVisit = (function () {
+  /* fresh: nothing saved yet (no prefs); the v2 and v3 migrations below skip a fresh browser. firstVisit: fresh and the page was not opened
+     from a #stop= share link; it only decides whether the welcome card shows (the welcome flag is checked separately). A share link
+     therefore never stops a later plain visit from showing the card. Both are captured before the migrations, which must not make a
+     fresh browser look like a returning one. */
+  var fresh = (function () {
     try {
-      return localStorage.getItem('septa.prefs.v1') === null && !/[#&]stop=/.test(location.hash);
+      return localStorage.getItem('septa.prefs.v1') === null;
     } catch (e) {
       return false;
     }
   })();
+  var firstVisit = fresh && !/[#&]stop=/.test(location.hash);
   var prefs = loadChecked('septa.prefs.v1', cleanPrefs, function (p, c) {
     return (
       !isObj(p) ||
@@ -333,7 +336,7 @@
       return;
     }
     if (present) return;
-    if (firstVisit) {
+    if (fresh) {
       /* nothing saved: the defaults already apply, so only the flag is written (a fresh browser stays "first visit" until it chooses something) */
       store.set('septa.defaults.v2', '1');
       return;
@@ -389,7 +392,7 @@
       return;
     }
     if (present) return;
-    if (firstVisit) {
+    if (fresh) {
       store.set('septa.defaults.v3', '1');
       return;
     }

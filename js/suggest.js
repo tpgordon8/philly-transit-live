@@ -164,7 +164,11 @@
     ((j && j.features) || []).forEach(function (f) {
       var it = toItem(f, hn);
       if (!it) return;
-      var k = norm(it.label) + (it.hit ? '' : '|' + it.lat.toFixed(3) + ',' + it.lng.toFixed(3));
+      var k =
+        norm(it.label) +
+        '|' +
+        norm((it.sub || '').split(',').slice(-2).join(',')) +
+        (it.hit ? '' : '|' + it.lat.toFixed(3) + ',' + it.lng.toFixed(3));
       if (seen[k] || dupOfPlace(it)) return;
       seen[k] = 1;
       out.push(it);

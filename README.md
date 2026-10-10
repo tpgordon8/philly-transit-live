@@ -15,10 +15,10 @@ caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md). By defau
 
 ## Code layout
 
-`index.html` holds the markup and a short loader. The styles are ten plain stylesheets in `css/`, linked in this
+`index.html` holds the markup and a short loader. The styles are eleven plain stylesheets in `css/`, linked in this
 order: `leaflet` (the Leaflet stylesheet), `base` (tokens, reset, header), `layout` (app shell, responsive rules), `map`
 (markers, pins, vehicle card), `panel` (sidebar sections), `trip` (trip planner), `suggest` (place and address suggestions), `stops` (stop card and board), `nearby` (Nearby stops list) and
-`alerts` (service alerts, leave-now rules, toasts, banners). The application code is fifteen classic scripts in `js/`,
+`alerts` (service alerts, leave-now rules, toasts, banners). The application code is sixteen classic scripts in `js/`,
 loaded with ordinary `<script src>` tags in dependency order: `util` (helpers, storage, shared state), `feed` (vehicle
 feed, ghost filter, idle pause, refresh), `map` (Leaflet map, markers, vehicle card), `landmarks` (about 40 well-known Philadelphia places), `suggest` (place and address suggestions as you type), `panel` (sidebar: status, search,
 saved places, Home, radius, filters), `stops` (stop links, stop board, ETA), `alerts` (service alerts, leave-now rules),
@@ -120,7 +120,7 @@ sent too.
 
 Nearby stops lists the 5 nearest bus and trolley stops after a search or Use my location. It reads `data/bus-network.json`
 (about 275 KB gzipped) from this site, once per visit, only after the first search or Use my location (or the first trip plan,
-which shares the same download); nothing about you is sent. Get me home fills the trip planner with From = Your location and
+which shares the same download; with Data Saver on it waits for a tap on "Show nearby stops"); nothing about you is sent. Get me home fills the trip planner with From = Your location and
 To = your saved Home and plans, so the privacy notes below for planning apply; it never changes your saved search center.
 
 Planning a trip sends data only as follows:
