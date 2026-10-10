@@ -85,10 +85,10 @@ FIXTURE = {
         {"id": "p5", "placeId": "home", "route": "42", "stopName": "Walnut St & 10th St", "placeName": "Home", "walkMin": 6},
     ],
     "arr": {
-        "p1": [{"key": "a1", "etaMin": 13.4}, {"key": "a2", "etaMin": 21.2}],     # later: leave in 7 (7.4 rounded down)
-        "p2": [{"key": "b1", "etaMin": 9.1, "rough": True}],                       # soon, rough ETA: leave in 2 (2.1 rounded down)
-        "p3": [{"key": "c1", "etaMin": 4.6}, {"key": "c2", "etaMin": 17.0}],       # now (3 + 2 = 5 needed, 4.6 left, still makeable)
-        "p4": [{"key": "d1", "etaMin": 5.0}],                                      # missed (walk is 8)
+        "p1": [{"key": "a1", "etaMin": 13.9}, {"key": "a2", "etaMin": 21.9}],     # later: leave in 7 (7.4 rounded down)
+        "p2": [{"key": "b1", "etaMin": 9.8, "rough": True}],                       # soon, rough ETA: leave in 2 (2.1 rounded down)
+        "p3": [{"key": "c1", "etaMin": 4.6}, {"key": "c2", "etaMin": 17.6}],       # now (3 + 2 = 5 needed, 4.6 left, still makeable)
+        "p4": [{"key": "d1", "etaMin": 5.6}],                                      # missed (walk is 8)
     },                                                                              # p5: nothing heading there
     "buf": 2,
 }
@@ -173,7 +173,7 @@ def _every_state(root):
         assert txt(s, ".bv-fine") == "Estimates from each bus's distance and speed, not official SEPTA predictions."
         assert not s.page.locator("#bvBanner").is_visible()
         # the next bus is the main number when the first cannot be made
-        d = with_fixture(arr={"p1": [{"key": "a1", "etaMin": 3.0}, {"key": "a2", "etaMin": 15.0}]})
+        d = with_fixture(arr={"p1": [{"key": "a1", "etaMin": 3.6}, {"key": "a2", "etaMin": 15.6}]})
         load(s, d)
         assert row(s, 0).locator(".bv-bus .bv-v").inner_text() == "15 min" and row(s, 0).locator(".bv-bus .bv-x").inner_text() == ""
         assert row(s, 0).locator(".bv-leave .bv-v").inner_text() == "9 min" and row(s, 0).get_attribute("data-state") == "later"
@@ -239,7 +239,7 @@ CONTRACT = {
         "c1": [{"key": "f1", "etaMin": 52.4}],                                 # far: only "45+ min", no leave advice
         "c3": [{"key": "g1", "etaMin": 10.5}],
         "c4": [{"key": "h1", "etaMin": 0.6}],                                  # under a minute: "Due"
-        "c5": [{"key": "i1", "etaMin": 12.9}, {"key": "i2", "etaMin": 48.0}],  # then a far one
+        "c5": [{"key": "i1", "etaMin": 12.9}, {"key": "i2", "etaMin": 48.6}],  # then a far one
     },
     "pending": {"c2": 2},                                                       # buses are coming but none can be timed
     "buf": 2,
@@ -998,7 +998,7 @@ def test_live_region_announces_only_new_leave_now(root):
 
 def _announce_once(root):
     one = with_fixture(pins=[{"id": "p", "placeId": "home", "route": "21", "stopName": "Chestnut St & 17th St", "placeName": "Home", "walkMin": 3}],
-                       arr={"p": [{"key": "k1", "etaMin": 20.0}]})
+                       arr={"p": [{"key": "k1", "etaMin": 20.6}]})
     live = lambda: s.page.inner_text("#bvLive").strip()  # noqa: E731
     with sess(root) as s:
         board_open(s, fixture=one)
@@ -1012,7 +1012,7 @@ def _announce_once(root):
         assert row(s, 0).get_attribute("data-state") == "now" and live() == "", "the same bus is not announced again after a flicker: " + live()
         load(s, with_fixture(pins=one["pins"], arr={}))  # ... then the bus is gone from the feed for over 2 minutes
         s.tick(130000)
-        load(s, with_fixture(pins=one["pins"], arr={"p": [{"key": "k1", "etaMin": 5.0}]}))  # the feed re-measured the same bus key
+        load(s, with_fixture(pins=one["pins"], arr={"p": [{"key": "k1", "etaMin": 5.6}]}))  # the feed re-measured the same bus key
         s.tick(2000)
         assert row(s, 0).get_attribute("data-state") == "now"
         assert live() == "Route 21: leave now", "announced again after 2 minutes out of leave-now: " + live()

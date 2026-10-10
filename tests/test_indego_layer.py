@@ -209,6 +209,10 @@ PICKABLE = """() => { const m = document.querySelector('#map').getBoundingClient
 
 
 def open_first(s, how="click"):
+    # under load the app can re-fit the map after boot(): put the view back before looking for a marker
+    if s.page.evaluate("window.__SEPTA_TEST__.tripMap.getZoom()") != 15:
+        view(s, 15)
+        s.page.wait_for_function("document.querySelectorAll('.ind-wrap').length > 3", timeout=8000)
     try:
         s.page.wait_for_function("(" + PICKABLE + ")()", timeout=15000)  # a slow runner may not have drawn the markers yet
     except PlaywrightTimeout:
