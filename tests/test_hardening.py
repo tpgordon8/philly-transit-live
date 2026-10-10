@@ -234,7 +234,7 @@ def test_old_saved_prefs_without_subway_still_load(root):
         s.open()
         s.wait_live()
         st = s.page.evaluate("Object.fromEntries([...document.querySelectorAll('[data-mode]')].map(i => [i.dataset.mode, i.checked]))")
-        assert st == {"bus": True, "trolley": False, "subway": False, "train": True}, st  # a missing key takes the new default (off)
+        assert st == {"bus": True, "trolley": False, "subway": False, "train": True, "indego": False}, st  # a missing key takes the new default (off)
 
 
 # ---------------------------------------------------------------- 6. request budget
