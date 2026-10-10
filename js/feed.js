@@ -179,8 +179,10 @@
    requests at all. Only pointerdown, keydown, touchstart, wheel, focus and becoming visible count; timers and fetches do not. ----- */
   var IDLE_MS = 60 * 60 * 1000,
     lastUse = Date.now();
+  /* The wall board (js/boardview.js) sets `awake` while it shows: the page then never idles, never slows down and always wants buses. */
+  var awake = false;
   function idleNow() {
-    return Date.now() - lastUse >= IDLE_MS;
+    return !awake && Date.now() - lastUse >= IDLE_MS;
   }
   function pauseNow() {
     if (state.paused) return;
@@ -346,11 +348,14 @@
   /* A visible tab nobody has touched for QUIET_MS slows down, unless the rider is relying on it: an enabled leave-now rule or an
    open stop card needs bus positions as fresh as usual. */
   function isQuiet() {
-    return Date.now() - lastUse >= QUIET_MS && !hasActiveRule() && !state.stop;
+    return !awake && Date.now() - lastUse >= QUIET_MS && !hasActiveRule() && !state.stop;
   }
   function wantedSources() {
     var f = state.filters;
-    return { bus: !!(f.bus || f.trolley || f.subway || hasActiveRule() || state.stop), train: !!f.train };
+    return {
+      bus: !!(f.bus || f.trolley || f.subway || hasActiveRule() || state.stop || awake),
+      train: !!f.train
+    };
   }
   function refresh(force) {
     if (idleNow()) {
@@ -423,6 +428,10 @@
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden && Date.now() - state.fetchedAt > REFRESH_MS) refresh();
   });
+  S.feed.setAwake = function (on) {
+    awake = !!on;
+    if (awake) markUse();
+  };
   S.feed.idleNow = idleNow;
   S.feed.pauseNow = pauseNow;
   S.feed.septa = septa;
