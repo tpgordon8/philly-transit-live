@@ -454,7 +454,7 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 
 ## 14. Code layout (WP3 split, reshaped by WP-F)
 
-`index.html` keeps the markup, the Leaflet script tag (with its SRI hash, unchanged), twelve local `<link rel="stylesheet">` tags and 18 lines of inline script. The application code is seventeen classic scripts under `js/` and the styles are eleven stylesheets under `css/`. There is no bundler, no ES modules and no build step; GitHub Pages serves the files as they are. Prettier and ESLint (section 15.1) are dev tools only.
+`index.html` keeps the markup, the Leaflet script tag (with its SRI hash, unchanged), twelve local `<link rel="stylesheet">` tags and 18 lines of inline script. The application code is eighteen classic scripts under `js/` and the styles are twelve stylesheets under `css/`. There is no bundler, no ES modules and no build step; GitHub Pages serves the files as they are. Prettier and ESLint (section 15.1) are dev tools only.
 
 ### 14.1 Files and load order
 

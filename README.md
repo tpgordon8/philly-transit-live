@@ -15,7 +15,7 @@ caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md). By defau
 
 ## Code layout
 
-`index.html` holds the markup and a short loader. The styles are eleven plain stylesheets in `css/`, linked in this
+`index.html` holds the markup and a short loader. The styles are twelve plain stylesheets in `css/`, linked in this
 order: `leaflet` (the Leaflet stylesheet), `base` (tokens, reset, header), `layout` (app shell, responsive rules), `map`
 (markers, pins, vehicle card), `panel` (sidebar sections), `trip` (trip planner), `suggest` (place and address suggestions), `stops` (stop card and board), `nearby` (Nearby stops list) and
 `alerts` (service alerts, leave-now rules, toasts, banners). The application code is eighteen classic scripts in `js/`,
