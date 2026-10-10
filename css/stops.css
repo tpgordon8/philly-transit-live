@@ -37,3 +37,5 @@
 @media (max-width:1180px),(max-height:500px){
   #detail:not([hidden]) ~ #stopCard{display:none}
 }
+#stopCard .row .btn.on{opacity:.65;cursor:default}
+#stopCard .pinchoose[hidden]{display:none}

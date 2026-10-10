@@ -26,6 +26,9 @@
   function evalRules() {
     return S.alerts.evalRules.apply(null, arguments);
   }
+  function refreshBoard() {
+    if (S.board && S.board.refresh) S.board.refresh();
+  }
   function hasActiveRule() {
     return S.alerts.hasActiveRule.apply(null, arguments);
   }
@@ -285,6 +288,7 @@
     renderStatus();
     renderStopBoard();
     evalRules();
+    refreshBoard();
     var w2 = wantedSources();
     if (!inflight && ((w2.bus && skipped.bus) || (w2.train && skipped.train))) refresh(true);
   }

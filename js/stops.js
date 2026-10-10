@@ -166,6 +166,86 @@
       t.focus({ preventScroll: true });
     }
   }
+  /* ----- Pin to board (logic in js/board.js). With saved places a small chooser asks which place the stop is for. ----- */
+  function updatePinRow() {
+    var b = $('#pinBoard'),
+      st = state.stop;
+    if (!b || !st || !S.board.hasPin) return;
+    var all = S.board.pinOptions(),
+      opts =
+        all.length > 1
+          ? all.slice(0, -1)
+          : all; /* "No place" does not count as taken when there are places */
+    var on = opts.every(function (o) {
+      return S.board.hasPin(st.route, st.id, o.placeId);
+    });
+    if (on !== b.classList.contains('on')) {
+      b.classList.toggle('on', on);
+      b.textContent = on ? 'On board' : 'Pin to board';
+    }
+    if (on) b.setAttribute('aria-disabled', 'true');
+    else b.removeAttribute('aria-disabled');
+  }
+  function pinDone(placeId) {
+    var r = S.board.pinFromStop(placeId),
+      live = $('#stopLive'),
+      c = $('#pinChoose'),
+      b = $('#pinBoard');
+    if (live) live.textContent = r.msg;
+    if (c) c.hidden = true;
+    updatePinRow();
+    if (b) {
+      b.setAttribute('aria-expanded', 'false');
+      b.focus({ preventScroll: true });
+    }
+  }
+  function pinButton() {
+    var b = el('button', 'btn small', 'Pin to board');
+    b.type = 'button';
+    b.id = 'pinBoard';
+    b.setAttribute('aria-controls', 'pinChoose');
+    b.addEventListener('click', function () {
+      var c = $('#pinChoose'),
+        live = $('#stopLive');
+      if (b.classList.contains('on')) {
+        if (live) live.textContent = 'Already on the board.';
+        return;
+      }
+      var all = S.board.pinOptions();
+      if (all.length < 2) {
+        pinDone(null);
+        return;
+      }
+      c.replaceChildren();
+      all.forEach(function (o) {
+        var x = el('button', 'btn small', o.name);
+        x.type = 'button';
+        x.addEventListener('click', function () {
+          pinDone(o.placeId);
+        });
+        c.appendChild(x);
+      });
+      c.hidden = !c.hidden;
+      b.setAttribute('aria-expanded', String(!c.hidden));
+      if (!c.hidden) c.firstChild.focus({ preventScroll: true });
+    });
+    return b;
+  }
+  function pinChooser() {
+    var c = el('div', 'row pinchoose');
+    c.id = 'pinChoose';
+    c.hidden = true;
+    c.setAttribute('role', 'group');
+    c.setAttribute('aria-label', 'Pin to which place?');
+    c.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      c.hidden = true;
+      $('#pinBoard').setAttribute('aria-expanded', 'false');
+      $('#pinBoard').focus({ preventScroll: true });
+    });
+    return c;
+  }
   function renderStopCard(st, err, retry) {
     var box = $('#stopCard');
     box.hidden = false;
@@ -224,14 +304,17 @@
       }
     });
     row.appendChild(cp);
+    row.appendChild(pinButton());
     row.appendChild(close);
     box.appendChild(row);
+    box.appendChild(pinChooser());
     box.appendChild(live);
     var board = el('div', 'sboard');
     board.id = 'stopBoard';
     box.appendChild(board);
     box.appendChild(alertRow(st));
     updateAlertRow();
+    updatePinRow();
     renderStopBoard();
   }
   function drawStopMarker(st) {
@@ -439,6 +522,8 @@
   });
   S.stops.STOP_ID_RE = STOP_ID_RE;
   S.stops.STOP_RT_RE = STOP_RT_RE;
+  S.stops.boardRows = boardRows;
+  S.stops.updatePinRow = updatePinRow;
   S.stops.closeStop = closeStop;
   S.stops.renderStopBoard = renderStopBoard;
   S.stops.updateBoardAge = updateBoardAge;
