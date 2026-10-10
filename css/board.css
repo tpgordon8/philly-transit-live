@@ -1,21 +1,23 @@
 /* board.css: the "My stops board" station sign (js/boardview.js). Always dark and high contrast, whatever the app theme. */
-#boardView{--bg:#080a0e;--row:#12161d;--line:#2b3340;--ink:#f5f7fa;--mute:#b4bdc8;--amber:#ffc247;--go:#55e58f;--go-ink:#032312;--grey:#a3acb7;--num:clamp(40px,7.2vh,72px);position:fixed;inset:0;z-index:1250;display:flex;flex-direction:column;gap:8px;padding:max(10px,env(safe-area-inset-top,0px)) max(18px,env(safe-area-inset-right,0px)) max(10px,env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));background:var(--bg);color:var(--ink);font-family:var(--f-body);overflow:hidden;transition:opacity .4s}
+#boardView{--bg:#080a0e;--row:#12161d;--line:#2b3340;--ink:#f5f7fa;--mute:#b4bdc8;--amber:#ffc247;--go:#55e58f;--go-ink:#032312;--grey:#a3acb7;--num:clamp(40px,6.9vh,72px);position:fixed;inset:0;z-index:1250;display:flex;flex-direction:column;gap:8px;padding:max(10px,env(safe-area-inset-top,0px)) max(18px,env(safe-area-inset-right,0px)) max(10px,env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));background:var(--bg);color:var(--ink);font-family:var(--f-body);overflow:hidden;transition:opacity .4s}
 #boardView[hidden]{display:none}
 #boardView:focus{outline:0}
-#boardView.dim{opacity:.55}
+#boardView.dim{opacity:.8}
 .bv-row>*,.bv-where,.bv-n,.bv-top{min-width:0}
 body.board-on #app{visibility:hidden}
+body.board-on{background:#000} /* the dimmed board shows through to black, never to the light page behind it */
 .bv-head{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px 22px}
 .bv-mark{margin:0;font:700 34px/1 var(--f-title);letter-spacing:.02em;color:#6db3ff}
 .bv-clock{font:600 clamp(40px,7.2vh,64px)/1 var(--f-display);font-variant-numeric:tabular-nums;letter-spacing:.02em}
 .bv-upd{flex:1;font-size:18px;color:var(--mute)}
 .bv-btns{display:flex;gap:10px}
 .bv-btn{min-height:48px;min-width:48px;padding:8px 20px;border:2px solid #5d6b7d;border-radius:8px;background:#161b23;color:var(--ink);font:600 18px var(--f-body)}
+.bv-set select{min-height:48px;max-width:100%;padding:6px 10px;border:2px solid #5d6b7d;border-radius:8px;background:#161b23;color:var(--ink);font:600 18px var(--f-body)}
 .bv-btn:hover{border-color:#9db3cc}
-.bv-btn:focus-visible,.bv-stepper button:focus-visible,.bv-set input:focus-visible{outline:3px solid #6db3ff;outline-offset:2px}
+.bv-btn:focus-visible,.bv-stepper button:focus-visible,.bv-set input:focus-visible,.bv-set select:focus-visible{outline:3px solid #6db3ff;outline-offset:2px}
 .bv-banner{flex:none;padding:10px 16px;border-radius:8px;border:2px solid var(--amber);background:#2a2008;color:#ffd678;font-size:22px;font-weight:600}
 .bv-banner.down{border-color:#ff9a8a;background:#33130e;color:#ffc2b8}
-.bv-list{flex:1 1 0;min-height:0;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;overflow-y:auto;overscroll-behavior:contain}
+.bv-list{flex:1 1 0;min-height:0;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;overflow-y:auto;overscroll-behavior:contain}
 .bv-row{flex:1 0 96px;max-height:200px;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.1fr);align-items:center;gap:4px 22px;padding:6px 20px 6px 14px;border-radius:12px;background:var(--row);border:2px solid var(--line)}
 .bv-top{display:flex;align-items:center;gap:20px}
 .bv-where{flex:1}
@@ -28,6 +30,7 @@ body.board-on #app{visibility:hidden}
 .bv-from{margin-top:4px;font-size:clamp(17px,2.6vh,22px);color:var(--mute);overflow-wrap:anywhere}
 .bv-n{display:flex;flex-direction:column;gap:0}
 .bv-k{font-size:clamp(16px,2.5vh,21px);font-weight:600;color:var(--mute);line-height:1.1}
+.bv-est{font-weight:500;font-size:.88em}
 .bv-v{font:700 var(--num)/1 var(--f-display);font-variant-numeric:tabular-nums;white-space:nowrap}
 .bv-u{font-size:.46em;font-weight:600;letter-spacing:.02em}
 .bv-x{min-height:28px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:clamp(17px,2.7vh,22px);color:var(--mute);font-weight:600}
