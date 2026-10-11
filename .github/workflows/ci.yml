@@ -101,7 +101,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install playwright==1.56.0
           python -m playwright install --with-deps webkit
-      - name: Layout and keyboard tests in WebKit (the board tests are next: two of them compare text that WebKit pads with a newline)
+      - name: Layout and keyboard tests in WebKit
         env:
           SEPTA_BROWSER: webkit
         run: python tests/run.py --only test_responsive
