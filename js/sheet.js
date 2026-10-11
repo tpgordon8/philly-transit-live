@@ -47,6 +47,12 @@
     var typing = !!(a && a.matches && a.matches(FIELD));
     var unzoomed = Math.abs((vv.scale || 1) - 1) < PINCH_EPSILON;
     var covered = window.innerHeight - vv.height - vv.offsetTop;
+    /* iOS pans the page up to bring a tapped field into view, which scrolls the map and the top of the sheet out of sight and leaves
+       blank space under a shrunk page. The page is one screen tall, so it never needs that pan: put it back and measure again. */
+    if (typing && unzoomed && covered > KEYBOARD_MIN_PX && (vv.offsetTop > 1 || window.scrollY > 1)) {
+      window.scrollTo(0, 0);
+      covered = window.innerHeight - vv.height;
+    }
     var kb = (typing && unzoomed && covered > KEYBOARD_MIN_PX ? Math.round(covered) : 0) + 'px';
     if ((root.style.getPropertyValue('--kb') || '0px') !== kb) {
       root.style.setProperty('--kb', kb);

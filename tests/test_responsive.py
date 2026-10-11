@@ -400,3 +400,27 @@ def test_tablet_portrait_gets_the_side_panel_and_phones_the_sheet(root):
         with session(root, (w, h)) as s:
             boot(s)
             assert handle_visible(s) and rect(s, "#panel")["t"] >= rect(s, "#map")["b"] - 1, w
+
+
+def check_pan_is_undone(root):
+    # iOS pans the page up for a tapped field: the page must be scrolled back and shrunk by the whole keyboard, not left panned
+    with Session(root=root, viewport=(390, 844), touch=True, mobile=True) as s:
+        s.open()
+        s.wait_live()
+        s.page.tap("#sheetHandle")
+        s.page.focus("#tripTo")
+        s.page.evaluate("""() => { window.__scrolls = []; const sc = window.scrollTo.bind(window);
+            window.scrollTo = (...a) => { window.__scrolls.push(a); return sc(...a); };
+            const vv = window.visualViewport;
+            Object.defineProperty(vv, 'height', {configurable: true, get: () => window.innerHeight - 330});
+            Object.defineProperty(vv, 'offsetTop', {configurable: true, get: () => window.__pan === false ? 0 : 150});
+            vv.dispatchEvent(new Event('resize')); }""")
+        s.page.wait_for_timeout(150)
+        assert s.page.evaluate("window.__scrolls.length") >= 1
+        assert s.page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--kb').trim()") == "330px"
+        assert s.page.evaluate("document.querySelector('#app').getBoundingClientRect().top") == 0
+
+
+def test_a_page_panned_by_the_keyboard_is_put_back(root):
+    check_pan_is_undone(root)
+    must_fail(check_pan_is_undone, root, ("js/sheet.js", "window.scrollTo(0, 0);", ""))
