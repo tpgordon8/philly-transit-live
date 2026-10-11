@@ -929,7 +929,7 @@ def _empty(root):
     with sess(root) as s:
         board_open(s, fixture=with_fixture(pins=[], arr={}))
         assert s.page.locator("#bvEmpty").is_visible() and not s.page.locator("#bvList").is_visible()
-        assert txt(s, "#bvEmptyMsg") == "Pin a stop to see when to leave. Open any bus stop on the map and tap Pin to board."
+        assert txt(s, "#bvEmptyMsg") == "Pin a stop or a bike station to see them here. Open a bus stop or an Indego station on the map and tap Pin to board."
         s.page.click("#bvCloseEmpty")
         assert not s.page.locator(BV).is_visible() and s.page.evaluate("document.querySelector('#app').inert") is False
     with sess(root, board=False) as s:  # the logic module is not there at all
@@ -951,7 +951,7 @@ def _empty(root):
 
 def test_empty_state_and_missing_board(root):
     _empty(root)
-    must_fail(_empty, root, ("js/boardview.js", "emptyBox.hidden = rows.length > 0;", "emptyBox.hidden = true;"))
+    must_fail(_empty, root, ("js/boardview.js", "emptyBox.hidden = rows.length > 0 || nBikes > 0;", "emptyBox.hidden = true;"))
 
 
 def _banners(root):

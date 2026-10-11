@@ -60,6 +60,8 @@
 #indegoCard .ind-sub{color:var(--mute);font-size:12.5px}
 #indegoCard .ind-note{color:var(--warn);font-weight:600}
 #indegoCard .ind-body .btn{margin-top:4px}
+#indegoCard .ind-acts{display:flex;flex-wrap:wrap;gap:8px}
+#indegoCard .ind-acts .btn.on{opacity:.65;cursor:default}
 @media (max-width:840px),(max-height:500px){
   #indegoCard{left:8px;right:64px;width:auto;bottom:26px;max-height:calc(100% - 90px)}
   #indegoCard .dh{padding:8px 52px 8px 10px;gap:8px}

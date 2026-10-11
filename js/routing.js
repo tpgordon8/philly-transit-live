@@ -246,6 +246,7 @@
       out.push({
         id: i.station_id,
         name: str(i.name) || str(i.address),
+        address: str(i.address),
         lat: i.lat,
         lon: i.lon,
         bikes: s.num_bikes_available | 0,
@@ -266,8 +267,11 @@
   function hasStations(j) {
     return !!(j && j.data && Array.isArray(j.data.stations) && j.data.stations.length);
   }
+  /* fresh: true asks again at once; a number is the oldest status answer (ms) that may be reused (the board and the map layer pass a
+     little under their 60 s poll, so two pollers share one request); anything else reuses an answer under STATUS_TTL_MS. */
   function loadIndego(fresh) {
-    var now = Date.now();
+    var now = Date.now(),
+      maxAge = typeof fresh === 'number' && fresh > 0 ? fresh : TP.STATUS_TTL_MS;
     if (!tpInfo) {
       var pi = tpGetVia(TP.INDEGO_BASE + 'information', TP.INDEGO_DIRECT + 'station_information.json').catch(
         function () {
@@ -277,7 +281,7 @@
       );
       tpInfo = pi;
     }
-    if (!tpStatus || fresh === true || now - tpStatus.t >= TP.STATUS_TTL_MS) {
+    if (!tpStatus || fresh === true || now - tpStatus.t >= maxAge) {
       var ps = { t: now };
       ps.p = tpGetVia(TP.INDEGO_BASE + 'status', TP.INDEGO_DIRECT + 'station_status.json', true).catch(
         function () {

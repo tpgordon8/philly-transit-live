@@ -140,6 +140,7 @@
       )
     );
     if (b) pinSettings(b);
+    if (S.boardbikes) bikeSettings();
     var done = el('button', 'bv-btn', 'Done');
     done.type = 'button';
     done.style.marginTop = '18px';
@@ -214,6 +215,145 @@
       settings.appendChild(auto2);
     });
   }
+  /* ----- Bike stations: the picked ones with Remove, and a search box over the Indego station list (js/boardbikes.js) ----- */
+  var bikeQuery = '',
+    bikeNodes = null;
+  function bikeResults() {
+    var bb = S.boardbikes,
+      n = bikeNodes;
+    if (!n || !n.box.isConnected) return;
+    var found = bb.listReady() ? bb.search(bikeQuery) : [],
+      msg = '';
+    if (!bb.listReady())
+      msg = bb.listFailed()
+        ? "The station list couldn't load. Check the connection and try again."
+        : 'Loading stations...';
+    else if (bikeQuery.trim() && !found.length) msg = 'No station matches that.';
+    else if (!bikeQuery.trim()) msg = 'Type a street or station name, like Wolf or 2nd & Snyder.';
+    if (n.msg.textContent !== msg) n.msg.textContent = msg;
+    n.retry.hidden = !(bb.listFailed() && !bb.listReady());
+    n.res.replaceChildren();
+    found.forEach(function (r, i) {
+      var li = el('li'),
+        b = el('button', 'bv-pick');
+      b.type = 'button';
+      b.dataset.fk = 'bk' + i;
+      b.disabled = r.picked;
+      b.appendChild(el('span', null, r.name + (r.picked ? ' (added)' : '')));
+      if (r.address) b.appendChild(el('small', null, r.address));
+      b.addEventListener('click', function () {
+        var res = S.boardbikes.add(r.id);
+        if (res.ok) {
+          bikeQuery = '';
+          say('Added ' + r.name + ' to the board' + (res.saved ? '' : ". It can't be saved on this device"));
+        } else
+          say(
+            res.reason === 'full'
+              ? 'The board shows at most ' + S.boardbikes.MAX_STATIONS + ' bike stations'
+              : res.reason === 'duplicate'
+                ? 'Already on the board'
+                : 'Could not add that station'
+          );
+        renderSettings();
+      });
+      li.appendChild(b);
+      n.res.appendChild(li);
+    });
+  }
+  function bikeSettings() {
+    var bb = S.boardbikes,
+      picked = bb.stations();
+    settings.appendChild(el('h3', null, 'Bike stations'));
+    picked.forEach(function (s, n) {
+      var line = el('div', 'bv-line');
+      line.appendChild(el('span', null, s.name));
+      var rm = el('button', 'bv-rm', 'Remove');
+      rm.type = 'button';
+      rm.setAttribute('aria-label', 'Remove bike station ' + s.name);
+      rm.dataset.fk = 'bm' + n;
+      rm.addEventListener('click', function () {
+        saved(bb.remove(s.id));
+        renderSettings();
+        (
+          settings.querySelector('[data-fk^="bm"]') ||
+          settings.querySelector('[data-fk="bq"]') ||
+          setBtn
+        ).focus();
+      });
+      line.appendChild(rm);
+      settings.appendChild(line);
+    });
+    if (picked.length >= bb.MAX_STATIONS) {
+      settings.appendChild(
+        el(
+          'p',
+          'bv-note',
+          'The board shows up to ' + bb.MAX_STATIONS + ' bike stations. Remove one to add another.'
+        )
+      );
+      bikeNodes = null;
+      return;
+    }
+    bb.ensureList();
+    var box = el('div', 'bv-add'),
+      lab = el('label', null, 'Add a bike station'),
+      q = el('input');
+    q.type = 'search';
+    q.id = 'bvBikeQ';
+    q.autocomplete = 'off';
+    q.setAttribute('autocapitalize', 'off');
+    q.setAttribute('spellcheck', 'false');
+    q.value = bikeQuery;
+    q.dataset.fk = 'bq';
+    lab.htmlFor = 'bvBikeQ';
+    var msg = el('p', 'bv-note'),
+      retry = el('button', 'bv-btn', 'Try again'),
+      res = el('ul', 'bv-res');
+    msg.setAttribute('role', 'status');
+    retry.type = 'button';
+    retry.hidden = true;
+    retry.addEventListener('click', function () {
+      bb.ensureList();
+      bikeResults();
+    });
+    q.setAttribute('aria-describedby', 'bvBikeMsg');
+    msg.id = 'bvBikeMsg';
+    q.addEventListener('input', function () {
+      bikeQuery = q.value;
+      bikeResults();
+      /* the sheet scrolls: lift the box to the top so the results below it (and the keyboard) leave it in view */
+      if (res.firstChild && q.scrollIntoView) q.scrollIntoView({ block: 'start' });
+    });
+    q.addEventListener('keydown', function (e) {
+      var first = res.querySelector('button:not(:disabled)');
+      if (e.key === 'ArrowDown' && first) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.key === 'Enter' && first) {
+        e.preventDefault();
+        first.click();
+      }
+    });
+    res.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      var all = [].slice.call(res.querySelectorAll('button:not(:disabled)')),
+        i = all.indexOf(document.activeElement);
+      if (i < 0) return;
+      e.preventDefault();
+      var next = all[i + (e.key === 'ArrowDown' ? 1 : -1)];
+      (next || (e.key === 'ArrowUp' ? q : null) || all[i]).focus();
+    });
+    [lab, q, msg, retry, res].forEach(function (n) {
+      box.appendChild(n);
+    });
+    settings.appendChild(box);
+    bikeNodes = { box: box, msg: msg, retry: retry, res: res };
+    bikeResults();
+  }
+  if (S.boardbikes && S.boardbikes.onChange)
+    S.boardbikes.onChange(function () {
+      if (!settings.hidden) bikeResults();
+    });
   function positionSettings() {
     /* below the header, so Settings and Close stay reachable; the header can change height when the screen turns */
     settings.style.top = $('.bv-head').getBoundingClientRect().bottom + 6 + 'px';

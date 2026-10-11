@@ -107,7 +107,8 @@
     var s = Math.max(0, Math.round((Date.now() - ok) / 1000));
     return 'Updated ' + (s < 90 ? s + ' s' : Math.round(s / 60) + ' min') + ' ago';
   }
-  var EMPTY_MSG = 'Pin a stop to see when to leave. Open any bus stop on the map and tap Pin to board.';
+  var EMPTY_MSG =
+    'Pin a stop or a bike station to see them here. Open a bus stop or an Indego station on the map and tap Pin to board.';
   var STATE_WORD = { later: 'later', soon: 'SOON', now: 'LEAVE NOW', missed: 'MISSED' };
   var ICON = {
     later:
@@ -255,9 +256,10 @@
       if (r.source === 'down') src = 'down';
       else if (r.source === 'stale' && src !== 'down') src = 'stale';
     });
+    var nBikes = S.boardbikes && S.boardbikes.stations ? S.boardbikes.stations().length : 0;
     setText($('#bvEmptyMsg'), b ? EMPTY_MSG : 'Board is not available.');
-    emptyBox.hidden = rows.length > 0;
-    list.hidden = !rows.length;
+    emptyBox.hidden = rows.length > 0 || nBikes > 0;
+    list.hidden = !rows.length && !nBikes;
     var msg =
       src === 'down'
         ? checking
@@ -289,6 +291,12 @@
       delete prevState[id];
     });
     forgetSpoken(nowKeys);
+    try {
+      if (S.boardbikesview)
+        S.boardbikesview.render(list); /* the Indego tiles, after the bus rows (js/boardbikesview.js) */
+    } catch (e) {
+      /* the bus rows still show */
+    }
   }
   /* The live region speaks once per bus, the first time its row reaches "leave now" (never for the countdown, never on the first
      draw). The bus is forgotten only after it has been out of "leave now" for 2 minutes, so a flicker does not say it again. */
@@ -441,6 +449,7 @@
     openedAt = Date.now();
     dimmed = null; /* tick() tells the feed whether the board is dimmed */
     if (S.feed.setAwake) S.feed.setAwake(true);
+    if (S.boardbikes && S.boardbikes.sync) S.boardbikes.sync(); /* bike counts: ask at once */
     if (!hooked && board() && board().onChange) {
       hooked = true;
       board().onChange(function () {
@@ -469,6 +478,7 @@
     app.removeAttribute('aria-hidden');
     release();
     if (S.feed.setAwake) S.feed.setAwake(false);
+    if (S.boardbikes && S.boardbikes.sync) S.boardbikes.sync();
     try {
       S.map.map.invalidateSize({ animate: false, pan: false });
     } catch (e) {
@@ -521,6 +531,9 @@
   };
   api.isOpen = function () {
     return open;
+  };
+  api.isDim = function () {
+    return !!dimmed;
   };
   api.show = show;
   api.hide = hide;

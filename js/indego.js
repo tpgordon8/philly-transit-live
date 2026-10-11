@@ -16,6 +16,7 @@
     FULL_ZOOM = 16 /* from here every station in view is drawn; below it the nearest MAX_MARKERS to the centre */,
     MAX_MARKERS = 150 /* a station not yet drawn enters at this rank (nearest the centre = 0) */,
     KEEP_RANK = 170 /* a station already drawn stays while it ranks inside this, so panning does not flicker the edge */,
+    SHARE_MS = 55000 /* a status answer younger than this is reused, so the board's poller and this one make one request a minute between them (js/boardbikes.js) */,
     POLL_MS = 60000 /* status refresh while the layer is on, the tab is visible and the rider is active */,
     MAX_SKIP_TICKS = 4 /* back-off after failures: skip 1, 2, 4, 4 ... polls, so at most 5 minutes between attempts */,
     DIM_AFTER_MS = 180000; /* markers dim when the last good answer is this old and a refresh has failed */
@@ -247,7 +248,7 @@
   function load(fresh) {
     if (inflight) return;
     inflight = true;
-    S.routing.loadIndego(fresh === true).then(
+    S.routing.loadIndego(fresh).then(
       function (list) {
         inflight = false;
         if (!Array.isArray(list) || !list.length) return failed();
@@ -294,7 +295,7 @@
         pollTimer = setInterval(function () {
           if (!wantPoll()) syncPolling();
           else if (skipTicks > 0) skipTicks--;
-          else load(true);
+          else load(SHARE_MS);
         }, POLL_MS);
         if (!skipTicks) load(false);
       }
@@ -362,7 +363,14 @@
     dir.type = 'button';
     dir.id = 'indegoDir';
     dir.addEventListener('click', directions);
-    [sum, types, note, age, dir].forEach(function (n) {
+    var pin = el('button', 'btn small', 'Pin to board'),
+      acts = el('div', 'ind-acts');
+    pin.type = 'button';
+    pin.id = 'indegoPin';
+    pin.addEventListener('click', pinToBoard);
+    acts.appendChild(dir);
+    acts.appendChild(pin);
+    [sum, types, note, age, acts].forEach(function (n) {
       body.appendChild(n);
     });
     card.appendChild(head);
@@ -395,6 +403,35 @@
     f.note.hidden = !f.note.textContent;
     f.age.textContent = ageText() + (isDim() ? '. May be out of date.' : '');
     f.dir.setAttribute('aria-label', 'Walk to ' + s.name);
+    pinState();
+  }
+  /* Pin to board: the wall board's Bikes section (js/boardbikes.js), the same pattern as the stop card's button. */
+  function pinState() {
+    var b = $('#indegoPin'),
+      on = !!selected && !!S.boardbikes && S.boardbikes.has(selected);
+    if (!b) return;
+    b.hidden = !S.boardbikes;
+    b.classList.toggle('on', on);
+    b.textContent = on ? 'On board' : 'Pin to board';
+    if (on) b.setAttribute('aria-disabled', 'true');
+    else b.removeAttribute('aria-disabled');
+  }
+  function pinToBoard() {
+    var s = byId[selected];
+    if (!s || !S.boardbikes) return;
+    var r = S.boardbikes.has(s.id)
+      ? { ok: false, reason: 'duplicate' }
+      : S.boardbikes.add({ id: s.id, name: s.name });
+    live.textContent = r.ok
+      ? r.saved
+        ? 'Pinned to board.'
+        : "Pinned to board. It can't be saved on this device."
+      : r.reason === 'full'
+        ? 'Board is full (' + S.boardbikes.MAX_STATIONS + ' bike stations).'
+        : r.reason === 'duplicate'
+          ? 'Already on the board.'
+          : "Couldn't pin this station.";
+    pinState();
   }
   /* On a phone the card covers most of the short map; pan once so the marker sits in the strip above it (as the vehicle card does). */
   function panAboveCard(id) {
@@ -480,6 +517,7 @@
       if (e.target === chipInput) sync();
     });
   document.addEventListener('visibilitychange', syncPolling);
+  if (S.boardbikes && S.boardbikes.onChange) S.boardbikes.onChange(pinState);
   /* Escape closes the station card and puts focus back on its marker. The vehicle and stop cards never share the screen with it. */
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || e.defaultPrevented || !selected) return;

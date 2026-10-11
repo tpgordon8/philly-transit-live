@@ -57,7 +57,41 @@ body.board-on{background:#000} /* the dimmed board shows through to black, never
 .bv-stepper output{min-width:3.4em;text-align:center;font:700 26px var(--f-display);font-variant-numeric:tabular-nums}
 .bv-chk{display:inline-flex;align-items:center;gap:10px;min-height:48px;cursor:pointer}
 .bv-chk input{width:44px;height:44px;margin:0;accent-color:#6db3ff}
+.bv-add{display:grid;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
+.bv-add label{font-weight:600}
+.bv-add input{box-sizing:border-box;width:100%;min-height:48px;padding:6px 12px;border:2px solid #5d6b7d;border-radius:8px;background:#161b23;color:var(--ink);font:600 18px var(--f-body)}
+.bv-note{margin:0;color:var(--mute);font-size:16px}
+.bv-res{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.bv-pick{width:100%;min-height:52px;padding:6px 12px;border:2px solid #5d6b7d;border-radius:8px;background:#161b23;color:var(--ink);font:600 18px var(--f-body);text-align:left}
+.bv-pick small{display:block;color:var(--mute);font-size:15px;font-weight:400}
+.bv-pick:disabled{opacity:.55}
+.bv-pick:focus-visible{outline:3px solid #6db3ff;outline-offset:2px}
 .bv-rm{min-height:48px;padding:6px 16px;border:2px solid #ff9a8a;border-radius:8px;background:transparent;color:#ffc2b8;font:600 17px var(--f-body)}
+/* Indego bike tiles (js/boardbikesview.js): the "Bikes" section ends the list, so it scrolls with the bus rows */
+#boardView{--bnum:clamp(40px,7.2vh,72px)}
+.bv-bikes{flex:none;list-style:none;margin-top:2px}
+.bv-sec{margin:0 0 6px;font:700 clamp(18px,2.8vh,22px)/1 var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.bv-tiles{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px}
+.bv-tile{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"n n" "m d";align-items:center;gap:0 18px;min-width:0;padding:8px 14px 8px 14px;border-radius:12px;background:var(--row);border:2px solid var(--line)}
+.bv-tile[data-state=noebike],.bv-tile[data-state=nobike],.bv-tile[data-state=closed]{border-style:dashed}
+.bv-tn{grid-area:n;font:600 clamp(20px,3.3vh,26px)/1.1 var(--f-display);overflow-wrap:anywhere}
+.bv-tm{grid-area:m;display:flex;flex-direction:column;min-width:0}
+.bv-tv{font:700 var(--bnum)/1 var(--f-display);font-variant-numeric:tabular-nums}
+.bv-tk{font-size:clamp(14px,2.2vh,17px);font-weight:600;letter-spacing:.08em;color:var(--mute)}
+.bv-tw{font:700 clamp(26px,4.2vh,34px)/1.1 var(--f-display);color:var(--mute)}
+.bv-td{grid-area:d;display:flex;flex-direction:column;gap:2px;font-size:clamp(17px,2.7vh,22px);font-weight:600;min-width:0}
+.bv-ta{font-size:clamp(14px,2.2vh,17px);font-weight:400;color:var(--mute)}
+@media (min-width:821px) and (orientation:landscape){
+  .has-bikes .bv-stop{font-size:clamp(20px,3.6vh,28px)}
+  .has-bikes .bv-from{margin-top:2px;font-size:clamp(16px,2.4vh,20px)}
+  .has-bikes .bv-row{flex-basis:84px;padding-top:4px;padding-bottom:4px}
+  .has-bikes .bv-v{font-size:clamp(38px,6.2vh,60px)}
+  .has-bikes #boardView .rbadge{min-height:56px}
+  .has-bikes .bv-k{font-size:clamp(14px,2.1vh,18px)}
+  .has-bikes .bv-x{min-height:22px;font-size:clamp(15px,2.3vh,19px)}
+  .has-bikes .bv-state{font-size:clamp(16px,2.5vh,21px);padding-top:0;padding-bottom:0}
+  .has-bikes .bv-tile{padding-top:6px;padding-bottom:6px}
+}
 @media (max-width:820px),(orientation:portrait){
   #boardView{--num:clamp(40px,6.9vw,60px);gap:8px}
   .bv-mark{font-size:28px}
@@ -68,6 +102,8 @@ body.board-on{background:#000} /* the dimmed board shows through to black, never
   #boardView .rbadge{min-width:76px;min-height:64px;font-size:42px}
   .bv-stop{font-size:clamp(24px,4vw,32px)}
   .bv-from{font-size:clamp(17px,2.6vw,21px)}
+  #boardView{--bnum:clamp(40px,6.9vw,60px)}
+  .bv-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (max-width:480px){
   #boardView{padding-left:max(10px,env(safe-area-inset-left,0px));padding-right:max(10px,env(safe-area-inset-right,0px));--num:clamp(40px,11.5vw,50px)}
@@ -81,5 +117,7 @@ body.board-on{background:#000} /* the dimmed board shows through to black, never
   .bv-state{font-size:18px;letter-spacing:.04em;padding:2px 8px 2px 6px;max-width:100%}
   .bv-banner{font-size:18px}
   .bv-fine{font-size:13.5px}
+  #boardView{--bnum:clamp(40px,11.5vw,50px)}
+  .bv-tiles{grid-template-columns:minmax(0,1fr)}
 }
 @media (prefers-reduced-motion:reduce){#boardView{transition:none}}
