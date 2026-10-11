@@ -86,3 +86,29 @@ jobs:
           name: test-output-full
           path: tests/out
           retention-days: 7
+
+  webkit:
+    name: WebKit (the engine every iPhone and iPad browser uses)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Playwright and WebKit
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps webkit
+      - name: Layout and keyboard tests in WebKit (the board tests are next: two of them compare text that WebKit pads with a newline)
+        env:
+          SEPTA_BROWSER: webkit
+        run: python tests/run.py --only test_responsive
+      - name: Keep test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output-webkit
+          path: tests/out
+          retention-days: 7
