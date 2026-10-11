@@ -22,7 +22,7 @@ loaded with ordinary `<script src>` tags in dependency order: `util` (helpers, s
 feed, ghost filter, idle pause, refresh), `map` (Leaflet map, markers, vehicle card), `landmarks` (about 40 well-known Philadelphia places), `suggest` (place and address suggestions as you type), `panel` (sidebar: status, search,
 saved places, Home, radius, filters), `stops` (stop links, stop board, ETA), `alerts` (service alerts, leave-now rules), `board` (My stops board logic),
 `routing` (trip planner data clients), `candidates` (bus candidates), `planner` (trip planner), `trip` (trip planner
-interface), `nearby` (Nearby stops under the search area; Get me home is in `panel`), `boardview` (the My stops board screen), `boardsettings` (its settings sheet), `sheet` (phone bottom sheet, on-screen keyboard), `indego` (Indego bike stations) and `main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else
+interface), `nearby` (Nearby stops under the search area; Get me home is in `panel`), `boardview` (the My stops board screen), `boardsettings` (its settings sheet), `boardadd` (its Add a bus stop search), `sheet` (phone bottom sheet, on-screen keyboard), `indego` (Indego bike stations) and `main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else
 is global. If a file fails to load, a red banner at the top of the page tells the visitor to reload (the file names go to the browser console and `SEPTA.failed`). How the files fit together and how to
 add one: [ARCHITECTURE.md](ARCHITECTURE.md) section 14. There is no build step; GitHub Pages serves the files as they are.
 

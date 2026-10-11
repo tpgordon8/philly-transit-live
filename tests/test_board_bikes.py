@@ -697,7 +697,7 @@ def test_empty_state_mentions_bikes_and_tiles_replace_it(root):
     with bsess(root, picked=()) as s:
         open_board(s, tiles=False)
         s.page.wait_for_selector("#bvEmpty", state="visible")
-        assert s.page.inner_text("#bvEmptyMsg").startswith("Pin a stop or a bike station to see them here."), s.page.inner_text("#bvEmptyMsg")
+        assert s.page.inner_text("#bvEmptyMsg").startswith("Nothing on your board yet. Add a bus stop or a bike station"), s.page.inner_text("#bvEmptyMsg")
         s.page.evaluate("window.SEPTA.boardbikes.add({id: 'q1', name: 'Quiet & Corner'})")
         s.page.wait_for_selector("#bvList .bv-tile", state="visible")
         assert s.page.is_hidden("#bvEmpty") and s.page.is_visible("#bvList"), "bike tiles only: no empty state"
@@ -1074,3 +1074,33 @@ def check_info_refresh(root):
 def test_station_list_refreshes_every_six_hours(root):
     check_info_refresh(root)
     must_fail(check_info_refresh, root, ("js/boardbikes.js", "INFO_MS = 6 * 3600000", "INFO_MS = 600 * 3600000"))
+
+
+# ---------------------------------------------------------------- Add a bike station from the empty state
+FAST.add("test_empty_state_add_a_bike_station")
+
+
+def check_empty_add_bike(root):
+    with bsess(root, picked=()) as s:
+        day(s)
+        go_board(s)
+        assert s.page.locator("#bvEmpty").is_visible()
+        s.page.click("#bvAddBike")
+        assert s.page.locator("#bvSettings").is_visible()
+        assert s.page.evaluate("document.activeElement.id") == "bvBikeQ", "focus starts in the bike search box"
+        s.page.wait_for_function("window.SEPTA.boardbikes.listReady()", timeout=8000)
+        s.page.keyboard.type("wolf")
+        assert s.page.locator("#bvSettings .bv-pick").count() == 3
+        s.page.locator("#bvSettings .bv-pick").first.click()
+        assert len(js(s, "window.SEPTA.boardbikes.stations()")) == 1
+        assert s.page.locator("#bvList .bv-tile").count() == 1 and s.page.locator("#bvEmpty").is_hidden()
+        s.page.keyboard.press("Escape")  # the opener is gone with the empty state: focus lands on Settings
+        assert s.page.locator("#bvSettings").is_hidden() and s.page.evaluate("document.activeElement.id") == "bvSet"
+        assert not s.console_errors, s.console_errors
+
+
+def test_empty_state_add_a_bike_station(root):
+    check_empty_add_bike(root)
+    must_fail(check_empty_add_bike, root, ("js/boardsettings.js", "o.focus === 'bike' &&", "false &&"))
+    must_fail(check_empty_add_bike, root, ("js/boardview.js", "S.boardsettings.open({ focus: 'bike', opener: e.currentTarget });", "S.boardsettings.open({ opener: e.currentTarget });"))
+    must_fail(check_empty_add_bike, root, ("js/boardsettings.js", "opener && opener.isConnected && opener.getClientRects().length ? opener : setBtn", "opener || setBtn"))

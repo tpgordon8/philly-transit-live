@@ -155,6 +155,24 @@
     }
     bv.render();
   }
+  /* The way into the bus stop search when the board is not empty (S.boardadd, js/boardadd.js). */
+  function addStopLine(count) {
+    if (!S.boardadd || typeof S.boardadd.open !== 'function') return;
+    var max = lim('MAX_PINS', 8);
+    if (count >= max) {
+      settings.appendChild(
+        el('p', 'bv-note', 'The board shows up to ' + max + ' bus stops. Remove one to add another.')
+      );
+      return;
+    }
+    var add = el('button', 'bv-btn', 'Add a bus stop');
+    add.type = 'button';
+    add.dataset.fk = 'addstop';
+    add.addEventListener('click', function () {
+      S.boardadd.open({ opener: add });
+    });
+    settings.appendChild(add);
+  }
   function pinSettings(b) {
     var pins = b.pins(),
       walkMax = lim('MAX_WALK_MIN', 60);
@@ -215,6 +233,7 @@
       auto2.querySelector('input').setAttribute('aria-label', 'Automatic walk time for ' + nm);
       settings.appendChild(auto2);
     });
+    addStopLine(pins.length);
   }
   /* ----- Bike stations: the picked ones with Remove, and a search box over the Indego station list (js/boardbikes.js) ----- */
   var bikeQuery = '',
@@ -402,19 +421,28 @@
     /* below the header, so Settings and Close stay reachable; the header can change height when the screen turns */
     settings.style.top = $('.bv-head').getBoundingClientRect().bottom + 6 + 'px';
   }
-  function openSettings() {
+  /* opts.focus 'bike': start in the bike search box (the empty state's "Add a bike station"); opts.opener: the control to give focus
+     back to on close, when it still shows. The Settings button's own click passes an event, which has neither. */
+  var opener = null;
+  function openSettings(opts) {
+    var o = opts && !opts.type ? opts : {};
+    opener = o.opener || null;
     settings.hidden = false;
     positionSettings();
     setBtn.setAttribute('aria-expanded', 'true');
     renderSettings();
-    var f = settings.querySelector('input, button');
+    var f =
+      (o.focus === 'bike' && settings.querySelector('[data-fk="bq"]')) ||
+      settings.querySelector('input, button');
     if (f) f.focus();
   }
   function closeSettings() {
     if (settings.hidden) return;
     settings.hidden = true;
     setBtn.setAttribute('aria-expanded', 'false');
-    setBtn.focus();
+    var back = opener && opener.isConnected && opener.getClientRects().length ? opener : setBtn;
+    opener = null;
+    back.focus();
   }
   ['resize', 'orientationchange'].forEach(function (t) {
     window.addEventListener(t, function () {

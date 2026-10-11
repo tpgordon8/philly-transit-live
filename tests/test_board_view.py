@@ -977,8 +977,8 @@ def _empty(root):
     with sess(root) as s:
         board_open(s, fixture=with_fixture(pins=[], arr={}))
         assert s.page.locator("#bvEmpty").is_visible() and not s.page.locator("#bvList").is_visible()
-        assert txt(s, "#bvEmptyMsg") == "Pin a stop or a bike station to see them here. Open a bus stop or an Indego station on the map and tap Pin to board."
-        s.page.click("#bvCloseEmpty")
+        assert txt(s, "#bvEmptyMsg") == "Nothing on your board yet. Add a bus stop or a bike station to watch it here."
+        s.page.click("#bvClose")
         assert not s.page.locator(BV).is_visible() and s.page.evaluate("document.querySelector('#app').inert") is False
     with sess(root, board=False) as s:  # the logic module is not there at all
         s.open(hash_="#board")
@@ -1173,3 +1173,89 @@ def test_phone_entry_button_is_below_the_peek_and_the_sheet_survives(root):
         assert s.page.get_attribute("#app", "data-sheet") == "peek"
         assert s.page.evaluate("(() => { const r = document.querySelector('#panel').getBoundingClientRect(); return [r.top, r.height]; })()") == before
         assert s.page.evaluate("(() => { const m = window.SEPTA.map.map, z = m.getSize(), c = m.getContainer(); return z.x === c.clientWidth && z.y === c.clientHeight; })()")
+
+
+# ---------------------------------------------------------------- empty state actions and the add sheets
+FAST.update({"test_empty_state_has_two_actions_and_one_back_to_map", "test_escape_closes_only_the_topmost_sheet"})
+EMPTY = with_fixture(pins=[], arr={})
+
+
+def active(s):
+    return s.page.evaluate("document.activeElement && (document.activeElement.id || document.activeElement.dataset.fk || document.activeElement.textContent)")
+
+
+def _empty_actions(root):
+    for vp, kw in ((LANDSCAPE, {}), (PHONE, dict(mobile=True, touch=True)), ((768, 1024), {})):
+        with sess(root, viewport=vp, **kw) as s:
+            board_open(s, fixture=EMPTY)
+            names = s.page.evaluate("""() => [...document.querySelectorAll('#boardView button')].filter(b => b.offsetParent).map(b => b.textContent.trim())""")
+            assert names.count("Back to map") == 1 and "Close" not in names, names
+            assert s.page.locator("#bvCloseEmpty").count() == 0
+            assert "Add a bus stop" in names and "Add a bike station" in names, names
+            for sel in ("#bvAddStop", "#bvAddBike", "#bvClose"):
+                box = s.page.locator(sel).bounding_box()
+                assert box["height"] >= 44 and box["width"] >= 44, (sel, box)
+            assert "map" not in txt(s, "#bvEmptyMsg").lower()
+            assert s.page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    with sess(root) as s:
+        board_open(s, fixture=EMPTY)
+        s.page.click("#bvAddBike")
+        assert s.page.locator("#bvSettings").is_visible() and active(s) == "bvBikeQ", active(s)
+        s.page.keyboard.press("Escape")
+        assert s.page.locator("#bvSettings").is_hidden() and active(s) == "bvAddBike", active(s)
+        s.page.click("#bvAddStop")
+        assert s.page.locator("#bvAdd").is_visible() and active(s) == "bvStopQ", active(s)
+        assert s.page.get_attribute("#bvAdd", "aria-label") == "Add a bus stop"
+        s.page.keyboard.press("Escape")
+        assert s.page.locator("#bvAdd").is_hidden() and active(s) == "bvAddStop", active(s)
+        assert s.page.locator(BV).is_visible()
+        s.page.click("#bvClose")
+        assert not s.page.locator(BV).is_visible()
+        assert not s.console_errors, s.console_errors
+    with sess(root) as s:  # with a pin the empty state is gone, and a missing board offers no actions
+        board_open(s)
+        assert s.page.locator("#bvEmpty").is_hidden()
+    with sess(root, board=False) as s:
+        s.open(hash_="#board")
+        s.page.wait_for_selector(BV, state="visible")
+        assert s.page.locator("#bvAddStop").is_hidden() and s.page.locator("#bvAddBike").is_hidden()
+
+
+def test_empty_state_has_two_actions_and_one_back_to_map(root):
+    _empty_actions(root)
+    must_fail(_empty_actions, root, ("index.html", 'id="bvClose">Back to map', 'id="bvClose">Close'))
+    must_fail(_empty_actions, root, ("js/boardview.js", "$('#bvAddStop').hidden = !b;", "$('#bvAddStop').hidden = true;"))
+    must_fail(_empty_actions, root, ("js/boardsettings.js", "o.focus === 'bike' &&", "false &&"))
+    must_fail(_empty_actions, root, ("js/boardsettings.js", "var back = opener &&", "var back = false &&"))
+
+
+def _topmost(root):
+    with sess(root) as s:
+        board_open(s)
+        s.page.click("#bvSet")
+        s.page.click("[data-fk=addstop]")
+        assert s.page.locator("#bvAdd").is_visible() and s.page.locator("#bvSettings").is_visible()
+        assert s.page.evaluate("document.querySelector('#bvSettings').inert"), "the sheet underneath takes no keys"
+        s.page.keyboard.press("Escape")
+        assert s.page.locator("#bvAdd").is_hidden() and s.page.locator("#bvSettings").is_visible()
+        assert not s.page.evaluate("document.querySelector('#bvSettings').inert") and active(s) == "addstop", active(s)
+        assert s.page.locator(BV).is_visible()
+        s.page.keyboard.press("Escape")
+        assert s.page.locator("#bvSettings").is_hidden() and s.page.locator(BV).is_visible()
+        s.page.keyboard.press("Escape")
+        assert not s.page.locator(BV).is_visible()
+        # closing the board with the sheet open leaves nothing open or inert behind
+        s.page.evaluate("location.hash = '#board'")
+        s.page.wait_for_selector(BV, state="visible")
+        s.page.click("#bvSet")
+        s.page.click("[data-fk=addstop]")
+        s.page.evaluate("location.hash = ''")
+        assert s.page.locator("#bvAdd").is_hidden() and not s.page.evaluate("document.querySelector('#bvSettings').inert")
+        assert not s.console_errors, s.console_errors
+
+
+def test_escape_closes_only_the_topmost_sheet(root):
+    _topmost(root)
+    must_fail(_topmost, root, ("js/boardview.js", "if (S.boardadd.isOpen && S.boardadd.isOpen()) {", "if (false) {"))
+    must_fail(_topmost, root, ("js/boardadd.js", "settings.inert = true;", ""))
+    must_fail(_topmost, root, ("js/boardview.js", "if (S.boardadd.reset) S.boardadd.reset();", ""))

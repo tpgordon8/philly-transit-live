@@ -328,7 +328,7 @@ class Session:
         self.base = f"http://127.0.0.1:{self._srv.server_address[1]}"
         threading.Thread(target=self._srv.serve_forever, daemon=True).start()
         self._pw = sync_playwright().start()
-        self.browser = self._pw.chromium.launch()
+        self.browser = getattr(self._pw, os.environ.get('SEPTA_BROWSER', 'chromium')).launch()  # SEPTA_BROWSER=webkit runs the iOS engine
         self.ctx = self.browser.new_context(viewport=self.viewport, has_touch=self.touch, is_mobile=self.mobile, device_scale_factor=self.scale,
                                         **({'color_scheme': self.color_scheme} if self.color_scheme else {}),
                                         **({'reduced_motion': self.reduced_motion} if self.reduced_motion else {}))

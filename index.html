@@ -26,18 +26,18 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="css/leaflet.css?v=278620b749">
-<link rel="stylesheet" href="css/base.css?v=278620b749">
-<link rel="stylesheet" href="css/layout.css?v=278620b749">
-<link rel="stylesheet" href="css/map.css?v=278620b749">
-<link rel="stylesheet" href="css/panel.css?v=278620b749">
-<link rel="stylesheet" href="css/trip.css?v=278620b749">
-<link rel="stylesheet" href="css/suggest.css?v=278620b749">
-<link rel="stylesheet" href="css/stops.css?v=278620b749">
-<link rel="stylesheet" href="css/alerts.css?v=278620b749">
-<link rel="stylesheet" href="css/nearby.css?v=278620b749">
-<link rel="stylesheet" href="css/indego.css?v=278620b749">
-<link rel="stylesheet" href="css/board.css?v=278620b749">
+<link rel="stylesheet" href="css/leaflet.css?v=bfe2d40b13">
+<link rel="stylesheet" href="css/base.css?v=bfe2d40b13">
+<link rel="stylesheet" href="css/layout.css?v=bfe2d40b13">
+<link rel="stylesheet" href="css/map.css?v=bfe2d40b13">
+<link rel="stylesheet" href="css/panel.css?v=bfe2d40b13">
+<link rel="stylesheet" href="css/trip.css?v=bfe2d40b13">
+<link rel="stylesheet" href="css/suggest.css?v=bfe2d40b13">
+<link rel="stylesheet" href="css/stops.css?v=bfe2d40b13">
+<link rel="stylesheet" href="css/alerts.css?v=bfe2d40b13">
+<link rel="stylesheet" href="css/nearby.css?v=bfe2d40b13">
+<link rel="stylesheet" href="css/indego.css?v=bfe2d40b13">
+<link rel="stylesheet" href="css/board.css?v=bfe2d40b13">
 </head>
 <body>
 <div id="app" data-sheet="peek">
@@ -175,19 +175,23 @@
     <div class="bv-upd" id="bvUpd"></div>
     <div class="bv-btns">
       <button type="button" class="bv-btn" id="bvSet" aria-expanded="false" aria-controls="bvSettings">Settings</button>
-      <button type="button" class="bv-btn" id="bvClose">Close</button>
+      <button type="button" class="bv-btn" id="bvClose">Back to map</button>
     </div>
   </header>
   <div class="bv-banner" id="bvBanner" role="status" hidden></div>
   <div class="bv-banner" id="bvBikeBanner" hidden></div>
   <ul class="bv-list" id="bvList" aria-label="Pinned stops and bike stations"></ul>
   <div class="bv-empty" id="bvEmpty" hidden>
-    <p class="bv-empty-msg" id="bvEmptyMsg">Pin a stop or a bike station to see them here. Open a bus stop or an Indego station on the map and tap Pin to board.</p>
-    <button type="button" class="bv-btn" id="bvCloseEmpty">Close</button>
+    <p class="bv-empty-msg" id="bvEmptyMsg">Nothing on your board yet. Add a bus stop or a bike station to watch it here.</p>
+    <div class="bv-empty-btns">
+      <button type="button" class="bv-btn bv-primary" id="bvAddStop">Add a bus stop</button>
+      <button type="button" class="bv-btn bv-primary" id="bvAddBike">Add a bike station</button>
+    </div>
   </div>
   <p class="bv-fine">Estimates from each bus's distance and speed, not official SEPTA predictions.</p>
   <p class="bv-fine" id="bvFineBikes" hidden>Bike counts from Indego, updated about once a minute.</p>
   <div class="bv-set" id="bvSettings" hidden role="group" aria-label="Board settings"></div>
+  <div class="bv-set bv-add-sheet" id="bvAdd" hidden role="group" aria-label="Add a bus stop"></div>
   <div class="sr-only" id="bvLive" role="status" aria-live="polite"></div>
 </div>
 <div id="toasts"></div>
@@ -195,7 +199,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script>
 /* Module namespace and load-failure banner (ARCHITECTURE.md section 14). Every js/*.js file adds only window.SEPTA.<name>. */
-window.SEPTA={util:{},feed:{},map:{},panel:{},stops:{},alerts:{},board:{},boardview:{},boardsettings:{},boardbikes:{},boardbikesview:{},routing:{},candidates:{},planner:{},trip:{},nearby:{},landmarks:{},suggest:{},sheet:{},failed:[]};
+window.SEPTA={util:{},feed:{},map:{},panel:{},stops:{},alerts:{},board:{},boardview:{},boardsettings:{},boardadd:{},boardbikes:{},boardbikesview:{},routing:{},candidates:{},planner:{},trip:{},nearby:{},landmarks:{},suggest:{},sheet:{},failed:[]};
 window.SEPTA.loadFailed=function(file){
   var S=window.SEPTA,box=document.getElementById('loadError');
   if(S.failed.indexOf(file)<0)S.failed.push(file);
@@ -213,27 +217,28 @@ window.addEventListener('error',function(e){
   if(t&&t.tagName==='SCRIPT'&&/\/js\/[^\/]+\.js/.test(t.src||''))window.SEPTA.loadFailed(t.src.split('/').pop().split('?')[0]);
 },true);
 </script>
-<script src="js/util.js?v=278620b749"></script>
-<script src="js/feed.js?v=278620b749"></script>
-<script src="js/map.js?v=278620b749"></script>
-<script src="js/landmarks.js?v=278620b749"></script>
-<script src="js/suggest.js?v=278620b749"></script>
-<script src="js/panel.js?v=278620b749"></script>
-<script src="js/stops.js?v=278620b749"></script>
-<script src="js/alerts.js?v=278620b749"></script>
-<script src="js/board.js?v=278620b749"></script>
-<script src="js/boardbikes.js?v=278620b749"></script>
-<script src="js/routing.js?v=278620b749"></script>
-<script src="js/candidates.js?v=278620b749"></script>
-<script src="js/planner.js?v=278620b749"></script>
-<script src="js/trip.js?v=278620b749"></script>
-<script src="js/nearby.js?v=278620b749"></script>
-<script src="js/boardview.js?v=278620b749"></script>
-<script src="js/boardbikesview.js?v=278620b749"></script>
-<script src="js/boardsettings.js?v=278620b749"></script>
-<script src="js/sheet.js?v=278620b749"></script>
-<script src="js/indego.js?v=278620b749"></script>
-<script src="js/main.js?v=278620b749"></script>
+<script src="js/util.js?v=bfe2d40b13"></script>
+<script src="js/feed.js?v=bfe2d40b13"></script>
+<script src="js/map.js?v=bfe2d40b13"></script>
+<script src="js/landmarks.js?v=bfe2d40b13"></script>
+<script src="js/suggest.js?v=bfe2d40b13"></script>
+<script src="js/panel.js?v=bfe2d40b13"></script>
+<script src="js/stops.js?v=bfe2d40b13"></script>
+<script src="js/alerts.js?v=bfe2d40b13"></script>
+<script src="js/board.js?v=bfe2d40b13"></script>
+<script src="js/boardbikes.js?v=bfe2d40b13"></script>
+<script src="js/routing.js?v=bfe2d40b13"></script>
+<script src="js/candidates.js?v=bfe2d40b13"></script>
+<script src="js/planner.js?v=bfe2d40b13"></script>
+<script src="js/trip.js?v=bfe2d40b13"></script>
+<script src="js/nearby.js?v=bfe2d40b13"></script>
+<script src="js/boardview.js?v=bfe2d40b13"></script>
+<script src="js/boardbikesview.js?v=bfe2d40b13"></script>
+<script src="js/boardsettings.js?v=bfe2d40b13"></script>
+<script src="js/boardadd.js?v=bfe2d40b13"></script>
+<script src="js/sheet.js?v=bfe2d40b13"></script>
+<script src="js/indego.js?v=bfe2d40b13"></script>
+<script src="js/main.js?v=bfe2d40b13"></script>
 <script>if(!window.SEPTA.started&&window.SEPTA.failed.indexOf('main.js')<0)window.SEPTA.loadFailed('main.js (the app did not start)');</script>
 
 </body>

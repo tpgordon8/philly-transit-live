@@ -107,8 +107,7 @@
     var s = Math.max(0, Math.round((Date.now() - ok) / 1000));
     return 'Updated ' + (s < 90 ? s + ' s' : Math.round(s / 60) + ' min') + ' ago';
   }
-  var EMPTY_MSG =
-    'Pin a stop or a bike station to see them here. Open a bus stop or an Indego station on the map and tap Pin to board.';
+  var EMPTY_MSG = 'Nothing on your board yet. Add a bus stop or a bike station to watch it here.';
   var STATE_WORD = { later: 'later', soon: 'SOON', now: 'LEAVE NOW', missed: 'MISSED' };
   var ICON = {
     later:
@@ -259,6 +258,8 @@
     var nBikes = S.boardbikes && S.boardbikes.stations ? S.boardbikes.stations().length : 0;
     setText($('#bvEmptyMsg'), b ? EMPTY_MSG : 'Board is not available.');
     emptyBox.hidden = rows.length > 0 || nBikes > 0;
+    $('#bvAddStop').hidden = !b;
+    $('#bvAddBike').hidden = !(b && S.boardbikes && typeof S.boardbikes.add === 'function');
     list.hidden = !rows.length && !nBikes;
     var msg =
       src === 'down'
@@ -472,6 +473,7 @@
     open = false;
     root.hidden = true;
     settings.hidden = true;
+    if (S.boardadd.reset) S.boardadd.reset();
     setBtn.setAttribute('aria-expanded', 'false');
     document.body.classList.remove('board-on');
     app.inert = false;
@@ -509,7 +511,13 @@
   }
   window.addEventListener('hashchange', sync);
   $('#bvClose').addEventListener('click', close);
-  $('#bvCloseEmpty').addEventListener('click', close);
+  /* The empty state's two actions; each sheet gives focus back to the button that opened it while that button still shows. */
+  $('#bvAddStop').addEventListener('click', function (e) {
+    if (S.boardadd.open) S.boardadd.open({ opener: e.currentTarget });
+  });
+  $('#bvAddBike').addEventListener('click', function (e) {
+    if (S.boardsettings.open) S.boardsettings.open({ focus: 'bike', opener: e.currentTarget });
+  });
   $('#btnBoard').addEventListener('click', function () {
     pending = $('#btnBoard');
     location.hash = '#board';
@@ -521,7 +529,10 @@
     function (e) {
       if (e.key !== 'Escape' || !open || document.querySelector('#toasts .toast')) return;
       e.stopImmediatePropagation();
-      if (!settings.hidden) {
+      if (S.boardadd.isOpen && S.boardadd.isOpen()) {
+        e.preventDefault(); /* a search box would otherwise empty itself on this key before the sheet decides */
+        if (!S.boardadd.escape()) S.boardadd.close(); /* only the topmost sheet */
+      } else if (!settings.hidden) {
         if (!(S.boardsettings.escape && S.boardsettings.escape())) S.boardsettings.close();
       } else close();
     },

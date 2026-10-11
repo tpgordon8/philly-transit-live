@@ -135,3 +135,27 @@ body.board-on{background:#000} /* the dimmed board shows through to black, never
   .bv-tiles{grid-template-columns:minmax(0,1fr)}
 }
 @media (prefers-reduced-motion:reduce){#boardView{transition:none}}
+/* Empty state actions and the "Add a bus stop" sheet (js/boardadd.js, which lies over the Settings sheet) */
+.bv-empty-btns{display:flex;flex-wrap:wrap;justify-content:center;gap:14px}
+.bv-primary{min-height:64px;padding:12px 28px;border-color:#6db3ff;background:#1b2f48;font-size:22px}
+.bv-add-sheet{z-index:3}
+.bv-btnrow{display:flex;flex-wrap:wrap;gap:10px}
+.bv-stack{display:grid;gap:10px;margin-top:10px}
+.bv-block{width:100%;text-align:left}
+.bv-pick{display:flex;align-items:center;gap:12px}
+.bv-rt{flex:none;min-width:48px;padding:6px 8px;border-radius:8px;background:var(--c);color:#06121f;font:700 22px/1 var(--f-display);text-align:center}
+.bv-pt{flex:1;min-width:0;overflow-wrap:anywhere}
+.bv-pt small{display:block}
+.bv-add-sheet .bv-btn:focus-visible{outline:3px solid #6db3ff;outline-offset:2px}
+/* Empty state actions and the "Add a bus stop" sheet (js/boardadd.js, which lies over the Settings sheet) */
+.bv-empty-btns{display:flex;flex-wrap:wrap;justify-content:center;gap:14px}
+.bv-primary{min-height:64px;padding:12px 28px;border-color:#6db3ff;background:#1b2f48;font-size:22px}
+.bv-add-sheet{z-index:3}
+.bv-btnrow{display:flex;flex-wrap:wrap;gap:10px}
+.bv-stack{display:grid;gap:10px;margin-top:10px}
+.bv-block{width:100%;text-align:left}
+.bv-pick{display:flex;align-items:center;gap:12px}
+.bv-rt{flex:none;min-width:48px;padding:6px 8px;border-radius:8px;background:var(--c);color:#06121f;font:700 22px/1 var(--f-display);text-align:center}
+.bv-pt{flex:1;min-width:0;overflow-wrap:anywhere}
+.bv-pt small{display:block}
+.bv-add-sheet .bv-btn:focus-visible{outline:3px solid #6db3ff;outline-offset:2px}
