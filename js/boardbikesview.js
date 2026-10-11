@@ -20,7 +20,13 @@
   function facts(r, view, age) {
     var bb = S.boardbikes,
       f = { big: '', unit: '', word: '', bikes: '', docks: '', age: '', say: '' };
-    if (view === 'ok' || view === 'noebike' || view === 'nobike') {
+    if (view === 'ok' && !r.typed) {
+      /* the feed gave a total but no split by type: show the total and say so, never "No e-bikes" */
+      f.big = String(r.bikes);
+      f.unit = r.bikes === 1 ? 'BIKE' : 'BIKES';
+      f.bikes = 'Type not reported';
+      f.say = plural(r.bikes, 'bike', 'bikes') + ', type not reported';
+    } else if (view === 'ok' || view === 'noebike' || view === 'nobike') {
       f.big = String(r.electric);
       f.unit = r.electric === 1 ? 'E-BIKE' : 'E-BIKES';
       f.bikes =
@@ -89,7 +95,7 @@
     var bb = S.boardbikes,
       banner = $('#bvBikeBanner'),
       fine = $('#bvFineBikes'),
-      picked = bb && bb.stations ? bb.stations() : [];
+      picked = bb && typeof bb.stations === 'function' ? bb.stations() : [];
     $('#boardView').classList.toggle('has-bikes', picked.length > 0);
     if (!picked.length) {
       if (sec && sec.parentNode) sec.remove();
@@ -116,7 +122,9 @@
         src === 'down'
           ? 'Bike data unavailable'
           : src === 'stale'
-            ? 'Bike data is ' + bb.feedAgeMin(now) + ' min old'
+            ? bb.refreshFailed()
+              ? 'Bike data may be out of date'
+              : 'Bike data is ' + bb.feedAgeMin(now) + ' min old'
             : ''
       );
     if (fine) fine.hidden = false;

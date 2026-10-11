@@ -7,6 +7,7 @@
   var shortText = S.util.shortText,
     store = S.util.store,
     isObj = S.util.isObj;
+  /* SKEW_MS: a report time further ahead than this is a wrong device clock; the fetch time stands in */
   var KEY = 'septa.boardbikes.v1',
     MAX_STATIONS = 4,
     MAX_NAME = 60,
@@ -16,9 +17,10 @@
     MAX_WAIT_MS = 300000 /* back-off never waits longer than this between attempts (a longer base poll is never shortened) */,
     SHARE_MS = 55000 /* a status answer younger than this is reused, so this poller and the map layer's make one request a minute */,
     STALE_MIN = 10 /* the banner "Bike data is N min old" appears past this */,
-    DOWN_MS = 30 * 60000 /* after failed refreshes, an answer this old is no longer shown */,
-    SKEW_MS =
-      5 * 60000 /* a report time further ahead than this is a wrong device clock; the fetch time stands in */,
+    DOWN_MS =
+      10 * 60000 /* after a failed refresh, the last good answer is no longer shown once it is this old */,
+    INFO_MS = 6 * 3600000 /* the station list is asked for again after this long while the board is open */,
+    SKEW_MS = 10 * 60000,
     ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
   function isFin(n) {
     return typeof n === 'number' && isFinite(n);
@@ -91,6 +93,11 @@
     sync();
     return ok;
   }
+  /* The station with this id in a list from S.routing.loadIndego (null when the list is missing or lacks it). */
+  function pick(list, id) {
+    for (var i = 0; list && i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
   /* add('id') needs the station list; add({id, name}) (the map card) does not. Answers {ok:true, station, saved} or {ok:false, reason}
      with invalid (bad id), duplicate, unknown (the id is not in the Indego list, or only an id was given and the list is not loaded) or full. */
   function add(arg) {
@@ -98,9 +105,10 @@
       name = isObj(arg) && typeof arg.name === 'string' ? arg.name : '';
     if (typeof id !== 'string' || !ID_RE.test(id)) return { ok: false, reason: 'invalid' };
     if (has(id)) return { ok: false, reason: 'duplicate' };
-    var known = byId[id];
+    var shared = S.routing && S.routing.lastIndego ? S.routing.lastIndego() : null,
+      known = byId[id] || pick(shared, id);
     if (known) name = known.name;
-    else if (data || !name) return { ok: false, reason: 'unknown' };
+    else if (!name || data || shared) return { ok: false, reason: 'unknown' };
     if (stored.stations.length >= MAX_STATIONS) return { ok: false, reason: 'full' };
     var st = cleanStation({ id: id, name: name });
     stored.stations.push(st);
@@ -126,17 +134,26 @@
       .replace(/\band\b/g, '&')
       .trim();
   }
-  function search(query) {
-    var q = norm(query);
-    if (!q || !data) return [];
+  function natural(a, b) {
+    return a.localeCompare(b, 'en', { numeric: true });
+  }
+  function find(q) {
     var hits = [];
     data.forEach(function (s) {
       var n = norm(s.name),
         rank = n.indexOf(q) === 0 ? 0 : n.indexOf(q) > 0 ? 1 : norm(s.address).indexOf(q) >= 0 ? 2 : -1;
       if (rank >= 0) hits.push({ rank: rank, n: n, s: s });
     });
+    return hits;
+  }
+  function search(query) {
+    var q = norm(query);
+    if (!q || !data) return [];
+    var hits = find(q);
+    /* "4th a" and "4th an" are on the way to "4th and": when nothing matches, drop that unfinished last word so the list does not blank */
+    if (!hits.length && /\s(a|an)$/.test(q)) hits = find(q.replace(/\s(a|an)$/, ''));
     hits.sort(function (a, b) {
-      return a.rank - b.rank || (a.n < b.n ? -1 : a.n > b.n ? 1 : 0);
+      return a.rank - b.rank || natural(a.n, b.n);
     });
     return hits.slice(0, MAX_RESULTS).map(function (h) {
       return { id: h.s.id, name: h.s.name, address: h.s.address || '', picked: has(h.s.id) };
@@ -144,13 +161,17 @@
   }
 
   /* ----- What the numbers mean ----- */
-  /* 'live' (fresh answer), 'stale' (the newest data is over 10 minutes old), 'down' (nothing to show: the first answer failed, or
-     refreshes keep failing and the last answer is over 30 minutes old), 'loading' (no answer yet). */
+  /* 'live' (fresh answer), 'stale' (the newest data is over 10 minutes old, or a refresh has failed since the last good answer),
+     'down' (nothing to show: the first answer failed, or a refresh failed and the last good answer is over 10 minutes old),
+     'loading' (no answer yet). */
   function source(nowMs) {
     nowMs = isFin(nowMs) ? nowMs : Date.now();
     if (!data) return failedAt ? 'down' : 'loading';
-    if (failedAt && nowMs - fetchedAt > DOWN_MS) return 'down';
+    if (failedAt) return nowMs - fetchedAt > DOWN_MS ? 'down' : 'stale';
     return nowMs - feedAsOf > STALE_MIN * 60000 ? 'stale' : 'live';
+  }
+  function refreshFailed() {
+    return !!failedAt;
   }
   function feedAgeMin(nowMs) {
     return data ? Math.max(0, Math.floor(((isFin(nowMs) ? nowMs : Date.now()) - feedAsOf) / 60000)) : 0;
@@ -174,6 +195,8 @@
           id: p.id,
           name: s ? s.name : p.name,
           address: s ? s.address || '' : '',
+          bikes: 0,
+          typed: true,
           electric: 0,
           classic: 0,
           docks: 0,
@@ -186,8 +209,12 @@
         };
       if (!s) return r;
       var at = s.asOf > 0 && s.asOf <= fetchedAt + SKEW_MS ? s.asOf : fetchedAt;
-      r.electric = s.ebikes;
-      r.classic = Math.max(0, s.bikes - s.ebikes);
+      var tot = isFin(s.total) ? s.total : s.bikes,
+        el = isFin(s.electric) ? s.electric : s.ebikes;
+      r.typed = s.typed !== false;
+      r.bikes = tot;
+      r.electric = r.typed ? el : 0;
+      r.classic = r.typed ? Math.max(0, tot - el) : 0;
       r.docks = s.docks;
       r.renting = s.renting;
       r.returning = s.returning;
@@ -195,7 +222,7 @@
       r.lastReported = at;
       r.ageMin = Math.max(0, Math.floor((nowMs - at) / 60000));
       r.state =
-        !s.installed || !s.renting ? 'closed' : s.bikes <= 0 ? 'nobike' : s.ebikes <= 0 ? 'noebike' : 'ok';
+        !s.installed || !s.renting ? 'closed' : tot <= 0 ? 'nobike' : r.typed && el <= 0 ? 'noebike' : 'ok';
       return r;
     });
   }
@@ -224,14 +251,15 @@
     list.forEach(function (s) {
       byId[s.id] = s;
     });
-    fetchedAt = now;
-    feedAsOf = list.asOf > 0 && list.asOf <= now + SKEW_MS ? list.asOf : now;
+    /* the time the status was really fetched (a reused answer is older than this call), never later than the device clock */
+    fetchedAt = list.fetchedAt > 0 && list.fetchedAt <= now ? list.fetchedAt : now;
+    feedAsOf = list.asOf > 0 && list.asOf <= now + SKEW_MS ? list.asOf : fetchedAt;
   }
   function load() {
     if (inflight || !S.routing || !S.routing.loadIndego) return;
     inflight = true;
     lastStart = Date.now();
-    S.routing.loadIndego(SHARE_MS).then(
+    S.routing.loadIndego(SHARE_MS, INFO_MS).then(
       function (list) {
         inflight = false;
         if (!Array.isArray(list) || !list.length) return miss();
@@ -259,11 +287,14 @@
       active = true;
       lastStart = 0;
     }
-    if (!inflight && Date.now() - lastStart >= everyMs()) load();
+    var now = Date.now();
+    if (now < lastStart) lastStart = 0; /* the device clock jumped back */
+    if (!inflight && now - lastStart >= everyMs()) load();
   }
   /* The settings sheet needs the station list before anything is picked: one load when it opens and nothing is loaded yet. */
-  function ensureList() {
-    if (!data && !inflight) load();
+  function ensureList(force) {
+    if (data || inflight) return;
+    if (force === true || !fails || Date.now() - lastStart >= everyMs() || Date.now() < lastStart) load();
   }
   setInterval(sync, 1000);
   document.addEventListener('visibilitychange', sync);
@@ -279,6 +310,7 @@
   S.boardbikes.search = search;
   S.boardbikes.rows = rows;
   S.boardbikes.source = source;
+  S.boardbikes.refreshFailed = refreshFailed;
   S.boardbikes.feedAgeMin = feedAgeMin;
   S.boardbikes.ageText = ageText;
   S.boardbikes.listReady = function () {

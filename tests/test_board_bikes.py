@@ -25,6 +25,9 @@ FAST = {
     "test_settings_search_add_and_remove",
     "test_pin_button_on_the_indego_card",
     "test_down_banner_hides_numbers_and_backs_off",
+    "test_type_counts_missing_types_electric_over_total_and_string_numbers",
+    "test_settings_enter_escape_focus_and_polls_leave_results_alone",
+    "test_board_and_card_survive_a_missing_boardbikes_module",
 }
 
 KEY = "septa.boardbikes.v1"
@@ -211,33 +214,56 @@ def norm(x):
     return re.sub(r"\band\b", "&", re.sub(r"\s+", " ", x.lower())).strip()
 
 
+def natural_cmp(a, b):
+    """Numbers inside a name compare as numbers (2nd before 10th); everything else by character."""
+    x, y = re.findall(r"\d+|\D+", a), re.findall(r"\d+|\D+", b)
+    for p, q in zip(x, y):
+        if p.isdigit() and q.isdigit():
+            if int(p) != int(q):
+                return -1 if int(p) < int(q) else 1
+        elif p != q:
+            return -1 if p < q else 1
+    return (len(x) > len(y)) - (len(x) < len(y))
+
+
 def oracle(stations, q, picked=()):
-    """The spec, written out again: name starts with q, then name contains q, then address contains q; each group A to Z; at most 8."""
+    """The spec, written out again: name starts with q, then name contains q, then address contains q; each group A to Z (numbers as
+    numbers); at most 8. A trailing "a" or "an" that matches nothing is the start of "and": it is dropped."""
+    import functools
     q = norm(q)
+    if q and not any(q in norm(x["name"]) or q in norm(x.get("address", "")) for x in stations) and re.search(r"\s(a|an)$", q):
+        q = re.sub(r"\s(a|an)$", "", q)
     hits = []
     for x in stations:
         n = norm(x["name"])
         rank = 0 if n.startswith(q) else 1 if q in n else 2 if q in norm(x.get("address", "")) else None
         if rank is not None:
             hits.append((rank, n, x))
-    hits.sort(key=lambda h: (h[0], h[1]))
+    hits.sort(key=functools.cmp_to_key(lambda a, b: (a[0] - b[0]) or natural_cmp(a[1], b[1])))
     return [h[2]["station_id"] for h in hits[:8]]
 
 
 def check_search(root):
     with bsess(root, picked=()) as s:
+        for sid, nm in (("zed10", "10th & Zed"), ("zed2", "2nd & Zed"), ("zed1", "1st & Zed")):  # numbers sort as numbers: 1st, 2nd, 10th
+            s.mocks.indego_info["data"]["stations"].append({"station_id": sid, "name": nm, "address": "Zed Way", "lat": 39.93, "lon": -75.16})
+            s.mocks.indego_status["data"]["stations"].append({"station_id": sid, "is_installed": 1, "is_renting": 1, "is_returning": 1, "num_bikes_available": 1,
+                                                              "num_docks_available": 1, "num_bikes_available_types": {"electric": 1, "classic": 0, "smart": 0}, "last_reported": 0})
+        fresh(s)
         s.open()
         s.wait_live()
         js(s, "window.SEPTA.boardbikes.ensureList()")
         s.page.wait_for_function("window.SEPTA.boardbikes.listReady()")
         info = s.mocks.stations()
-        for q, expect_min in (("wolf", 3), ("WOLF", 3), ("  4th and wolf ", 1), ("broad", 8), ("2nd", 8), ("tasker", 3), ("street", 1), ("zzzz", 0), ("", 0)):
+        for q, expect_min in (("wolf", 3), ("WOLF", 3), ("  4th and wolf ", 1), ("4th a", 1), ("4th an", 1), ("4th and", 1), ("4th and w", 1), ("broad", 8), ("2nd", 8), ("tasker", 3), ("street", 1), ("zzzz", 0), ("", 0)):
             got = js(s, "window.SEPTA.boardbikes.search(a)", q)
             ids = [g["id"] for g in got]
             assert ids == (oracle(info, q) if q.strip() else []), (q, ids, oracle(info, q))
             assert len(got) >= expect_min and len(got) <= 8, (q, len(got))
             for g in got:
                 assert set(g) == {"id", "name", "address", "picked"} and g["name"], g
+        assert js(s, "window.SEPTA.boardbikes.search(a).map(x => x.name)", "zed") == ["1st & Zed", "2nd & Zed", "10th & Zed"], "2nd before 10th"
+        assert [g["name"] for g in js(s, "window.SEPTA.boardbikes.search(a)", "4th a")] == [g["name"] for g in js(s, "window.SEPTA.boardbikes.search(a)", "4th")], "typing 4th and wolf keeps results"
         # ranking, spelled out for two cases: names starting with the text come before names that only contain it
         names = [g["name"] for g in js(s, "window.SEPTA.boardbikes.search(a)", "2nd")]
         starts = [n for n in names if n.lower().startswith("2nd")]
@@ -257,6 +283,8 @@ def test_search_ranks_name_start_then_name_then_address_and_stops_at_eight(root)
     check_search(root)
     must_fail(check_search, root, ("js/boardbikes.js", "MAX_RESULTS = 8", "MAX_RESULTS = 20"))
     must_fail(check_search, root, ("js/boardbikes.js", "return a.rank - b.rank || ", "return "))
+    must_fail(check_search, root, ("js/boardbikes.js", "return a.rank - b.rank || natural(a.n, b.n);", "return a.rank - b.rank || (a.n < b.n ? -1 : a.n > b.n ? 1 : 0);"))
+    must_fail(check_search, root, ("js/boardbikes.js", "if (!hits.length && /\\s(a|an)$/.test(q))", "if (false)"))
 
 
 # ---------------------------------------------------------------- counts and states
@@ -313,9 +341,9 @@ def check_counts_and_states(root):
 
 def test_counts_and_states_map_from_the_feed(root):
     check_counts_and_states(root)
-    must_fail(check_counts_and_states, root, ("js/boardbikes.js", "r.electric = s.ebikes;", "r.electric = s.classic;"))
+    must_fail(check_counts_and_states, root, ("js/boardbikes.js", "r.electric = r.typed ? el : 0;", "r.electric = s.classic;"))
     must_fail(check_counts_and_states, root, ("js/boardbikes.js", "!s.installed || !s.renting ? 'closed'", "!s.installed ? 'closed'"))
-    must_fail(check_counts_and_states, root, ("js/boardbikes.js", "r.classic = Math.max(0, s.bikes - s.ebikes);", "r.classic = s.classic;"))
+    must_fail(check_counts_and_states, root, ("js/boardbikes.js", "r.classic = r.typed ? Math.max(0, tot - el) : 0;", "r.classic = s.classic;"))
 
 
 # ---------------------------------------------------------------- freshness
@@ -510,19 +538,26 @@ def check_down(root):
         s.mocks.worker_indego_hits.clear()
         s.tick(3 * MIN)
         assert status_hits(s) == 3, ("the one-a-minute rhythm is back at once", status_hits(s))
-    # a refresh that fails after a good answer keeps the numbers (with their age) until the answer is half an hour old
+    # a refresh that fails after a good answer: stale at once ("may be out of date", numbers stay), down once the last good answer is 10 minutes old
     with bsess(root, picked=(WOLF,)) as s:
         open_board(s)
+        assert s.page.is_hidden("#bvBikeBanner")
         s.mocks.indego_mode = "http500"
-        s.tick(5 * MIN)
-        assert s.page.is_hidden("#bvBikeBanner") and "E-BIKES" in tiles_text(s)[0], "a failed refresh alone changes nothing visible"
-        s.tick(7 * MIN)  # the answer is now over 10 minutes old
+        s.tick(MIN + 5000)  # the next poll fails
         s.page.wait_for_function("!document.querySelector('#bvBikeBanner').hidden")
-        assert re.fullmatch(r"Bike data is 1\d min old", s.page.inner_text("#bvBikeBanner").strip()), s.page.inner_text("#bvBikeBanner")
-        assert "E-BIKES" in tiles_text(s)[0]
-        s.tick(25 * MIN)
+        assert s.page.inner_text("#bvBikeBanner").strip() == "Bike data may be out of date", s.page.inner_text("#bvBikeBanner")
+        assert "down" not in s.page.get_attribute("#bvBikeBanner", "class").split()
+        assert "E-BIKES" in tiles_text(s)[0] and js(s, "window.SEPTA.boardbikes.source(Date.now())") == "stale"
+        s.tick(5 * MIN)
+        assert "E-BIKES" in tiles_text(s)[0] and s.page.inner_text("#bvBikeBanner").strip() == "Bike data may be out of date"
+        s.tick(5 * MIN)  # the last good answer is now over 10 minutes old
         s.page.wait_for_function("document.querySelector('#bvBikeBanner').textContent === 'Bike data unavailable'", timeout=8000)
-        assert "E-BIKE" not in tiles_text(s)[0]
+        assert "E-BIKE" not in tiles_text(s)[0] and js(s, "window.SEPTA.boardbikes.source(Date.now())") == "down"
+        s.mocks.indego_mode = "ok"
+        fresh(s, 10, page_clock=True)
+        s.tick(5 * MIN)
+        s.page.wait_for_function("document.querySelector('#bvBikeBanner').hidden", timeout=8000)
+        assert "E-BIKES" in tiles_text(s)[0]
         assert not [e for e in s.console_errors if "pageerror" in e], s.console_errors
 
 
@@ -530,6 +565,7 @@ def test_down_banner_hides_numbers_and_backs_off(root):
     check_down(root)
     must_fail(check_down, root, ("js/boardbikes.js", "if (!data) return failedAt ? 'down' : 'loading';", "if (!data) return 'loading';"))
     must_fail(check_down, root, ("js/boardbikes.js", "skip = fails ? Math.min(Math.pow(2, fails - 1), 4) : 0;", "skip = 0;"))
+    must_fail(check_down, root, ("js/boardbikes.js", "if (failedAt) return nowMs - fetchedAt > DOWN_MS ? 'down' : 'stale';", "if (failedAt && nowMs - fetchedAt > 30 * 60000) return 'down';"))
 
 
 # ---------------------------------------------------------------- settings: search, add, remove
@@ -632,10 +668,13 @@ def check_pin_button(root):
         assert "Already on the board" in s.page.inner_text("#indegoLive") and js(s, "window.SEPTA.boardbikes.stations().length") == 1
         # another station: the card says Pin to board again; the pinned one says On board when reopened
         s.page.keyboard.press("Escape")
-        open_card(s, s.page.evaluate("[...document.querySelectorAll('.ind-wrap')].map(e => e.title).find(t => t !== 'Municipal Services Building Plaza')"))
+        other = s.page.evaluate("[...document.querySelectorAll('.ind-wrap')].map(e => e.title).find(t => t !== 'Municipal Services Building Plaza')")
+        open_card(s, other)
         assert s.page.locator("#indegoPin").inner_text() == "Pin to board"
         # full board: a clear message
-        js(s, "(window.SEPTA.boardbikes.add({id: 'a1', name: 'A'}), window.SEPTA.boardbikes.add({id: 'a2', name: 'B'}), window.SEPTA.boardbikes.add({id: 'a3', name: 'C'}), 0)")
+        fill = [x["station_id"] for x in s.mocks.stations() if x["name"] not in (other, "Municipal Services Building Plaza")][:3]
+        js(s, "(a.forEach(i => window.SEPTA.boardbikes.add(i)), 0)", fill)
+        assert js(s, "window.SEPTA.boardbikes.stations().length") == 4, "the board is full"
         s.page.locator("#indegoPin").click()
         assert "Board is full" in s.page.inner_text("#indegoLive"), s.page.inner_text("#indegoLive")
         # and the board shows the pinned station
@@ -672,7 +711,7 @@ def test_empty_state_mentions_bikes_and_tiles_replace_it(root):
 # ---------------------------------------------------------------- geometry
 
 PINS4 = dict(BV.FIXTURE, pins=BV.FIXTURE["pins"][:4])
-VIEWPORTS = {"landscape": (1133, 744), "portrait": (744, 1133), "phone": (390, 844), "small": (320, 640)}
+VIEWPORTS = {"landscape": (1133, 744), "landscape690": (1133, 690), "landscape650": (1133, 650), "portrait": (744, 1133), "phone": (390, 844), "small": (320, 640)}
 
 
 def geometry(s):
@@ -689,10 +728,10 @@ def geometry(s):
     }""")
 
 
-def check_geometry(root, name, shot=True, n_tiles=3):
+def check_geometry(root, name, shot=True, n_tiles=3, extra=()):
     vp = VIEWPORTS[name]
     picked = (WOLF, SNYDER, TASKER, ("bcycle_indego_3004", "Municipal Services Building Plaza"))[:n_tiles]
-    with bsess(root, picked=picked, viewport=vp, fake_bus=True) as s:
+    with bsess(root, picked=picked, viewport=vp, fake_bus=True, extra=extra) as s:
         open_board(s, fixture=PINS4)
         s.page.wait_for_function("document.querySelectorAll('#bvList .bv-tile').length === %d" % n_tiles)
         s.page.wait_for_timeout(200)
@@ -702,7 +741,7 @@ def check_geometry(root, name, shot=True, n_tiles=3):
         assert not g["small"], ("tap targets under 44 px", g["small"])
         assert min(g["nums"]) >= 40, ("e-bike numbers under 40 px", g["nums"])
         cols = sorted({round(t["l"]) for t in g["tiles"]})
-        if name == "landscape":
+        if name.startswith("landscape"):
             assert len(cols) == n_tiles, ("one row of tiles", cols)
             assert n_tiles > 3 or g["listSH"] <= g["listCH"] + 1, ("4 bus pins and %d tiles fit without scrolling" % n_tiles, g["listSH"], g["listCH"])
             assert g["fine"]["b"] <= g["vh"] + 1 and g["head"]["t"] >= 0
@@ -728,8 +767,17 @@ def check_geometry(root, name, shot=True, n_tiles=3):
 def test_geometry_landscape_three_tiles_and_four_bus_pins(root):
     check_geometry(root, "landscape")
     check_geometry(root, "landscape", n_tiles=4)  # four tiles: still one row, may scroll but never overflow sideways
-    # the same check on a copy where the section is not part of the scrolling list must fail: mutate the e-bike number to a small size
+    # the same check must fail on a copy where the e-bike number is shrunk below 40 px (the number rule is what keeps it readable)
     must_fail(lambda r: check_geometry(r, "landscape", shot=False), root, ("css/board.css", "#boardView{--bnum:clamp(40px,7.2vh,72px)}", "#boardView{--bnum:clamp(20px,3vh,30px)}"))
+
+
+def test_geometry_short_landscape_heights_iad_with_toolbars(root):
+    """iPad Safari with its toolbars showing leaves 690 or 650 px: 4 bus pins and 3 bike tiles must still fit, with the e-bike number at 40 px."""
+    for name in ("landscape690", "landscape650"):
+        check_geometry(root, name)
+    for name in ("landscape", "landscape690", "landscape650"):  # the machine's fallback font must not matter: the same with a wide stack forced
+        check_geometry(root, name, shot=False, extra=[BV.WIDE])
+    must_fail(lambda r: check_geometry(r, "landscape650", shot=False), root, ("css/board.css", "@media (min-width:821px) and (orientation:landscape) and (max-height:720px){", "@media (min-width:821px) and (orientation:landscape) and (max-height:1px){"))
 
 
 def test_geometry_portrait_phone_and_small(root):
@@ -755,3 +803,274 @@ def test_tiles_only_board_and_settings_sheet_screenshots(root):
         open_board(s, tiles=False)
         s.page.wait_for_function("!document.querySelector('#bvBikeBanner').hidden")
         s.page.screenshot(path="/tmp/claude-0/bike-shots/down_phone.png")
+
+
+# ---------------------------------------------------------------- review fixes (v14/bikefix)
+BB = "window.SEPTA.boardbikes."
+
+
+def add_station(s, sid, name, bikes=1, electric=1, classic=0, with_types=True):
+    s.mocks.indego_info["data"]["stations"].append({"station_id": sid, "name": name, "address": name + " Street", "lat": 39.93, "lon": -75.16})
+    x = {"station_id": sid, "is_installed": 1, "is_renting": 1, "is_returning": 1, "num_bikes_available": bikes, "num_docks_available": 5, "last_reported": 0}
+    if with_types:
+        x["num_bikes_available_types"] = {"electric": electric, "classic": classic, "smart": 0}
+    s.mocks.indego_status["data"]["stations"].append(x)
+
+
+def check_types(root):
+    picked = (("t_missing", "Missing Types"), ("t_zero", "Zero Missing"), ("t_over", "Over Total"), ("t_str", "String Numbers"))
+    with bsess(root, picked=picked) as s:
+        add_station(s, "t_missing", "Missing Types", bikes=6, with_types=False)
+        add_station(s, "t_zero", "Zero Missing", bikes=0, with_types=False)
+        add_station(s, "t_over", "Over Total", bikes=4, electric=5, classic=1)  # types add up to more than the total: the larger count stands
+        add_station(s, "t_str", "String Numbers", bikes="5", electric="3", classic="2")
+        # string numbers in the other fields too
+        s.mocks.indego_status["data"]["stations"][-1]["num_bikes_available_types"]["smart"] = "0"
+        fresh(s)
+        open_board(s)
+        r = {x["id"]: x for x in rows(s)}
+        m = r["t_missing"]
+        assert (m["typed"], m["bikes"], m["state"]) == (False, 6, "ok"), m
+        assert (r["t_zero"]["typed"], r["t_zero"]["bikes"], r["t_zero"]["state"]) == (False, 0, "nobike"), r["t_zero"]
+        o = r["t_over"]
+        assert (o["bikes"], o["electric"], o["classic"], o["state"], o["typed"]) == (6, 5, 1, "ok", True), o
+        n = r["t_str"]
+        assert (n["bikes"], n["electric"], n["classic"], n["state"]) == (5, 3, 2, "ok"), n
+        t = tiles_text(s)
+        assert re.search(r"Missing Types 6 BIKES Type not reported \d+ open docks", t[0]) and "E-BIKES" not in t[0] and "No e-bikes" not in t[0], t[0]
+        assert re.search(r"Zero Missing 0 E-BIKES No bikes", t[1]), t[1]
+        assert re.search(r"Over Total 5 E-BIKES 1 classic", t[2]), t[2]
+        assert re.search(r"String Numbers 3 E-BIKES 2 classic", t[3]), t[3]
+        assert tile(s, 0).get_attribute("aria-label").startswith("Indego Missing Types, 6 bikes, type not reported, "), tile(s, 0).get_attribute("aria-label")
+        assert not s.console_errors, s.console_errors
+
+
+def test_type_counts_missing_types_electric_over_total_and_string_numbers(root):
+    check_types(root)
+    must_fail(check_types, root, ("js/routing.js", "typed: typed,", "typed: true,"))
+    must_fail(check_types, root, ("js/routing.js", "total = Math.max(nb, nsum);", "total = nb;"))
+    must_fail(check_types, root, ("js/routing.js", "var n = Number(v);", "var n = typeof v === 'number' ? v : 0;"))
+    must_fail(check_types, root, ("js/routing.js", "electric: Math.min(Math.max(0, num(t.electric)), total),", "electric: Math.max(0, num(t.electric)) + 1,"))
+
+
+def check_settings_fixes(root):
+    with bsess(root, picked=(WOLF,)) as s:
+        go_board(s)
+        s.page.wait_for_selector("#bvList .bv-tile")
+        s.page.click("#bvSet")
+        s.page.wait_for_selector("#bvBikeQ")
+        s.page.wait_for_function(BB + "listReady()", timeout=8000)
+        s.page.evaluate("window.__scrolls = 0; Element.prototype.scrollIntoView = function () { window.__scrolls++; }")
+        q = s.page.locator("#bvBikeQ")
+        q.focus()
+        s.page.evaluate("window.__scrolls = 0")  # (focusing a field is the sheet's own business; count from here)
+        s.page.keyboard.type("tasker")  # six keystrokes, results from the first one on
+        assert s.page.evaluate("window.__scrolls") <= 1, ("the results scroll into view once, not per keystroke", s.page.evaluate("window.__scrolls"))
+        assert s.page.inner_text("#bvBikeMsg") == "3 stations found", s.page.inner_text("#bvBikeMsg")
+        # Enter with three results adds nothing and moves to the first; with one result it adds that one
+        s.page.keyboard.press("Enter")
+        assert js(s, BB + "stations().length") == 1
+        assert s.page.evaluate("document.activeElement.classList.contains('bv-pick')"), "focus is on the first result"
+        # Escape in the box: first the text, then the sheet
+        q.focus()
+        s.page.keyboard.press("Escape")
+        assert s.page.input_value("#bvBikeQ") == "" and s.page.is_visible("#bvSettings"), "the first Escape only clears the box"
+        assert s.page.locator("#bvSettings .bv-pick").count() == 0
+        s.page.keyboard.press("Escape")
+        assert s.page.is_hidden("#bvSettings"), "the second Escape closes the sheet"
+        # a poll does not rebuild the result list: a focused result keeps focus
+        s.page.click("#bvSet")
+        q = s.page.locator("#bvBikeQ")
+        q.fill("wolf")
+        s.page.evaluate("(() => { const b = document.querySelector('#bvSettings .bv-pick:not(:disabled)'); b.__mark = 1; b.focus(); })()")
+        before = status_hits(s)
+        s.tick(MIN + 5000)
+        for _ in range(10):  # on a busy machine the first answer may still be in flight when the clock jumps: let the next check ask
+            if status_hits(s) > before:
+                break
+            s.tick(10000)
+        assert status_hits(s) > before, "a poll happened"
+        s.page.wait_for_timeout(400)  # and its answer has been applied (the poll's change event fired)
+        assert s.page.evaluate("document.activeElement.__mark") == 1, "same node, still focused after the poll"
+        # clicking a result: the tapped button is gone, so focus goes to the search box
+        s.page.locator("#bvSettings .bv-pick:not(:disabled)").first.click()
+        assert js(s, BB + "stations().length") == 2
+        assert s.page.evaluate("document.activeElement.id") == "bvBikeQ", s.page.evaluate("document.activeElement.outerHTML")
+        # the click that fills the board: the box is gone, so focus goes to the new station's Remove button
+        q = s.page.locator("#bvBikeQ")
+        q.fill("tasker")
+        s.page.locator("#bvSettings .bv-pick:not(:disabled)").first.click()
+        assert js(s, BB + "stations().length") == 3
+        q = s.page.locator("#bvBikeQ")
+        q.fill("snyder")
+        s.page.locator("#bvSettings .bv-pick:not(:disabled)").first.click()
+        assert js(s, BB + "stations().length") == 4 and s.page.locator("#bvBikeQ").count() == 0
+        assert s.page.evaluate("document.activeElement.dataset.fk") == "bm3", s.page.evaluate("document.activeElement.outerHTML")
+        assert "Remove bike station" in s.page.evaluate("document.activeElement.getAttribute('aria-label')")
+        assert not s.console_errors, s.console_errors
+    # one result and Enter adds it
+    with bsess(root, picked=()) as s:
+        go_board(s)
+        s.page.click("#bvSet")
+        s.page.wait_for_function(BB + "listReady()", timeout=8000)
+        s.page.fill("#bvBikeQ", "moyamensing & tasker")
+        assert s.page.inner_text("#bvBikeMsg") == "1 station found"
+        s.page.press("#bvBikeQ", "Enter")
+        assert js(s, BB + "stations().map(x => x.id)") == [ID_TASKER]
+
+
+def test_settings_enter_escape_focus_and_polls_leave_results_alone(root):
+    check_settings_fixes(root)
+    must_fail(check_settings_fixes, root, ("js/boardsettings.js", "if (res.querySelectorAll('button').length === 1) first.click();", "first.click();"))
+    must_fail(check_settings_fixes, root, ("js/boardsettings.js", "if (n.sig === sig) return;", ""))
+    must_fail(check_settings_fixes, root, ("js/boardsettings.js", "if (to) to.focus();", ""))
+    must_fail(check_settings_fixes, root, ("js/boardsettings.js", "if (found.length && !n.had &&", "if (found.length &&"))
+    must_fail(check_settings_fixes, root, ("js/boardview.js", "if (!(S.boardsettings.escape && S.boardsettings.escape())) S.boardsettings.close();", "S.boardsettings.close();"))
+    must_fail(check_settings_fixes, root, ("js/boardsettings.js", "found.length + (found.length === 1 ? ' station found' : ' stations found')", "''"))
+
+
+NOBB = """(function () { var v; Object.defineProperty(window, 'SEPTA', { configurable: true, get: function () { return v; },
+  set: function (x) { x.boardbikes = new Proxy({}, { set: function () { return true; } }); v = x; } }); })();"""
+
+
+def check_no_boardbikes(root):
+    """js/boardbikes.js "failed to load": S.boardbikes stays the empty object index.html makes, every write to it is dropped."""
+    with Session(root, viewport=(1280, 800), init_scripts=[HOOK, NOBB, IL.ON]) as s:
+        prep(s)
+        day(s)
+        IL.boot(s, 15)
+        s.page.evaluate("(t) => [...document.querySelectorAll('.ind-wrap')].find(e => e.title === t).click()", "Municipal Services Building Plaza")
+        s.page.wait_for_selector("#indegoCard:not([hidden])")
+        assert s.page.locator("#indegoPin").is_hidden(), "no Pin button without the module"
+        assert re.search(r"\d+ bikes?", s.page.inner_text("#indegoCard")), "the card finished rendering"
+        s.page.evaluate("location.hash = '#board'")
+        s.page.wait_for_selector("#boardView", state="visible")
+        s.page.click("#bvSet")
+        s.page.wait_for_selector("#bvSettings button:has-text('Done')")
+        assert "Bike stations" not in s.page.inner_text("#bvSettings")
+        assert not s.console_errors, s.console_errors
+
+
+def test_board_and_card_survive_a_missing_boardbikes_module(root):
+    check_no_boardbikes(root)
+    must_fail(check_no_boardbikes, root, ("js/indego.js", "return !!S.boardbikes && typeof S.boardbikes.add === 'function' && typeof S.boardbikes.has === 'function';", "return !!S.boardbikes;"))
+    must_fail(check_no_boardbikes, root, ("js/boardsettings.js", "if (S.boardbikes && typeof S.boardbikes.add === 'function') bikeSettings();", "if (S.boardbikes) bikeSettings();"))
+
+
+def check_list_backoff(root):
+    with bsess(root, picked=()) as s:
+        s.mocks.indego_mode = "http500"
+        day(s)
+        go_board(s)
+        s.page.click("#bvSet")
+        s.page.wait_for_function("document.querySelector('#bvBikeMsg') && /couldn't load/.test(document.querySelector('#bvBikeMsg').textContent)", timeout=8000)
+        s.mocks.worker_indego_hits.clear()
+        for _ in range(4):  # each tap re-draws the sheet, which asks for the list again
+            s.page.click("#bvSettings [data-fk=bufi]")
+        s.page.evaluate("for (let i = 0; i < 5; i++) window.SEPTA.boardbikes.ensureList()")
+        s.page.wait_for_timeout(300)
+        assert s.mocks.worker_indego_hits == [], ("no request while the feed is down and backing off", s.mocks.worker_indego_hits)
+        s.mocks.indego_mode = "ok"
+        s.page.click("#bvSettings button:has-text('Try again')")  # the person asked: that one goes through
+        s.page.wait_for_function(BB + "listReady()", timeout=8000)
+
+
+def test_station_list_requests_respect_back_off(root):
+    check_list_backoff(root)
+    must_fail(check_list_backoff, root, ("js/boardbikes.js", "if (force === true || !fails || Date.now() - lastStart >= everyMs() || Date.now() < lastStart) load();", "load();"))
+
+
+def check_add_from_card(root):
+    with bsess(root, picked=(WOLF,)) as s:
+        msb = [x for x in s.mocks.indego_status["data"]["stations"] if x["station_id"] == ID_MSB][0]
+        s.mocks.indego_status["data"]["stations"].remove(msb)  # the board's own status answer lacks it
+        open_board(s)
+        assert js(s, BB + "listReady()") is True
+        s.mocks.indego_status["data"]["stations"].append(msb)
+        s.page.evaluate("window.SEPTA.routing.loadIndego(true)")  # the map layer's fetch has it
+        s.page.wait_for_timeout(300)
+        r = js(s, BB + "add({id: '" + ID_MSB + "', name: 'Municipal Services Building Plaza'})")
+        assert r["ok"] is True, r
+        assert js(s, BB + "add({id: 'not_a_station', name: 'Nowhere'})") == {"ok": False, "reason": "unknown"}
+
+
+def test_add_from_the_map_card_uses_the_shared_list(root):
+    check_add_from_card(root)
+    must_fail(check_add_from_card, root, ("js/boardbikes.js", "known = byId[id] || pick(shared, id);", "known = byId[id];"))
+
+
+def check_reused_answer_age(root):
+    with bsess(root, picked=(WOLF,)) as s:
+        open_board(s)
+        for x in s.mocks.indego_status["data"]["stations"]:
+            x["last_reported"] = 0  # no report times: the fetch time stands in
+        s.mocks.indego_status["last_updated"] = 0
+        s.tick(10000)
+        f1 = s.page.evaluate("window.SEPTA.routing.loadIndego(true).then(l => l.fetchedAt)")  # e.g. the map layer fetches
+        s.tick(52000)  # the board's poll reuses that answer (younger than 55 s)
+        s.page.wait_for_timeout(300)
+        r = rows(s)[0]
+        assert r["lastReported"] == f1, ("the reused answer keeps the time it was fetched", r["lastReported"], f1)
+        assert s.page.evaluate("Date.now()") - r["lastReported"] >= 40000
+        # the planner and the map layer still get a fresh answer on loadIndego(true), and the same object shape as before
+        a = s.page.evaluate("window.SEPTA.routing.loadIndego(true).then(l => [l.length > 0, l.asOf, l.fetchedAt > 0, Object.keys(l[0]).sort().join()])")
+        assert a[0] and a[2] and "bikes" in a[3] and "ebikes" in a[3] and "classic" in a[3] and "smart" in a[3], a
+
+
+def test_reused_answer_keeps_its_fetch_time(root):
+    check_reused_answer_age(root)
+    must_fail(check_reused_answer_age, root, ("js/boardbikes.js", "fetchedAt = list.fetchedAt > 0 && list.fetchedAt <= now ? list.fetchedAt : now;", "fetchedAt = now;"))
+    must_fail(check_reused_answer_age, root, ("js/routing.js", "out.fetchedAt = statusP.t;", "out.fetchedAt = Date.now();"))
+
+
+def check_clock_skew(root):
+    with bsess(root, picked=(WOLF,)) as s:
+        open_board(s)
+        # a feed time 12 minutes ahead of the device clock is a wrong clock: the fetch time stands in
+        fresh(s, -12 * 60, page_clock=True)
+        s.tick(MIN + 5000)
+        s.page.wait_for_timeout(300)
+        r = rows(s)[0]
+        assert r["lastReported"] <= s.page.evaluate("Date.now()"), ("a report 12 minutes ahead is not believed", r)
+        assert js(s, BB + "source(Date.now())") == "live"
+        # 9 minutes ahead is an ordinary clock difference: the report time is used
+        fresh(s, -9 * 60, page_clock=True)
+        s.tick(MIN + 5000)
+        s.page.wait_for_timeout(300)
+        r = rows(s)[0]
+        assert r["lastReported"] > s.page.evaluate("Date.now()") + 5 * 60000, r
+        # the device clock jumps back an hour: the next check asks at once instead of waiting an hour
+        s.mocks.worker_indego_hits.clear()
+        s.page.clock.set_system_time((s.page.evaluate("Date.now()") - 3600 * 1000) / 1000)
+        s.tick(3000)
+        s.page.wait_for_timeout(300)
+        assert status_hits(s) >= 1, "asked again after the clock went back"
+
+
+def test_clock_skew_both_ways(root):
+    check_clock_skew(root)
+    must_fail(check_clock_skew, root, ("js/boardbikes.js", "SKEW_MS = 10 * 60000,", "SKEW_MS = 20 * 60000,"))
+    must_fail(check_clock_skew, root, ("js/boardbikes.js", "if (now < lastStart) lastStart = 0;", ""))
+
+
+def check_info_refresh(root):
+    with bsess(root, picked=(WOLF,)) as s:
+        open_board(s)
+        assert s.mocks.worker_indego_hits.count("information") == 1
+        add_station(s, "late_1", "Brand New & Station")
+        fresh(s, 10, page_clock=True)
+        jump(s, 300)  # 5 hours: not yet
+        s.page.wait_for_timeout(500)
+        assert s.mocks.worker_indego_hits.count("information") == 1, "the list is not asked for again before 6 hours"
+        assert js(s, BB + "search(a).length", "brand new") == 0
+        fresh(s, 10, page_clock=True)
+        jump(s, 70)  # past 6 hours: one more
+        s.tick(MIN + 5000)
+        s.page.wait_for_timeout(500)
+        assert s.mocks.worker_indego_hits.count("information") == 2, s.mocks.worker_indego_hits
+        assert js(s, BB + "search(a).map(x => x.name)", "brand new") == ["Brand New & Station"], "a new station is found"
+
+
+def test_station_list_refreshes_every_six_hours(root):
+    check_info_refresh(root)
+    must_fail(check_info_refresh, root, ("js/boardbikes.js", "INFO_MS = 6 * 3600000", "INFO_MS = 600 * 3600000"))

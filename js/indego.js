@@ -406,11 +406,15 @@
     pinState();
   }
   /* Pin to board: the wall board's Bikes section (js/boardbikes.js), the same pattern as the stop card's button. */
+  /* S.boardbikes is always an object (index.html makes the namespace), so it says nothing about js/boardbikes.js having loaded: ask for the function. */
+  function bikesOk() {
+    return !!S.boardbikes && typeof S.boardbikes.add === 'function' && typeof S.boardbikes.has === 'function';
+  }
   function pinState() {
     var b = $('#indegoPin'),
-      on = !!selected && !!S.boardbikes && S.boardbikes.has(selected);
+      on = !!selected && bikesOk() && S.boardbikes.has(selected);
     if (!b) return;
-    b.hidden = !S.boardbikes;
+    b.hidden = !bikesOk();
     b.classList.toggle('on', on);
     b.textContent = on ? 'On board' : 'Pin to board';
     if (on) b.setAttribute('aria-disabled', 'true');
@@ -418,7 +422,7 @@
   }
   function pinToBoard() {
     var s = byId[selected];
-    if (!s || !S.boardbikes) return;
+    if (!s || !bikesOk()) return;
     var r = S.boardbikes.has(s.id)
       ? { ok: false, reason: 'duplicate' }
       : S.boardbikes.add({ id: s.id, name: s.name });
@@ -517,7 +521,7 @@
       if (e.target === chipInput) sync();
     });
   document.addEventListener('visibilitychange', syncPolling);
-  if (S.boardbikes && S.boardbikes.onChange) S.boardbikes.onChange(pinState);
+  if (bikesOk() && typeof S.boardbikes.onChange === 'function') S.boardbikes.onChange(pinState);
   /* Escape closes the station card and puts focus back on its marker. The vehicle and stop cards never share the screen with it. */
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || e.defaultPrevented || !selected) return;

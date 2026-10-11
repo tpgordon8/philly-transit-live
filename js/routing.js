@@ -52,6 +52,8 @@
   };
   var tpNet = null,
     tpInfo = null,
+    tpInfoAt = 0 /* when the station information was asked for */,
+    tpLast = null /* the latest good merged answer */,
     tpStatus = null,
     tpRoute = {},
     tpQueue = [],
@@ -222,6 +224,10 @@
     tpNet = p;
     return p;
   }
+  function num(v) {
+    var n = Number(v);
+    return isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  }
   /* Stations merged from information and status. A station counts as usable only through the GBFS flags:
    renting = installed and renting, returning = installed and returning. Resolves an array; array.asOf is the status time in ms. */
   function mergeIndego(info, status) {
@@ -240,8 +246,12 @@
       if (!i || typeof i !== 'object' || !idOk(i.station_id)) return;
       var s = st[i.station_id];
       if (!s || !isNum(i.lat) || !isNum(i.lon)) return;
-      var t = s.num_bikes_available_types;
+      var t = s.num_bikes_available_types,
+        typed = !!t && typeof t === 'object' && ('electric' in t || 'classic' in t || 'smart' in t);
       if (!t || typeof t !== 'object') t = {};
+      var nb = Math.max(0, num(s.num_bikes_available)),
+        nsum = num(t.electric) + num(t.classic) + num(t.smart),
+        total = Math.max(nb, nsum);
       var inst = s.is_installed === 1 || s.is_installed === true;
       out.push({
         id: i.station_id,
@@ -253,6 +263,11 @@
         ebikes: t.electric | 0,
         classic: t.classic | 0,
         smart: t.smart | 0,
+        /* the board's reading (js/boardbikes.js): total bikes is the larger of the station total and the sum of the types, e-bikes
+           never exceed it, and typed says whether the feed split the bikes by type at all */
+        total: total,
+        electric: Math.min(Math.max(0, num(t.electric)), total),
+        typed: typed,
         docks: s.num_docks_available | 0,
         installed: inst,
         renting: inst && (s.is_renting === 1 || s.is_renting === true),
@@ -269,19 +284,31 @@
   }
   /* fresh: true asks again at once; a number is the oldest status answer (ms) that may be reused (the board and the map layer pass a
      little under their 60 s poll, so two pollers share one request); anything else reuses an answer under STATUS_TTL_MS. */
-  function loadIndego(fresh) {
+  function loadIndego(fresh, infoMaxAge) {
     var now = Date.now(),
       maxAge = typeof fresh === 'number' && fresh > 0 ? fresh : TP.STATUS_TTL_MS;
-    if (!tpInfo) {
-      var pi = tpGetVia(TP.INDEGO_BASE + 'information', TP.INDEGO_DIRECT + 'station_information.json').catch(
-        function () {
-          if (tpInfo === pi) tpInfo = null;
-          throw 0;
-        }
-      );
+    /* infoMaxAge (ms, the board passes 6 hours): station information older than that is asked for again; if that fails the old
+       information stays and the next try is 15 minutes on, so a long-running wall board learns new and renamed stations. */
+    if (!tpInfo || (infoMaxAge > 0 && (now - tpInfoAt >= infoMaxAge || now < tpInfoAt))) {
+      var prev = tpInfo,
+        pi = tpGetVia(TP.INDEGO_BASE + 'information', TP.INDEGO_DIRECT + 'station_information.json').then(
+          function (j) {
+            if (!hasStations(j) && prev) return prev;
+            return j;
+          },
+          function () {
+            if (prev) {
+              if (tpInfo === pi) tpInfoAt = Date.now() - infoMaxAge + Math.min(infoMaxAge, 900000);
+              return prev;
+            }
+            if (tpInfo === pi) tpInfo = null;
+            throw 0;
+          }
+        );
       tpInfo = pi;
+      tpInfoAt = now;
     }
-    if (!tpStatus || fresh === true || now - tpStatus.t >= maxAge) {
+    if (!tpStatus || fresh === true || now - tpStatus.t >= maxAge || now < tpStatus.t) {
       var ps = { t: now };
       ps.p = tpGetVia(TP.INDEGO_BASE + 'status', TP.INDEGO_DIRECT + 'station_status.json', true).catch(
         function () {
@@ -306,6 +333,9 @@
           }
           throw 0;
         }
+        /* when the status was really fetched: a reused answer is older than the call that returns it */
+        out.fetchedAt = statusP.t;
+        tpLast = out;
         return out;
       })
       .catch(function () {
@@ -470,6 +500,9 @@
   S.routing.cellOf = cellOf;
   S.routing.inRegion = inRegion;
   S.routing.loadIndego = loadIndego;
+  S.routing.lastIndego = function () {
+    return tpLast;
+  };
   S.routing.loadNetwork = loadNetwork;
   S.routing.networkRequested = function () {
     return !!tpNet;

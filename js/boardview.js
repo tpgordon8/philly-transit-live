@@ -521,8 +521,9 @@
     function (e) {
       if (e.key !== 'Escape' || !open || document.querySelector('#toasts .toast')) return;
       e.stopImmediatePropagation();
-      if (!settings.hidden) S.boardsettings.close();
-      else close();
+      if (!settings.hidden) {
+        if (!(S.boardsettings.escape && S.boardsettings.escape())) S.boardsettings.close();
+      } else close();
     },
     true
   );

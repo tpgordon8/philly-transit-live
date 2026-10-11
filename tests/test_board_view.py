@@ -664,12 +664,46 @@ def contrast(a, b):
     return (la + 0.05) / (lb + 0.05)
 
 
+class Pix:
+    """A decoded screenshot: width, height, getpixel((x, y)) and getdata() as RGB tuples (the few calls these tests need)."""
+
+    def __init__(self, width, height, rgba):
+        self.width, self.height, self._d = width, height, rgba
+
+    def getpixel(self, xy):
+        i = (xy[1] * self.width + xy[0]) * 4
+        return (self._d[i], self._d[i + 1], self._d[i + 2])
+
+    def getdata(self):
+        d = self._d
+        return [(d[i], d[i + 1], d[i + 2]) for i in range(0, len(d), 4)]
+
+
+DECODE = """async (b64) => {
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const bmp = await createImageBitmap(new Blob([bytes], {type: 'image/png'}));
+  const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+  const x = c.getContext('2d'); x.drawImage(bmp, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height).data;
+  let out = '';
+  for (let i = 0; i < d.length; i += 30000) out += String.fromCharCode.apply(null, d.subarray(i, i + 30000));
+  return {w: c.width, h: c.height, data: btoa(out)};
+}"""
+
+
 def pixels(s, clip=None):
-    """The rendered pixels (what the screen really shows, opacity and all) as a PIL image."""
-    import io
-    from PIL import Image
+    """The rendered pixels (what the screen really shows, opacity and all). The screenshot is decoded by a blank scratch page of the same
+    browser (canvas getImageData), so no third-party image module is needed."""
+    import base64
     kw = {"clip": clip} if clip else {}
-    return Image.open(io.BytesIO(s.page.screenshot(**kw))).convert("RGB")
+    png = base64.b64encode(s.page.screenshot(**kw)).decode()
+    scratch = s.page.context.new_page()
+    try:
+        r = scratch.evaluate(DECODE, png)
+    finally:
+        scratch.close()
+    return Pix(r["w"], r["h"], base64.b64decode(r["data"]))
 
 
 def _dim_pixels(root):
@@ -874,16 +908,24 @@ def geometry(s, label, big_min=0, stacked=None):
     return g
 
 
-def _geometry(root):
+# The harness stubs web fonts, so the board falls back to whatever the machine has; a CI runner's fallback is wider than this one's. This
+# forces a wide stack so the layout is proven not to depend on one font's metrics.
+WIDE = """(function () { var add = function () { var st = document.createElement('style');
+  st.textContent = '*{font-family:"DejaVu Sans",Verdana,sans-serif !important}'; document.head.appendChild(st); };
+  if (document.head) add(); else document.addEventListener('DOMContentLoaded', add); })();"""
+LIST_SLACK = 30  # px the list may overflow at 1133x744 (it scrolls by design; the rows' height depends on the fallback font)
+
+
+def _geometry(root, extra=()):
     for vp, kw, stacked, big in (
         (LANDSCAPE, {}, False, 40), (PORTRAIT, {}, True, 40),
         (PHONE, dict(mobile=True, touch=True), True, 40), (SMALL, dict(mobile=True, touch=True), True, 40),
     ):
-        with sess(root, viewport=vp, **kw) as s:
+        with sess(root, viewport=vp, extra=extra, **kw) as s:
             board_open(s)
             g = geometry(s, vp, big_min=big, stacked=stacked)
             if vp == LANDSCAPE:
-                assert g["listScroll"] <= g["listH"] + 1, ("five rows fit without scrolling", g)
+                assert g["listScroll"] <= g["listH"] + LIST_SLACK, ("five rows fit (nearly) without scrolling", g)
                 s.shot("board_landscape")
             s.page.click("#bvSet")
             geometry(s, (vp, "settings"))
@@ -891,7 +933,7 @@ def _geometry(root):
             load(s, CONTRACT)  # pending, far, removed-place and due rows
             g2 = geometry(s, (vp, "contract rows"), big_min=big, stacked=stacked)
             if vp == LANDSCAPE:
-                assert g2["listScroll"] <= g2["listH"] + 1, ("five rows fit without scrolling", g2)
+                assert g2["listScroll"] <= g2["listH"] + LIST_SLACK, ("five rows fit (nearly) without scrolling", g2)
                 s.shot("board_landscape_contract")
             else:
                 s.shot("board_" + str(vp[0]))
@@ -909,6 +951,12 @@ def _geometry(root):
 
 def test_geometry_at_four_viewports(root):
     _geometry(root)
+
+
+def test_geometry_holds_with_a_wider_fallback_font(root):
+    _geometry(root, extra=[WIDE])
+    # the phone header ("Bus in (estimate)") only stays on one line with the smaller phone size
+    must_fail(lambda r: _geometry(r, extra=[WIDE]), root, ("css/board.css", "  .bv-k{font-size:clamp(12px,3.5vw,16px)}\n", ""))
 
 
 def _big(root):

@@ -140,7 +140,8 @@
       )
     );
     if (b) pinSettings(b);
-    if (S.boardbikes) bikeSettings();
+    /* S.boardbikes is always an object; only the function says js/boardbikes.js loaded */
+    if (S.boardbikes && typeof S.boardbikes.add === 'function') bikeSettings();
     var done = el('button', 'bv-btn', 'Done');
     done.type = 'button';
     done.style.marginTop = '18px';
@@ -222,17 +223,43 @@
     var bb = S.boardbikes,
       n = bikeNodes;
     if (!n || !n.box.isConnected) return;
-    var found = bb.listReady() ? bb.search(bikeQuery) : [],
-      msg = '';
-    if (!bb.listReady())
-      msg = bb.listFailed()
+    var ready = bb.listReady(),
+      failed = bb.listFailed(),
+      found = ready ? bb.search(bikeQuery) : [],
+      msg;
+    /* A poll tells us the list again every minute: draw only when something shown would differ, so a focused result keeps focus. */
+    var sig = [
+      ready,
+      failed,
+      bikeQuery,
+      bb
+        .stations()
+        .map(function (s) {
+          return s.id;
+        })
+        .join(','),
+      found
+        .map(function (r) {
+          return r.id + r.name + r.picked;
+        })
+        .join(',')
+    ].join('|');
+    if (n.sig === sig) return;
+    n.sig = sig;
+    if (!ready)
+      msg = failed
         ? "The station list couldn't load. Check the connection and try again."
         : 'Loading stations...';
     else if (bikeQuery.trim() && !found.length) msg = 'No station matches that.';
     else if (!bikeQuery.trim()) msg = 'Type a street or station name, like Wolf or 2nd & Snyder.';
+    else msg = found.length + (found.length === 1 ? ' station found' : ' stations found');
     if (n.msg.textContent !== msg) n.msg.textContent = msg;
-    n.retry.hidden = !(bb.listFailed() && !bb.listReady());
+    n.retry.hidden = !(failed && !ready);
     n.res.replaceChildren();
+    /* the sheet scrolls: lift the box to the top when the results first appear, so they (and the keyboard) leave it in view */
+    if (found.length && !n.had && document.activeElement === n.q && n.q.scrollIntoView)
+      n.q.scrollIntoView({ block: 'start' });
+    n.had = found.length > 0;
     found.forEach(function (r, i) {
       var li = el('li'),
         b = el('button', 'bv-pick');
@@ -255,10 +282,27 @@
                 : 'Could not add that station'
           );
         renderSettings();
+        if (res.ok) {
+          /* the tapped result is gone: focus the search box, else the new station's Remove button, else Done */
+          var rms = settings.querySelectorAll('[data-fk^="bm"]'),
+            to =
+              settings.querySelector('[data-fk="bq"]') ||
+              rms[rms.length - 1] ||
+              settings.querySelector('[data-fk="done"]');
+          if (to) to.focus();
+        }
       });
       li.appendChild(b);
       n.res.appendChild(li);
     });
+  }
+  /* Escape in the search box empties it first; the board's Escape handler closes the sheet only when this answers false. */
+  function escapeSearch() {
+    var n = bikeNodes;
+    if (!n || !n.box.isConnected || document.activeElement !== n.q || !bikeQuery) return false;
+    bikeQuery = n.q.value = '';
+    bikeResults();
+    return true;
   }
   function bikeSettings() {
     var bb = S.boardbikes,
@@ -313,7 +357,7 @@
     retry.type = 'button';
     retry.hidden = true;
     retry.addEventListener('click', function () {
-      bb.ensureList();
+      bb.ensureList(true);
       bikeResults();
     });
     q.setAttribute('aria-describedby', 'bvBikeMsg');
@@ -321,8 +365,6 @@
     q.addEventListener('input', function () {
       bikeQuery = q.value;
       bikeResults();
-      /* the sheet scrolls: lift the box to the top so the results below it (and the keyboard) leave it in view */
-      if (res.firstChild && q.scrollIntoView) q.scrollIntoView({ block: 'start' });
     });
     q.addEventListener('keydown', function (e) {
       var first = res.querySelector('button:not(:disabled)');
@@ -331,7 +373,9 @@
         first.focus();
       } else if (e.key === 'Enter' && first) {
         e.preventDefault();
-        first.click();
+        /* one result shown: add it; several: move to the first so a wrong guess is never added */
+        if (res.querySelectorAll('button').length === 1) first.click();
+        else first.focus();
       }
     });
     res.addEventListener('keydown', function (e) {
@@ -347,10 +391,10 @@
       box.appendChild(n);
     });
     settings.appendChild(box);
-    bikeNodes = { box: box, msg: msg, retry: retry, res: res };
+    bikeNodes = { box: box, q: q, msg: msg, retry: retry, res: res, sig: '', had: false };
     bikeResults();
   }
-  if (S.boardbikes && S.boardbikes.onChange)
+  if (S.boardbikes && typeof S.boardbikes.onChange === 'function')
     S.boardbikes.onChange(function () {
       if (!settings.hidden) bikeResults();
     });
@@ -382,6 +426,7 @@
     else closeSettings();
   });
 
+  S.boardsettings.escape = escapeSearch;
   S.boardsettings.render = renderSettings;
   S.boardsettings.open = openSettings;
   S.boardsettings.close = closeSettings;

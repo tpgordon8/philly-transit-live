@@ -123,7 +123,7 @@ def check_panel_without_sheet(root):
 
 def test_panel_renders_before_the_sheet_module_has_loaded(root):
     check_panel_without_sheet(root)
-    must_fail(check_panel_without_sheet, root, ("js/panel.js", "if (S.sheet.syncPill) S.sheet.syncPill();", "S.sheet.syncPill();"))
+    must_fail(check_panel_without_sheet, root, ("js/panel.js", "if (S.sheet.syncPill)\n      S.sheet.syncPill();", "S.sheet.syncPill();"))
 
 
 FAST.add("test_the_board_path_opens_the_board")
