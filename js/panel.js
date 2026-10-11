@@ -69,7 +69,8 @@
   function renderMyRoutes() {
     var box = $('#myRoutes'),
       st = routesStore.stars;
-    S.sheet.syncPill(); /* the "My routes only" pill in the header follows the filter */
+    if (S.sheet.syncPill)
+      S.sheet.syncPill(); /* the "My routes only" pill follows the filter; js/sheet.js loads later and syncs itself at the end */
     box.replaceChildren();
     if (!st.length) {
       box.appendChild(el('p', 'hint', 'Tap a vehicle, then star its route to build your own view.'));

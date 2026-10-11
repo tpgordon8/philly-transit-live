@@ -105,3 +105,39 @@ def test_far_and_pending_arrivals_are_shown_on_the_board(root):
     check_far_and_pending_on_screen(root)
     must_fail(check_far_and_pending_on_screen, root, ("js/board.js", "pending++;", ""))
     must_fail(check_far_and_pending_on_screen, root, ("js/board.js", "if (left > FAR_MIN) a.far = true;", ""))
+
+
+FAST.add("test_panel_renders_before_the_sheet_module_has_loaded")
+
+
+def check_panel_without_sheet(root):
+    # a page opened straight on #board can refresh before js/sheet.js has run: the panel must not throw
+    with Session(root) as s:
+        s.open()
+        s.wait_live()
+        s.page.evaluate("window.__sp = window.SEPTA.sheet.syncPill; delete window.SEPTA.sheet.syncPill")
+        err = s.page.evaluate("(() => { try { window.SEPTA.panel.renderMyRoutes(); return ''; } catch (e) { return String(e); } })()")
+        s.page.evaluate("window.SEPTA.sheet.syncPill = window.__sp")
+        assert err == "", err
+
+
+def test_panel_renders_before_the_sheet_module_has_loaded(root):
+    check_panel_without_sheet(root)
+    must_fail(check_panel_without_sheet, root, ("js/panel.js", "if (S.sheet.syncPill) S.sheet.syncPill();", "S.sheet.syncPill();"))
+
+
+FAST.add("test_the_board_path_opens_the_board")
+
+
+def check_board_path(root):
+    with Session(root, viewport=(1133, 744)) as s:
+        s.open(path="board/")
+        s.page.wait_for_url("**/index.html#board" if False else "**/#board", timeout=10000)
+        s.page.wait_for_selector("#boardView", state="visible", timeout=10000)
+        assert s.page.url.endswith("/#board"), s.page.url
+
+
+def test_the_board_path_opens_the_board(root):
+    check_board_path(root)
+    must_fail(check_board_path, root, ("board/index.html", "location.replace('../#board');", ""),
+              ("board/index.html", '<meta http-equiv="refresh" content="0; url=../#board">', ""))

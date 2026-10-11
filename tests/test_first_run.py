@@ -33,7 +33,7 @@ CLS = """(() => { window.__cls = 0;
 # Which elements moved, for layouts where the chips (visible beside the map, hidden below the fold in the sheet) grow when their counts arrive.
 SHIFTS = """(() => { window.__shifts = [];
  new PerformanceObserver(l => { for (const e of l.getEntries()) for (const x of e.sources) window.__shifts.push((x.node && (x.node.id || x.node.className || x.node.tagName)) + ''); }).observe({type: 'layout-shift', buffered: true}); })();"""
-SITE = ("index.html", "js", "css", "data", "icons", "manifest.webmanifest")
+SITE = ("index.html", "js", "css", "data", "icons", "board", "manifest.webmanifest")
 
 
 def seed(key, value):
