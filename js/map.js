@@ -367,7 +367,7 @@
     if (v) $('#detailLive').textContent = vehLabel(v, true) + '. Vehicle details opened.';
     if (opts && opts.focus) {
       var h = $('#detailHead');
-      if (h) h.focus();
+      if (h) h.focus({ preventScroll: true });
     }
     if (CARD_NARROW.matches) panAboveCard(k);
   }
@@ -563,7 +563,7 @@
     star.addEventListener('click', function () {
       toggleStar(sk);
       var b = $('#starBtn');
-      if (b) b.focus();
+      if (b) b.focus({ preventScroll: true });
     });
     acts.appendChild(star);
     box.appendChild(acts);

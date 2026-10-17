@@ -526,7 +526,7 @@ def test_h_no_storage_and_names_render_as_text(root):
         card_for(s, "Bus X47").click()
         assert s.page.evaluate("document.querySelectorAll('.tp-mk img, .tp-mk *[onerror]').length") == 0
         assert s.page.evaluate("JSON.stringify(Object.entries(localStorage))") == keys, "no storage key gains trip data"
-        assert s.page.evaluate("JSON.stringify(Object.entries(sessionStorage))") == "[]"
+        assert s.page.evaluate("JSON.stringify(Object.entries(sessionStorage))") in ("[]", '[["septa.install.visit","1"]]'), "only the install visit counter lives in sessionStorage"
         s.page.click("#tripClear")
         assert s.page.evaluate("JSON.stringify(Object.entries(localStorage))") == keys
         assert "Origin St" in s.page.input_value("#tripFrom"), "the text stays in the form only"

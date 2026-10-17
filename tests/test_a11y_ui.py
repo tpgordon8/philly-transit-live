@@ -48,6 +48,7 @@ def overlap(a, b):
 
 def click_marker(s, i=0):
     s.page.evaluate(f"document.querySelectorAll('.veh-wrap')[{i}].click()")
+    s.page.wait_for_timeout(260)  # the card slides up (200 ms); a click during the slide makes the browser scroll it into view
 
 
 def sel_marker_rect(s):

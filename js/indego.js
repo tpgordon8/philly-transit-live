@@ -503,7 +503,7 @@
     if (m) updateMarker(m, s);
     fillCard();
     live.textContent = labelOf(s) + '. Station details opened.';
-    if (opts && opts.focus) $('#indegoHead').focus();
+    if (opts && opts.focus) $('#indegoHead').focus({ preventScroll: true });
     if (CARD_NARROW.matches) panAboveCard(id);
   }
   function closeCard(opts) {

@@ -388,6 +388,7 @@ def test_install_card_logic_on_chromium_phone(root):
             txt = s.page.inner_text("#installCard")
             assert "Install Septer" in txt
             s.page.wait_for_timeout(400)  # the entrance transition
+            s.page.evaluate("document.documentElement.style.setProperty('--tabbar-h', '0px')")  # the phone tab bar is tested in test_tabs
             b = s.page.evaluate("(() => { const r = document.getElementById('installCard').getBoundingClientRect(); return [innerHeight - r.bottom, r.left, innerWidth - r.right, getComputedStyle(document.getElementById('installCard')).position]; })()")
             assert b[3] == "fixed" and abs(b[0] - 12) < 1.5 and b[1] >= 15 and b[2] >= 15, b
             s.page.evaluate("document.documentElement.style.setProperty('--tabbar-h', '64px')")
@@ -470,6 +471,7 @@ def test_ios_safari_hint_once(root):
             assert "Add Septer to your Home Screen" in t and "Share, then Add to Home Screen" in t, t
             assert s.page.query_selector("#iosHintCard svg") is not None
             assert s.page.get_attribute("#iosHintCard svg", "aria-hidden") == "true"
+            s.page.evaluate("document.documentElement.style.setProperty('--tabbar-h', '0px')")  # the phone tab bar is tested in test_tabs
             pos = s.page.evaluate("(() => { const r = document.getElementById('iosHintCard').getBoundingClientRect(); return [getComputedStyle(document.getElementById('iosHintCard')).position, innerHeight - r.bottom]; })()")
             assert pos[0] == "fixed" and abs(pos[1] - 12) < 1.5, pos
             s.page.click("#iosHintCard .ic-x")
