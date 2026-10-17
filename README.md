@@ -41,6 +41,10 @@ pinned in `package-lock.json`). Needs Node 20.19 or newer.
 CI runs `npx prettier --check` and `npx eslint .` as its own job on every pull request and on `main`. The style is
 ES5 on purpose (`var`, classic scripts); Prettier only changes layout, so format before you commit.
 
+## Installable app
+
+Septer is a PWA: `sw.js` (repo root) keeps the app shell so it opens instantly and offline, and `js/install.js` offers Install on Android and Add to Home Screen on iPhone after a little use. Live data is never cached. Details and rules: ARCHITECTURE.md section 17. After any change to `js/`, `css/`, `data/`, `icons/`, the manifest or `index.html`, run `python3 tests/stamp_version.py` (it also stamps the cache version in `sw.js`). `tests/test_pwa.py` tests all of it.
+
 ## Phones and small screens
 
 Up to 760 px wide the map takes the screen and the controls are a bottom sheet under it: the closed sheet shows the Septer name, the

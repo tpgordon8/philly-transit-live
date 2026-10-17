@@ -64,7 +64,8 @@ def test_manifest_and_icons(root):
         assert (root / link).is_file(), link
     png = (root / "icons/apple-touch-icon.png").read_bytes()
     assert png[:8] == b"\x89PNG\r\n\x1a\n" and int.from_bytes(png[16:20], "big") == 180 == int.from_bytes(png[20:24], "big")
-    assert not (root / "sw.js").exists() and "serviceWorker" not in "".join(p.read_text() for p in (root / "js").glob("*.js")), "no service worker"
+    users = sorted(p.name for p in (root / "js").glob("*.js") if "serviceWorker" in p.read_text())
+    assert (root / "sw.js").exists() and users == ["install.js"], users  # Package B: one worker, registered from one module
 
 
 def test_old_name_is_gone_from_visible_sources(root):

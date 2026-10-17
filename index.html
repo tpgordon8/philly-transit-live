@@ -11,6 +11,9 @@
 <meta name="application-name" content="Septer">
 <meta name="apple-mobile-web-app-title" content="Septer">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Septer">
 <meta property="og:title" content="Septer: live Philadelphia transit">
@@ -21,23 +24,34 @@
 <link rel="preconnect" href="https://septa-proxy.tpgordon8.workers.dev" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin>
+<style id="splash">
+/* Launch splash: drawn on <html> before any script runs, so the first paint already looks like the app; js/install.js adds .app-ready once the app has started (a timer below does it if scripts never finish). Fixed overlay, so nothing shifts when it goes. */
+html:not(.app-ready)::before{content:"Septer";position:fixed;z-index:2147483000;inset:0;display:flex;align-items:center;justify-content:center;padding-bottom:6vh;background:#eef1f4;color:#1f5fae;font:700 52px/1 "Barlow Condensed","Arial Narrow",system-ui,sans-serif;letter-spacing:.5px}
+html:not(.app-ready)::after{content:"";position:fixed;z-index:2147483001;left:50%;top:calc(50% + 34px);width:96px;height:4px;margin-left:-48px;border-radius:2px;background:linear-gradient(90deg,transparent 0,#1f5fae 50%,transparent 100%);background-size:200% 100%;animation:splashSweep 1.2s ease-in-out infinite}
+@keyframes splashSweep{0%{background-position:100% 0}100%{background-position:-100% 0}}
+@media (prefers-color-scheme:dark){html:not(.app-ready)::before{background:#0a1119;color:#e7eef6}html:not(.app-ready)::after{background-image:linear-gradient(90deg,transparent 0,#5da4f3 50%,transparent 100%)}}
+@media (prefers-reduced-motion:reduce){html:not(.app-ready)::after{animation:none;background:#1f5fae;opacity:.5}}
+</style>
+<noscript><style>html::before,html::after{display:none!important}</style></noscript>
+<script>setTimeout(function(){document.documentElement.classList.add("app-ready")},8000);</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="css/leaflet.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/base.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/layout.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/map.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/panel.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/trip.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/suggest.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/stops.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/alerts.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/nearby.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/indego.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/board.css?v=bfe2d40b13">
+<link rel="stylesheet" href="css/leaflet.css?v=e19197daee">
+<link rel="stylesheet" href="css/base.css?v=e19197daee">
+<link rel="stylesheet" href="css/layout.css?v=e19197daee">
+<link rel="stylesheet" href="css/map.css?v=e19197daee">
+<link rel="stylesheet" href="css/panel.css?v=e19197daee">
+<link rel="stylesheet" href="css/trip.css?v=e19197daee">
+<link rel="stylesheet" href="css/suggest.css?v=e19197daee">
+<link rel="stylesheet" href="css/stops.css?v=e19197daee">
+<link rel="stylesheet" href="css/alerts.css?v=e19197daee">
+<link rel="stylesheet" href="css/nearby.css?v=e19197daee">
+<link rel="stylesheet" href="css/indego.css?v=e19197daee">
+<link rel="stylesheet" href="css/board.css?v=e19197daee">
+<link rel="stylesheet" href="css/install.css?v=e19197daee">
 </head>
 <body>
 <div id="app" data-sheet="peek">
@@ -199,7 +213,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script>
 /* Module namespace and load-failure banner (ARCHITECTURE.md section 14). Every js/*.js file adds only window.SEPTA.<name>. */
-window.SEPTA={util:{},feed:{},map:{},panel:{},stops:{},alerts:{},board:{},boardview:{},boardsettings:{},boardadd:{},boardbikes:{},boardbikesview:{},routing:{},candidates:{},planner:{},trip:{},nearby:{},landmarks:{},suggest:{},sheet:{},failed:[]};
+window.SEPTA={util:{},feed:{},map:{},panel:{},stops:{},alerts:{},board:{},boardview:{},boardsettings:{},boardadd:{},boardbikes:{},boardbikesview:{},routing:{},candidates:{},planner:{},trip:{},nearby:{},landmarks:{},suggest:{},sheet:{},install:{},failed:[]};
 window.SEPTA.loadFailed=function(file){
   var S=window.SEPTA,box=document.getElementById('loadError');
   if(S.failed.indexOf(file)<0)S.failed.push(file);
@@ -217,28 +231,29 @@ window.addEventListener('error',function(e){
   if(t&&t.tagName==='SCRIPT'&&/\/js\/[^\/]+\.js/.test(t.src||''))window.SEPTA.loadFailed(t.src.split('/').pop().split('?')[0]);
 },true);
 </script>
-<script src="js/util.js?v=bfe2d40b13"></script>
-<script src="js/feed.js?v=bfe2d40b13"></script>
-<script src="js/map.js?v=bfe2d40b13"></script>
-<script src="js/landmarks.js?v=bfe2d40b13"></script>
-<script src="js/suggest.js?v=bfe2d40b13"></script>
-<script src="js/panel.js?v=bfe2d40b13"></script>
-<script src="js/stops.js?v=bfe2d40b13"></script>
-<script src="js/alerts.js?v=bfe2d40b13"></script>
-<script src="js/board.js?v=bfe2d40b13"></script>
-<script src="js/boardbikes.js?v=bfe2d40b13"></script>
-<script src="js/routing.js?v=bfe2d40b13"></script>
-<script src="js/candidates.js?v=bfe2d40b13"></script>
-<script src="js/planner.js?v=bfe2d40b13"></script>
-<script src="js/trip.js?v=bfe2d40b13"></script>
-<script src="js/nearby.js?v=bfe2d40b13"></script>
-<script src="js/boardview.js?v=bfe2d40b13"></script>
-<script src="js/boardbikesview.js?v=bfe2d40b13"></script>
-<script src="js/boardsettings.js?v=bfe2d40b13"></script>
-<script src="js/boardadd.js?v=bfe2d40b13"></script>
-<script src="js/sheet.js?v=bfe2d40b13"></script>
-<script src="js/indego.js?v=bfe2d40b13"></script>
-<script src="js/main.js?v=bfe2d40b13"></script>
+<script src="js/util.js?v=e19197daee"></script>
+<script src="js/feed.js?v=e19197daee"></script>
+<script src="js/map.js?v=e19197daee"></script>
+<script src="js/landmarks.js?v=e19197daee"></script>
+<script src="js/suggest.js?v=e19197daee"></script>
+<script src="js/panel.js?v=e19197daee"></script>
+<script src="js/stops.js?v=e19197daee"></script>
+<script src="js/alerts.js?v=e19197daee"></script>
+<script src="js/board.js?v=e19197daee"></script>
+<script src="js/boardbikes.js?v=e19197daee"></script>
+<script src="js/routing.js?v=e19197daee"></script>
+<script src="js/candidates.js?v=e19197daee"></script>
+<script src="js/planner.js?v=e19197daee"></script>
+<script src="js/trip.js?v=e19197daee"></script>
+<script src="js/nearby.js?v=e19197daee"></script>
+<script src="js/boardview.js?v=e19197daee"></script>
+<script src="js/boardbikesview.js?v=e19197daee"></script>
+<script src="js/boardsettings.js?v=e19197daee"></script>
+<script src="js/boardadd.js?v=e19197daee"></script>
+<script src="js/sheet.js?v=e19197daee"></script>
+<script src="js/indego.js?v=e19197daee"></script>
+<script src="js/main.js?v=e19197daee"></script>
+<script src="js/install.js?v=e19197daee"></script>
 <script>if(!window.SEPTA.started&&window.SEPTA.failed.indexOf('main.js')<0)window.SEPTA.loadFailed('main.js (the app did not start)');</script>
 
 </body>

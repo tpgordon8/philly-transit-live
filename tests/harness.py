@@ -303,7 +303,7 @@ class _Quiet(http.server.SimpleHTTPRequestHandler):
 
 
 class Session:
-    def __init__(self, root=None, viewport=(1280, 800), geolocation=None, extra_routes=None, init_scripts=(), legacy_defaults=True, touch=False, mobile=False, scale=1, color_scheme=None, reduced_motion=None, tile_png=None):
+    def __init__(self, root=None, viewport=(1280, 800), geolocation=None, extra_routes=None, init_scripts=(), legacy_defaults=True, touch=False, mobile=False, scale=1, color_scheme=None, reduced_motion=None, tile_png=None, service_workers=False, user_agent=None):
         self.root = pathlib.Path(root or HERE.parent)
         self.viewport = {"width": viewport[0], "height": viewport[1]}
         self.geolocation = geolocation
@@ -312,6 +312,8 @@ class Session:
         self.scale = scale  # device pixel ratio
         self.color_scheme = color_scheme  # 'light' | 'dark' | None (browser default)
         self.reduced_motion = reduced_motion  # 'reduce' | 'no-preference' | None
+        self.service_workers = service_workers  # False: js/install.js cannot register sw.js, so page.route sees every request (tests/test_pwa.py turns it on)
+        self.user_agent = user_agent
         self.tile_png = tile_png or PNG  # bytes served for every map tile
         self.extra_routes = extra_routes or {}  # substring -> (status, content_type, body)
         self.init_scripts = ([LEGACY_DEFAULTS_JS] if legacy_defaults else []) + list(init_scripts)
@@ -330,6 +332,8 @@ class Session:
         self._pw = sync_playwright().start()
         self.browser = getattr(self._pw, os.environ.get('SEPTA_BROWSER', 'chromium')).launch()  # SEPTA_BROWSER=webkit runs the iOS engine
         self.ctx = self.browser.new_context(viewport=self.viewport, has_touch=self.touch, is_mobile=self.mobile, device_scale_factor=self.scale,
+                                        service_workers='allow' if self.service_workers else 'block',
+                                        **({'user_agent': self.user_agent} if self.user_agent else {}),
                                         **({'color_scheme': self.color_scheme} if self.color_scheme else {}),
                                         **({'reduced_motion': self.reduced_motion} if self.reduced_motion else {}))
         if self.geolocation:
