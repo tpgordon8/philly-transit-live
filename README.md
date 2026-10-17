@@ -17,16 +17,24 @@ caches them briefly. Details are in [ARCHITECTURE.md](ARCHITECTURE.md). By defau
 
 `index.html` holds the markup and a short loader. The styles are twelve plain stylesheets in `css/`, linked in this
 order: `leaflet` (the Leaflet stylesheet), `base` (tokens, reset, header), `layout` (app shell, responsive rules), `map`
-(markers, pins, vehicle card), `panel` (sidebar sections), `trip` (trip planner), `suggest` (place and address suggestions), `stops` (stop card and board), `alerts` (service alerts, leave-now rules, toasts, banners), `nearby` (Nearby stops list), `indego` (Indego stations and card) and `board` (the My stops board). The application code is nineteen classic scripts in `js/`,
+(markers, pins, vehicle card), `panel` (sidebar sections), `trip` (trip planner), `suggest` (place and address suggestions), `stops` (stop card and board), `alerts` (service alerts, leave-now rules, toasts, banners), `nearby` (Nearby stops list), `indego` (Indego stations and card) and `board` (the My stops board). The application code is twenty-three classic scripts in `js/`,
 loaded with ordinary `<script src>` tags in dependency order: `util` (helpers, storage, shared state), `feed` (vehicle
 feed, ghost filter, idle pause, refresh), `map` (Leaflet map, markers, vehicle card), `landmarks` (about 40 well-known Philadelphia places), `suggest` (place and address suggestions as you type), `panel` (sidebar: status, search,
-saved places, Home, radius, filters), `stops` (stop links, stop board, ETA), `alerts` (service alerts, leave-now rules), `board` (My stops board logic),
+saved places, Home, radius, filters), `stops` (stop links, stop board, ETA), `alerts` (service alerts, leave-now rules), `board` (My stops board logic), `maplod` (map level of detail: compact markers zoomed out, labels that never overlap, count badges, your routes kept prominent),
 `routing` (trip planner data clients), `candidates` (bus candidates), `planner` (trip planner), `trip` (trip planner
 interface), `nearby` (Nearby stops under the search area; Get me home is in `panel`), `boardview` (the My stops board screen), `boardsettings` (its settings sheet), `boardadd` (its Add a bus stop search), `sheet` (phone bottom sheet, tab bar, on-screen keyboard), `indego` (Indego bike stations) and `main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else
 is global. If a file fails to load, a red banner at the top of the page tells the visitor to reload (the file names go to the browser console and `SEPTA.failed`). How the files fit together and how to
 add one: [ARCHITECTURE.md](ARCHITECTURE.md) section 14. There is no build step; GitHub Pages serves the files as they are.
 
 The app manifest is `manifest.webmanifest` and the logo mark and its PNG exports are in `icons/` (`favicon.svg` is the source; there is no service worker). The wordmark is set in Barlow Condensed 700 (the heading font, already loaded from Google Fonts) beside a small CSS route-badge mark in the header; the favicon and icons are unchanged.
+
+## Map and cards
+
+Zoomed out (14 and below) vehicles are compact, labels never overlap, and piles fold into a numbered badge that zooms in when tapped
+(or Enter); at 15 markers are full size with the same rules; from 16 every marker is full and labelled. The selected vehicle, starred
+routes and routes serving a pinned, open or nearby stop always stay visible and labelled first, and the rest dim while any of them is
+shown. Cards put the number a rider wants first (minutes to the stop, bike and dock counts), use 44 px icon buttons for Copy link and
+Close, show shimmer rows while loading and say what happened when something fails. Details: [ARCHITECTURE.md](ARCHITECTURE.md) 4.1.
 
 ## Lint and format
 

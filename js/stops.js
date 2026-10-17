@@ -113,11 +113,14 @@
     stopSeq = 0;
   var STOP_ID_RE = /^[0-9]{1,8}$/,
     STOP_RT_RE = /^[A-Za-z0-9]{1,6}$/;
+  var stopLists =
+    {}; /* route -> the resolved stop list, for synchronous lookups (the vehicle card's next-stop estimate) */
   function loadStops(route) {
     if (!stopCache[route]) {
       stopCache[route] = septa('Stops?route=' + route)
         .then(function (j) {
           if (!Array.isArray(j)) throw new Error('bad stops');
+          stopLists[route] = j;
           return j;
         })
         .catch(function (e) {
@@ -126,6 +129,25 @@
         });
     }
     return stopCache[route];
+  }
+  /* {id, lat, lng} of a stop on a route whose list is already loaded, else null. */
+  function stopCoords(route, id) {
+    var l = stopLists[route];
+    if (!l) return null;
+    for (var i = 0; i < l.length; i++)
+      if (String(l[i].stopid) === String(id)) {
+        var lat = num(l[i].lat),
+          lng = num(l[i].lng);
+        return lat == null || lng == null ? null : { id: String(id), lat: lat, lng: lng };
+      }
+    return null;
+  }
+  /* Load a route's stop list in the background; never rejects (a failure only means no estimate on the vehicle card). */
+  function prefetch(route) {
+    if (!STOP_RT_RE.test(String(route))) return Promise.resolve(null);
+    return loadStops(String(route)).catch(function () {
+      return null;
+    });
   }
   function setHash(h) {
     try {
@@ -137,9 +159,15 @@
   function stopLink(st) {
     return location.origin + location.pathname + '#stop=' + st.id + '&route=' + st.route;
   }
+  /* The open stop's route is one the rider cares about (js/maplod.js keeps its vehicles prominent). */
+  function relayout() {
+    if (typeof S.maplod.layout === 'function') S.maplod.layout();
+  }
   function clearStop() {
     stopSeq++;
+    var had = !!state.stop;
     state.stop = null;
+    if (had) relayout();
     if (stopLayer) {
       stopLayer.remove();
       stopLayer = null;
@@ -181,7 +209,8 @@
     });
     if (on !== b.classList.contains('on')) {
       b.classList.toggle('on', on);
-      b.textContent = on ? 'On board' : 'Pin to board';
+      b.classList.toggle('primary', !on);
+      b.querySelector('.lbl').textContent = on ? 'On board' : 'Pin to board';
     }
     if (on) b.setAttribute('aria-disabled', 'true');
     else b.removeAttribute('aria-disabled');
@@ -200,9 +229,11 @@
     }
   }
   function pinButton() {
-    var b = el('button', 'btn small', 'Pin to board');
+    var b = el('button', 'btn small primary pinbtn');
     b.type = 'button';
     b.id = 'pinBoard';
+    b.innerHTML = ICON_PIN;
+    b.appendChild(el('span', 'lbl', 'Pin to board'));
     b.setAttribute('aria-controls', 'pinChoose');
     b.addEventListener('click', function () {
       var c = $('#pinChoose'),
@@ -246,36 +277,104 @@
     });
     return c;
   }
+  var ICON_PIN =
+      '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3zM12 14v7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>',
+    ICON_LINK =
+      '<svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    ICON_ALERT =
+      '<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5v5.5M12 16.2v.3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+    ICON_BUS =
+      '<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><rect x="5" y="3" width="14" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 11h14M8 21v-3M16 21v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="8.5" cy="14.5" r="1" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1" fill="currentColor"/></svg>';
+  function closeBtn() {
+    var c = S.map.iconBtn('stopClose', 'Close stop details', S.map.ICON_X);
+    c.addEventListener('click', closeStop);
+    return c;
+  }
+  /* Placeholder rows that shimmer while something loads (no shimmer with reduced motion: css/stops.css). */
+  function skelRows(n) {
+    var f = document.createDocumentFragment();
+    for (var i = 0; i < n; i++) {
+      var r = el('div', 'sk-row');
+      r.setAttribute('aria-hidden', 'true');
+      ['sk sk-badge', 'sk sk-line', 'sk sk-num'].forEach(function (c) {
+        r.appendChild(el('span', c));
+      });
+      f.appendChild(r);
+    }
+    return f;
+  }
+  /* The card while the stop's details load: the frame, shimmer rows, Close, and a status line for screen readers. */
+  function renderStopLoading() {
+    var box = $('#stopCard');
+    box.hidden = false;
+    box.replaceChildren();
+    box.setAttribute('aria-label', 'Stop details');
+    box.setAttribute('aria-busy', 'true');
+    var h = el('div', 'sch');
+    var t = el('span', 'sk sk-title');
+    t.setAttribute('aria-hidden', 'true');
+    h.appendChild(t);
+    h.appendChild(closeBtn());
+    box.appendChild(h);
+    var sb = el('span', 'sk sk-sub');
+    sb.setAttribute('aria-hidden', 'true');
+    box.appendChild(sb);
+    box.appendChild(skelRows(3));
+    var st = el('div', 'sr-only', 'Loading stop details');
+    st.setAttribute('role', 'status');
+    box.appendChild(st);
+  }
+  /* A friendly empty or error block: icon, message, optional second line and button. */
+  function stateBox(cls, icon, msg, sub, btn) {
+    var d = el('div', 'sstate ' + cls),
+      i = el('span', 'sic'),
+      t = el('div', 'stxt');
+    i.innerHTML = icon;
+    d.appendChild(i);
+    t.appendChild(msg);
+    if (sub) t.appendChild(el('span', 'ssub', sub));
+    if (btn) t.appendChild(btn);
+    d.appendChild(t);
+    return d;
+  }
   function renderStopCard(st, err, retry) {
     var box = $('#stopCard');
     box.hidden = false;
     box.replaceChildren();
+    box.removeAttribute('aria-busy');
     box.setAttribute('aria-label', st ? 'Stop ' + st.name : 'Stop details');
-    var close = el('button', 'btn small ghost', 'Close');
-    close.type = 'button';
-    close.id = 'stopClose';
-    close.setAttribute('aria-label', 'Close stop details');
-    close.addEventListener('click', closeStop);
+    var close = closeBtn();
     if (err) {
-      box.appendChild(el('div', 'err', err));
-      var r = el('div', 'row');
+      var eh = el('div', 'sch');
+      eh.appendChild(el('span', 'stitle', 'Stop details'));
+      eh.appendChild(close);
+      box.appendChild(eh);
+      var rb = null;
       if (retry) {
-        var rb = el('button', 'btn small', 'Retry');
+        rb = el('button', 'btn small primary', 'Retry');
         rb.type = 'button';
         rb.id = 'stopRetry';
         rb.addEventListener('click', retry);
-        r.appendChild(rb);
       }
-      r.appendChild(close);
-      box.appendChild(r);
+      box.appendChild(
+        stateBox(
+          'bad',
+          ICON_ALERT,
+          el('div', 'err', err),
+          retry ? 'Check your connection, then try again.' : '',
+          rb
+        )
+      );
       return;
     }
-    box.appendChild(el('b', null, st.name));
+    var head = el('div', 'sch');
+    head.appendChild(el('b', null, st.name));
+    var icons = el('div', 'sicons');
+    head.appendChild(icons);
+    box.appendChild(head);
     box.appendChild(el('div', 'sub', 'Stop ' + st.id + ' · Route ' + st.route));
-    var row = el('div', 'row');
-    var cp = el('button', 'btn small ghost', 'Copy link');
-    cp.type = 'button';
-    cp.id = 'copyStop';
+    var cp = S.map.iconBtn('copyStop', 'Copy link to this stop', ICON_LINK);
+    cp.title = 'Copy link';
     var live = el('div', 'live');
     live.id = 'stopLive';
     live.setAttribute('aria-live', 'polite');
@@ -303,9 +402,10 @@
         manual();
       }
     });
-    row.appendChild(cp);
+    icons.appendChild(cp);
+    icons.appendChild(close);
+    var row = el('div', 'row sacts');
     row.appendChild(pinButton());
-    row.appendChild(close);
     box.appendChild(row);
     box.appendChild(pinChooser());
     box.appendChild(live);
@@ -379,15 +479,19 @@
     var li = lateInfo(v.late);
     mid.appendChild(el('span', 'pill ' + li.cls, li.txt));
     btn.appendChild(mid);
-    var eta = el('span', 'sbeta');
-    eta.appendChild(
-      el(
-        'b',
-        r.eta.rough ? 'rough' : r.eta.min == null ? 'none' : null,
-        r.eta.min == null ? '—' : (r.eta.rough ? 'about ' : '') + r.eta.min + ' min'
-      )
-    );
-    if (r.eta.note) eta.appendChild(el('small', null, r.eta.note));
+    /* Minutes are the hero: a large number with a small "min", and "estimate" (or why there is none) under it. */
+    var eta = el('span', 'sbeta'),
+      e = r.eta,
+      hero = el('b', e.rough ? 'rough' : e.min == null ? 'none' : null);
+    if (e.min == null) hero.textContent = '—';
+    else {
+      if (e.rough) hero.appendChild(el('span', 'ab', 'about '));
+      hero.appendChild(el('span', 'n', String(e.min)));
+      hero.appendChild(document.createTextNode(' '));
+      hero.appendChild(el('span', 'u', 'min'));
+    }
+    eta.appendChild(hero);
+    eta.appendChild(el('small', null, e.note || 'estimate'));
     btn.appendChild(eta);
     return btn;
   }
@@ -403,14 +507,35 @@
     var b = state.src.bus,
       now = Date.now();
     box.replaceChildren();
+    if (!b.ok && !b.err) {
+      /* the first positions are still on their way */
+      box.appendChild(skelRows(2));
+      var ld = el('div', 'sr-only', 'Loading arrivals');
+      box.appendChild(ld);
+      return;
+    }
     if (!b.ok || now - b.ok > DROP_AFTER_MS) {
-      box.appendChild(el('div', 'sbmsg', 'Live data unavailable. No arrival times are shown.'));
+      /* No Retry here: the refresh loop already tries again on its own schedule (with back-off, ARCHITECTURE.md 5), so a button
+         could only promise what the app is doing anyway. */
+      box.appendChild(
+        stateBox(
+          'bad',
+          ICON_ALERT,
+          el('div', 'sbmsg', 'Live data unavailable. No arrival times are shown.'),
+          'Septer keeps trying and shows arrivals as soon as positions come back.'
+        )
+      );
       return;
     }
     var rows = boardRows(st, collect());
     if (!rows.a.length && !rows.b.length) {
       box.appendChild(
-        el('div', 'sbmsg', 'No buses on route ' + st.route + ' are heading to this stop right now.')
+        stateBox(
+          'calm',
+          ICON_BUS,
+          el('div', 'sbmsg', 'No buses on route ' + st.route + ' are heading to this stop right now.'),
+          'This updates every 15 seconds.'
+        )
       );
     } else {
       [
@@ -460,6 +585,7 @@
         if (opts && opts.focus) $('#stopCard').focus({ preventScroll: true });
       };
     stopOpener = (opts && opts.opener) || null;
+    if (!stopLists[route]) renderStopLoading();
     loadStops(route).then(
       function (list) {
         if (seq !== stopSeq) return;
@@ -483,6 +609,7 @@
         }
         var st = { id: id, name: String(f.stopname || 'Stop ' + id), lat: lat, lng: lng, route: route };
         state.stop = st;
+        relayout();
         drawStopMarker(st);
         renderStopCard(st);
         focusCard();
@@ -523,6 +650,8 @@
   S.stops.STOP_ID_RE = STOP_ID_RE;
   S.stops.STOP_RT_RE = STOP_RT_RE;
   S.stops.boardRows = boardRows;
+  S.stops.stopCoords = stopCoords;
+  S.stops.prefetch = prefetch;
   S.stops.updatePinRow = updatePinRow;
   S.stops.closeStop = closeStop;
   S.stops.renderStopBoard = renderStopBoard;

@@ -3,13 +3,21 @@
 .seg button{border:0;background:var(--panel);min-height:44px;padding:5px 12px;font-size:12.5px;font-weight:600;color:var(--mute)}
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
 .alerts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.alert{border:1px solid var(--line);border-radius:7px;padding:9px 11px;min-width:0}
-.alert .top{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px}
-.alert p{margin:0;font-size:13px;overflow-wrap:anywhere}
+/* One service alert: route name first and largest, the kind as a coloured word, and a coloured edge (alert red, advisory amber, detour blue). */
+.alert{position:relative;border:1px solid var(--line);border-left:4px solid var(--info);border-radius:12px;padding:10px 12px;min-width:0;background:var(--panel)}
+.alert.t-alert{border-left-color:var(--bad)} .alert.t-advisory{border-left-color:var(--warn)} .alert.t-detour{border-left-color:var(--info)}
+.alert .top{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;justify-content:space-between;margin-bottom:5px}
+.alert .top b{font:700 16px/1.15 var(--f-display);letter-spacing:.01em;overflow-wrap:anywhere}
+.alert p{margin:0;font-size:13.5px;line-height:1.45;overflow-wrap:anywhere}
 .alert .tag.k-alert{background:var(--bad-bg);color:var(--bad)}
 .alert .tag.k-advisory{background:var(--warn-bg);color:var(--warn)}
 .alert .tag.k-detour{background:var(--info-bg);color:var(--info)}
-.alert .until{color:var(--mute);font-size:12px;margin-top:3px}
+.alert .until{color:var(--mute);font-size:12px;margin-top:5px;font-weight:600}
+.al-state{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.alert.al-sk{display:grid;gap:8px;border-left-color:var(--line)}
+.alert .sk{display:block;border-radius:6px;background:linear-gradient(90deg,var(--unk-bg) 25%,color-mix(in srgb,var(--unk-bg) 40%,var(--panel)) 50%,var(--unk-bg) 75%);background-size:300% 100%;animation:sk-shine 1.3s ease-in-out infinite}
+.alert .sk-a{width:40%;height:15px} .alert .sk-b{width:90%;height:12px}
+@media (prefers-reduced-motion:reduce){.alert .sk{animation:none}}
 #banner{position:absolute;z-index:1200;left:50%;top:12px;transform:translateX(-50%);width:min(560px,calc(100% - 24px));padding:10px 14px;border-radius:8px;box-shadow:var(--shadow);font-weight:500;background:var(--bad-bg);color:var(--bad);border:1px solid color-mix(in srgb,var(--bad) 40%,transparent)}
 #idleBar{position:absolute;z-index:1200;left:50%;top:12px;transform:translateX(-50%);width:min(560px,calc(100% - 24px));padding:10px 14px;border-radius:8px;box-shadow:var(--shadow);font-weight:500;background:var(--panel);color:var(--ink);border:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 #idleBar .btn{padding:5px 12px}

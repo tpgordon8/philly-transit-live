@@ -211,7 +211,7 @@ def test_empty_state_and_vehicle_card_wording(root):
     with Session(root, init_scripts=[HOOK]) as s:
         s.open()
         s.wait_live()
-        s.page.locator(".veh-wrap:not(.k-train)").first.click(force=True)
+        s.page.locator(".veh-wrap:not(.k-train):not(.inclu)").first.dispatch_event("click")  # one not folded into a count badge (js/maplod.js)
         s.page.wait_for_selector("#detail:not([hidden])")
         pos = s.page.inner_text("#detail")
         assert re.search(r"Position\s*Position updated \d+ s ago", pos), pos

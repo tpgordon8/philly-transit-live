@@ -14,6 +14,10 @@
   function openStop() {
     return S.stops.openStop.apply(null, arguments);
   }
+  /* Level of detail (js/maplod.js, loaded later): a no-op until it has loaded. */
+  function lod(list) {
+    if (typeof S.maplod.update === 'function') S.maplod.update(list);
+  }
   if (S.halt) return;
   var $ = S.util.$;
   var M_PER_MI = S.util.M_PER_MI,
@@ -246,7 +250,9 @@
   }
   var focusKey = null; /* key of the marker that has keyboard focus */
   function zOffset(key) {
-    return focusKey === key ? 2000 : state.selected === key ? 1000 : 0;
+    if (focusKey === key) return 2000;
+    if (state.selected === key) return 1000;
+    return typeof S.maplod.isHot === 'function' && S.maplod.isHot(key) ? S.maplod.HOT_Z : 0;
   }
   function syncMarkers(list) {
     var keep = new Set();
@@ -320,6 +326,7 @@
         markers.delete(k);
       }
     });
+    lod(list);
   }
   var tipFor =
     null; /* the vehicle whose open card shows the one-time tip (the card is rebuilt on every refresh) */
@@ -333,6 +340,7 @@
     var lv = $('#detailLive');
     if (lv && lv.textContent) lv.textContent = '';
     renderDetail();
+    lod();
   }
   /* ----- Detail card ----- */
   function findVehicle(k) {
@@ -352,6 +360,7 @@
       if (e) e.classList.toggle('sel', key === k);
       m.setZIndexOffset(zOffset(key));
     });
+    lod();
     renderDetail();
     var v = findVehicle(k);
     /* The card is not a live region (it is rebuilt on every refresh). Opening it is announced once, here. */
@@ -369,10 +378,9 @@
       card = $('#detail');
     if (!m || card.hidden) return;
     var mr = mapEl.getBoundingClientRect(),
-      cr = card.getBoundingClientRect(),
       ban = $('#banner');
     var top = 4,
-      bottom = cr.top - mr.top - 4,
+      bottom = cardTop(card) - mr.top - 4,
       half = 22;
     if (!ban.hidden) top = Math.max(top, ban.getBoundingClientRect().bottom - mr.top + 4);
     var lo = top + half,
@@ -384,6 +392,11 @@
     var dx = Math.round(p.x - cx),
       dy = Math.round(p.y - cy);
     if (dx || dy) map.panBy([dx, dy], { animate: animOK() });
+  }
+  /* Top of a card where it comes to rest: the slide-in animation's offset (css/map.css) is taken out. */
+  function cardTop(card) {
+    var t = getComputedStyle(card).transform;
+    return card.getBoundingClientRect().top - (t && t !== 'none' ? new DOMMatrix(t).m42 : 0);
   }
   function addRow(dl, label, node) {
     var dt = el('dt', null, label),
@@ -425,6 +438,34 @@
     }
     return node;
   }
+  var ICON_X =
+      '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+    ICON_STAR =
+      '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+  /* A 44 px icon button with an accessible name (Close on every card). */
+  function iconBtn(id, label, svg) {
+    var b = el('button', 'btn ghost ibtn');
+    b.type = 'button';
+    b.id = id;
+    b.setAttribute('aria-label', label);
+    b.innerHTML = svg;
+    return b;
+  }
+  /* Arrival estimate for the vehicle's next stop: needs the stop's position, which comes from the route's stop list (fetched once
+     per route per session through js/stops.js, only for a bus or trolley whose card is open, never while the app is paused). */
+  var stopAsked = {};
+  function nextEta(v) {
+    if ((v.kind !== 'bus' && v.kind !== 'trolley') || !v.nextId || !/^[0-9]{1,8}$/.test(v.nextId))
+      return null;
+    var st = S.stops.stopCoords(v.route, v.nextId);
+    if (!st && !stopAsked[v.route] && !S.feed.idleNow()) {
+      stopAsked[v.route] = 1;
+      S.stops.prefetch(v.route).then(function () {
+        if (state.selected === v.key) renderDetail();
+      });
+    }
+    return st ? S.stops.etaFor(v, st) : null;
+  }
   function buildDetail() {
     var box = $('#detail');
     if (!state.selected) {
@@ -435,10 +476,7 @@
     box.hidden = false;
     box.replaceChildren();
     var head = el('div', 'dh');
-    var close = el('button', 'btn small ghost', 'Close');
-    close.type = 'button';
-    close.id = 'detailClose';
-    close.setAttribute('aria-label', 'Close vehicle details');
+    var close = iconBtn('detailClose', 'Close vehicle details', ICON_X);
     close.addEventListener('click', closeDetailFocus);
     if (!v) {
       var t0 = el('div', 'dt'),
@@ -455,9 +493,11 @@
       );
       return;
     }
+    /* Header: the route badge and where the vehicle is going are the largest things on the card. */
     var badge = el('span', 'rbadge k-' + v.kind, v.badge);
     var dt = el('div', 'dt');
-    var hd = el('b', null, v.kind === 'train' ? v.route || 'Regional Rail' : 'Route ' + v.route);
+    var name = v.kind === 'train' ? v.route || 'Regional Rail' : 'Route ' + v.route;
+    var hd = el('b', null, v.dest ? 'To ' + v.dest : name);
     hd.id = 'detailHead';
     hd.tabIndex = -1;
     dt.appendChild(hd);
@@ -466,36 +506,33 @@
         'span',
         null,
         v.kind === 'train'
-          ? 'Regional Rail · Train ' + v.badge
-          : MODE_NAME[v.kind] + (v.vid ? ' · Vehicle ' + v.vid : '')
+          ? 'Regional Rail · Train ' + v.badge + (v.route ? ' · ' + v.route : '')
+          : name + ' · ' + MODE_NAME[v.kind] + (v.vid ? ' ' + v.vid : '')
       )
     );
-    var sk = starKey(v),
-      starred = isStarred(sk),
-      rn = starName(sk);
-    var star = el('button', 'btn small', starred ? 'Starred' : 'Star route');
-    star.type = 'button';
-    star.id = 'starBtn';
-    star.setAttribute('aria-pressed', starred ? 'true' : 'false');
-    star.setAttribute('aria-label', (starred ? 'Unstar route ' : 'Star route ') + rn);
-    star.addEventListener('click', function () {
-      toggleStar(sk);
-      var b = $('#starBtn');
-      if (b) b.focus();
-    });
     head.appendChild(badge);
     head.appendChild(dt);
-    head.appendChild(star);
     head.appendChild(close);
     box.appendChild(head);
-    var dl = el('dl');
-    addRow(dl, 'Direction', directionNode(v));
-    addRow(dl, 'Destination', v.dest || 'Not reported');
-    if (v.kind === 'train' && v.cur) addRow(dl, 'Last stop', v.cur);
-    var nextNode = v.next || 'Not reported';
+    /* Next stop with its estimate, and View stop for the stop's arrivals and alerts. */
+    var nx = el('div', 'vnext');
+    nx.appendChild(el('span', 'vlbl', v.kind === 'train' ? 'Next station' : 'Next stop'));
+    var row = el('div', 'vrow');
+    row.appendChild(el('span', 'vstop', v.next || 'Not reported'));
+    var e = v.next ? nextEta(v) : null;
+    if (e && e.min != null) {
+      var em = el('span', 'veta' + (e.rough ? ' rough' : ''));
+      var eb = el('b');
+      if (e.rough) eb.appendChild(el('span', 'ab', 'about '));
+      eb.appendChild(el('span', 'n', String(e.min)));
+      eb.appendChild(document.createTextNode(' '));
+      eb.appendChild(el('span', 'u', 'min'));
+      em.appendChild(eb);
+      em.appendChild(el('small', null, 'estimate'));
+      row.appendChild(em);
+    } else if (e && e.note === 'bus is stopped') row.appendChild(el('span', 'vnote', 'Stopped'));
+    nx.appendChild(row);
     if ((v.kind === 'bus' || v.kind === 'trolley') && v.nextId && /^[0-9]{1,8}$/.test(v.nextId)) {
-      nextNode = el('span');
-      nextNode.appendChild(document.createTextNode((v.next || 'Not reported') + ' '));
       var vs = el('button', 'btn small ghost', 'View stop');
       vs.type = 'button';
       vs.id = 'viewStop';
@@ -504,17 +541,38 @@
         if (STOP_HIDDEN.matches) clearSelection();
         openStop(v.route, v.nextId, { focus: true, opener: vs });
       });
-      nextNode.appendChild(vs);
+      nx.appendChild(vs);
     }
-    addRow(dl, 'Next stop', nextNode);
-    var li = lateInfo(v.late),
-      pill = el('span', 'pill ' + li.cls, li.txt);
-    addRow(dl, 'Schedule', pill);
+    box.appendChild(nx);
+    /* Status chips (colour and words), then Star as a toggle. */
+    var acts = el('div', 'vacts'),
+      li = lateInfo(v.late);
+    acts.appendChild(el('span', 'pill ' + li.cls, li.txt));
+    if (v.kind !== 'train' && v.seats)
+      acts.appendChild(el('span', 'pill unk', SEATS[v.seats] || v.seats.replace(/_/g, ' ').toLowerCase()));
+    var sk = starKey(v),
+      starred = isStarred(sk),
+      rn = starName(sk);
+    var star = el('button', 'btn small star' + (starred ? ' on' : ''));
+    star.type = 'button';
+    star.id = 'starBtn';
+    star.innerHTML = ICON_STAR;
+    star.appendChild(el('span', null, starred ? 'Starred' : 'Star route'));
+    star.setAttribute('aria-pressed', starred ? 'true' : 'false');
+    star.setAttribute('aria-label', (starred ? 'Unstar route ' : 'Star route ') + rn);
+    star.addEventListener('click', function () {
+      toggleStar(sk);
+      var b = $('#starBtn');
+      if (b) b.focus();
+    });
+    acts.appendChild(star);
+    box.appendChild(acts);
+    var dl = el('dl');
+    addRow(dl, 'Direction', directionNode(v));
+    if (v.kind === 'train' && v.cur) addRow(dl, 'Last stop', v.cur);
     if (v.kind === 'train') {
       if (v.service) addRow(dl, 'Service', v.service.charAt(0) + v.service.slice(1).toLowerCase());
       if (v.track) addRow(dl, 'Track', v.track);
-    } else if (v.seats) {
-      addRow(dl, 'Crowding', SEATS[v.seats] || v.seats.replace(/_/g, ' ').toLowerCase());
     }
     if (v.kind !== 'train') {
       var live = state.src.bus.stale
@@ -567,10 +625,15 @@
   S.map.NARROW = NARROW;
   S.map.CARD_NARROW = CARD_NARROW;
   S.map.animOK = animOK;
+  S.map.cardTop = cardTop;
+  S.map.iconBtn = iconBtn;
+  S.map.ICON_X = ICON_X;
   S.map.drawCenter = drawCenter;
   S.map.drawHome = drawHome;
   S.map.fitRadius = fitRadius;
   S.map.syncMarkers = syncMarkers;
+  S.map.markers = markers;
+  S.map.zOffset = zOffset;
   S.map.vehSig = vehSig;
   S.map.vehLabel = vehLabel;
   S.map.vehInner = vehInner;

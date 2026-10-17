@@ -687,7 +687,7 @@ def check_pin_button(root):
 
 def test_pin_button_on_the_indego_card(root):
     check_pin_button(root)
-    must_fail(check_pin_button, root, ("js/indego.js", "b.textContent = on ? 'On board' : 'Pin to board';", "b.textContent = 'Pin to board';"))
+    must_fail(check_pin_button, root, ("js/indego.js", "b.querySelector('.lbl').textContent = on ? 'On board' : 'Pin to board';", "b.querySelector('.lbl').textContent = 'Pin to board';"))
     must_fail(check_pin_button, root, ("js/indego.js", "S.boardbikes.add({ id: s.id, name: s.name })", "{ ok: false, reason: 'invalid' }"))
 
 

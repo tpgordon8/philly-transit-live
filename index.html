@@ -215,7 +215,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script>
 /* Module namespace and load-failure banner (ARCHITECTURE.md section 14). Every js/*.js file adds only window.SEPTA.<name>. */
-window.SEPTA={util:{},feed:{},map:{},panel:{},stops:{},alerts:{},board:{},boardview:{},boardsettings:{},boardadd:{},boardbikes:{},boardbikesview:{},routing:{},candidates:{},planner:{},trip:{},nearby:{},landmarks:{},suggest:{},sheet:{},failed:[]};
+window.SEPTA={util:{},feed:{},map:{},panel:{},stops:{},alerts:{},board:{},maplod:{},boardview:{},boardsettings:{},boardadd:{},boardbikes:{},boardbikesview:{},routing:{},candidates:{},planner:{},trip:{},nearby:{},landmarks:{},suggest:{},sheet:{},failed:[]};
 window.SEPTA.loadFailed=function(file){
   var S=window.SEPTA,box=document.getElementById('loadError');
   if(S.failed.indexOf(file)<0)S.failed.push(file);
@@ -243,6 +243,7 @@ window.addEventListener('error',function(e){
 <script src="js/alerts.js?v=530f16b8f4"></script>
 <script src="js/board.js?v=530f16b8f4"></script>
 <script src="js/boardbikes.js?v=530f16b8f4"></script>
+<script src="js/maplod.js?v=530f16b8f4"></script>
 <script src="js/routing.js?v=530f16b8f4"></script>
 <script src="js/candidates.js?v=530f16b8f4"></script>
 <script src="js/planner.js?v=530f16b8f4"></script>
