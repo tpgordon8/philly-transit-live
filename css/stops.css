@@ -1,30 +1,59 @@
-/* stops.css: stop card and live stop board. */
-#stopCard{position:absolute;z-index:1100;right:64px;top:64px;width:min(320px,calc(100% - 76px));background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:12px;display:grid;gap:8px}
-#stopCard b{font:700 18px/1.15 var(--f-display);overflow-wrap:anywhere}
-#stopCard .sub{color:var(--mute);font-size:12.5px;overflow-wrap:anywhere}
-#stopCard .err{color:var(--warn);font-weight:600}
+/* stops.css: stop card and live stop board. The minutes are the hero of each row; the card's chrome is icon buttons and one primary action. */
+#stopCard{position:absolute;z-index:1100;right:64px;top:64px;width:min(320px,calc(100% - 76px));background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 32px rgba(15,28,44,.22);padding:12px 12px 14px;display:grid;gap:8px;animation:card-up .2s cubic-bezier(.2,.8,.2,1)}
+#stopCard .sch{display:flex;align-items:flex-start;gap:6px;min-width:0;margin:-4px -6px 0 0}
+#stopCard .sch>b,#stopCard .stitle{flex:1 1 0;min-width:0;padding-top:9px}
+#stopCard b{font:700 20px/1.15 var(--f-display);overflow-wrap:anywhere}
+#stopCard .stitle{font:700 18px/1.15 var(--f-display);color:var(--mute)}
+#stopCard .sicons{flex:none;display:flex}
+#stopCard .sub{margin-top:-6px;color:var(--mute);font-size:12.5px;overflow-wrap:anywhere}
+#stopCard .err{color:var(--bad);font-weight:600}
 #stopCard .row{display:flex;gap:8px;flex-wrap:wrap}
-#stopCard input{width:100%;min-width:0;min-height:44px;padding:6px 8px;border:1px solid var(--line-strong);border-radius:6px;background:var(--panel);color:var(--ink);font:16px var(--f-mono)}
+#stopCard .pinbtn{display:inline-flex;align-items:center;gap:7px;padding:5px 16px 5px 12px;border-radius:999px;font-size:14px}
+#stopCard .pinbtn svg{flex:none}
+#stopCard .pinbtn.on{background:var(--good-bg);border-color:transparent;color:var(--good);opacity:1;cursor:default}
+#stopCard input{width:100%;min-width:0;min-height:44px;padding:6px 8px;border:1px solid var(--line-strong);border-radius:8px;background:var(--panel);color:var(--ink);font:16px var(--f-mono)}
 #stopCard .live{color:var(--mute);font-size:12.5px;min-height:1em}
 #stopCard .live:empty{display:none}
 #stopCard{max-height:calc(100% - 76px);overflow:auto}
 #stopCard .sboard{display:grid;gap:6px;min-width:0}
-#stopCard .sbh{font:700 12.5px var(--f-display);color:var(--mute);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
-#stopCard .sbrow{min-height:44px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;text-align:left;width:100%;min-width:0;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
+#stopCard .sbh{font:700 11.5px var(--f-display);color:var(--mute);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
+#stopCard .sbrow{min-height:60px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;width:100%;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink)}
 #stopCard .sbrow:hover{background:var(--paper)}
-#stopCard .sbrow .rbadge{grid-row:auto}
-#stopCard .sbmid{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:center;min-width:0;font-size:12.5px}
-#stopCard .sbdir{font-weight:600;overflow-wrap:anywhere}
+#stopCard .sbrow .rbadge{grid-row:auto;display:flex;align-items:center;justify-content:center;min-width:42px;height:34px;border-radius:9px;font-size:18px}
+#stopCard .sbmid{display:flex;flex-wrap:wrap;gap:3px 8px;align-items:center;min-width:0;font-size:12.5px}
+#stopCard .sbdir{flex:1 1 100%;font-weight:600;font-size:14px;overflow-wrap:anywhere}
 #stopCard .sbdist{color:var(--mute)}
-#stopCard .sbeta{display:grid;justify-items:end;text-align:right;font-size:12px;color:var(--mute)}
-#stopCard .sbeta b{font:700 16px var(--f-display);color:var(--ink)}
+#stopCard .sbmid .pill{padding:1px 8px;font-size:12px}
+#stopCard .sbeta{display:grid;justify-items:end;text-align:right;font-size:11.5px;line-height:1.2;color:var(--mute);max-width:96px}
+#stopCard .sbeta b{font:700 30px/1 var(--f-display);font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap}
+#stopCard .sbeta b .u{font-size:14px;color:var(--mute)}
+#stopCard .sbeta b .ab{font-size:12px;font-weight:600;color:var(--mute)}
 #stopCard .sbeta b.rough{font-style:italic;font-weight:500;color:var(--mute)}
 #stopCard .sbeta b.none{font:400 12px var(--f-body);color:var(--mute)} /* no estimate: small muted text, not a large dash */
-#stopCard .sbmsg{color:var(--mute);font-size:13px}
+#stopCard .sbeta small{margin-top:3px;font-size:11.5px}
+#stopCard .sbmsg{font-size:14px;font-weight:600;color:var(--ink)}
 #stopCard .sbstale{color:var(--warn);font-weight:600;font-size:12.5px}
 #stopCard .sbfine{color:var(--mute);font-size:12px}
+/* Empty and error blocks: an icon, a plain sentence, a second line and, for errors, a Retry button. */
+#stopCard .sstate{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:12px;background:var(--paper)}
+#stopCard .sstate .sic{flex:none;color:var(--mute);line-height:0}
+#stopCard .sstate.bad .sic{color:var(--bad)}
+#stopCard .sstate svg{display:block}
+#stopCard .stxt{display:grid;gap:4px;justify-items:start;min-width:0}
+#stopCard .ssub{color:var(--mute);font-size:12.5px}
+#stopCard .stxt .btn{margin-top:4px}
+/* Skeleton shimmer while the stop or the first positions load. */
+#stopCard .sk{display:block;border-radius:6px;background:linear-gradient(90deg,var(--unk-bg) 25%,color-mix(in srgb,var(--unk-bg) 40%,var(--panel)) 50%,var(--unk-bg) 75%);background-size:300% 100%;animation:sk-shine 1.3s ease-in-out infinite}
+#stopCard .sk-title{flex:1 1 0;height:22px;margin:11px 40px 0 0}
+#stopCard .sk-sub{width:45%;height:12px}
+#stopCard .sk-row{display:grid;grid-template-columns:42px 1fr 46px;gap:10px;align-items:center;min-height:60px;padding:8px 10px;border:1px solid var(--line);border-radius:12px}
+#stopCard .sk-badge{height:34px;border-radius:9px}
+#stopCard .sk-line{height:14px;width:80%}
+#stopCard .sk-num{height:28px}
+@keyframes sk-shine{0%{background-position:100% 0}100%{background-position:0 0}}
+@media (prefers-reduced-motion:reduce){#stopCard .sk{animation:none}}
 #stopCard .alertrow{display:flex;flex-wrap:wrap;gap:6px 6px;align-items:center;font-size:12.5px;color:var(--mute);min-width:0}
-#stopCard .alertrow select{min-height:44px;font-size:16px;padding:4px 6px;border:1px solid var(--line-strong);border-radius:6px;background:var(--panel);color:var(--ink)}
+#stopCard .alertrow select{min-height:44px;font-size:16px;padding:4px 6px;border:1px solid var(--line-strong);border-radius:8px;background:var(--panel);color:var(--ink)}
 /* The sentence stays together (select and "min away" never split); Add alert takes its own line. */
 #stopCard .alertrow .alertmin{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 #stopCard .alertrow #addAlert{flex:0 0 auto;margin-right:100%}
@@ -37,5 +66,5 @@
 @media (max-width:1180px),(max-height:500px){
   #detail:not([hidden]) ~ #stopCard{display:none}
 }
-#stopCard .row .btn.on{opacity:.65;cursor:default}
+#stopCard .row .btn.on{cursor:default}
 #stopCard .pinchoose[hidden]{display:none}

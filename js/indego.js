@@ -323,27 +323,43 @@
       head: $('#indegoHead'),
       badge: $('#indegoBadge'),
       sum: $('#indegoSum'),
+      stats: $('#indegoStats'),
       types: $('#indegoTypes'),
       note: $('#indegoNote'),
       age: $('#indegoAge'),
       dir: $('#indegoDir')
     };
   }
+  var BOLT =
+      '<svg class="ind-ic" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M9 1.5L3.5 9H8l-1 5.5L12.5 7H8z"/></svg>',
+    DOCK =
+      '<svg class="ind-ic" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M3 14V6M8 14V6M13 14V6M1.5 14h13M2 4.5h12"/></svg>',
+    PIN =
+      '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3zM12 14v7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+  /* One count tile: big number, label, and a status word in colour (colour is never the only cue). */
+  function tile(icon, n, label, words) {
+    var t = el('div', 'ind-tile ' + availCls(n)),
+      top = el('span', 'ind-tn');
+    top.innerHTML = icon;
+    top.appendChild(el('b', null, String(n)));
+    t.appendChild(top);
+    t.appendChild(el('span', 'ind-tl', label));
+    t.appendChild(el('span', 'ind-ts', n === 0 ? words[0] : n <= 2 ? words[1] : words[2]));
+    return t;
+  }
   function buildCard() {
     card.replaceChildren();
     var head = el('div', 'dh');
     var badge = el('span', 'ind-b ind-badge');
     badge.id = 'indegoBadge';
+    badge.setAttribute('aria-hidden', 'true');
     var dt = el('div', 'dt');
     var hd = el('b');
     hd.id = 'indegoHead';
     hd.tabIndex = -1;
     dt.appendChild(hd);
     dt.appendChild(el('span', null, 'Indego bike share'));
-    var close = el('button', 'btn small ghost', 'Close');
-    close.type = 'button';
-    close.id = 'indegoClose';
-    close.setAttribute('aria-label', 'Close station details');
+    var close = S.map.iconBtn('indegoClose', 'Close station details', S.map.ICON_X);
     close.addEventListener('click', function () {
       closeCard({ focus: true });
     });
@@ -351,8 +367,11 @@
     head.appendChild(dt);
     head.appendChild(close);
     var body = el('div', 'ind-body');
-    var sum = el('p', 'ind-sum');
+    var sum = el('p', 'sr-only');
     sum.id = 'indegoSum';
+    var stats = el('div', 'ind-stats');
+    stats.id = 'indegoStats';
+    stats.setAttribute('aria-hidden', 'true');
     var types = el('p', 'ind-sub');
     types.id = 'indegoTypes';
     var note = el('p', 'ind-note');
@@ -363,14 +382,16 @@
     dir.type = 'button';
     dir.id = 'indegoDir';
     dir.addEventListener('click', directions);
-    var pin = el('button', 'btn small', 'Pin to board'),
+    var pin = el('button', 'btn small ind-pin'),
       acts = el('div', 'ind-acts');
     pin.type = 'button';
     pin.id = 'indegoPin';
+    pin.innerHTML = PIN;
+    pin.appendChild(el('span', 'lbl', 'Pin to board'));
     pin.addEventListener('click', pinToBoard);
     acts.appendChild(dir);
     acts.appendChild(pin);
-    [sum, types, note, age, acts].forEach(function (n) {
+    [sum, stats, note, types, age, acts].forEach(function (n) {
       body.appendChild(n);
     });
     card.appendChild(head);
@@ -386,6 +407,12 @@
     f.badge.className = 'ind-b ind-badge ' + availCls(b);
     f.badge.innerHTML = markerInner(s);
     f.sum.textContent = plural(b, 'bike', 'bikes') + ', ' + plural(d, 'open dock', 'open docks');
+    var eb = s.renting ? s.ebikes || 0 : 0;
+    f.stats.replaceChildren(
+      tile(BIKE, b, b === 1 ? 'Bike' : 'Bikes', ['None', 'Few left', 'Available']),
+      tile(BOLT, eb, 'Electric', ['None', 'Few left', 'Available']),
+      tile(DOCK, d, d === 1 ? 'Dock' : 'Docks', ['Full', 'Few left', 'Open'])
+    );
     var parts = [];
     if (s.ebikes) parts.push(s.ebikes + ' electric');
     if (s.classic) parts.push(s.classic + ' classic');
@@ -416,7 +443,7 @@
     if (!b) return;
     b.hidden = !bikesOk();
     b.classList.toggle('on', on);
-    b.textContent = on ? 'On board' : 'Pin to board';
+    b.querySelector('.lbl').textContent = on ? 'On board' : 'Pin to board';
     if (on) b.setAttribute('aria-disabled', 'true');
     else b.removeAttribute('aria-disabled');
   }

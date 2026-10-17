@@ -22,6 +22,9 @@ SEPTA public hackathon API (no key, no CORS headers)
   so a retry works). The request carries only the route id. The URL hash `#stop=<id>&route=<route>` is the only state in
   a shared link (no coordinates, no center, no places); it is parsed on load and on `hashchange`, and a stop link moves
   the radius center for the session without writing it to `septa.prefs.v1`.
+  The vehicle card asks for the same list (same call, same cache) when it opens for a bus or trolley whose next stop is
+  known and the route's list is not loaded yet, once per route per session and never during the idle pause, so it can show
+  the estimate to that next stop (section 4.1). A failed list only means no estimate; it is not asked for again that session.
 
 - Stop board ETA method: the stop card lists buses and trolleys on the stop's route. SEPTA gives no bus predictions, so a
   number appears only when it is computed from measured data. Each successful TransitView refresh appends a
@@ -150,6 +153,55 @@ non-zero. The train detail card says positions have no timestamp. Headings may b
 - Gotcha: Leaflet gives map-pane SVGs `z-index: 200`, so the bus drawing sets `z-index: 0` and the badges `1`.
 - Colors: buses blue, trolleys green, subway purple (`--subway`, in a delimited CSS block), rail orange; all tokens are redefined for dark mode.
 - Vehicle kinds: `bus`, `trolley`, `subway` (all three come from TransitView, classified by route id: trolley = T1-T5, G1, D1, D2 and legacy 10, 11, 13, 15, 34, 36, 101, 102; subway = B1, B2, B3, L1, M1) and `train` (TrainView). Subway has its own car drawing, a `Subway` chip, star key `subway:<route>`, and like trains has no View stop, stop board, ETA or leave-now rule.
+
+### 4.1 Level of detail and the cards (UX package C)
+
+- **Why.** At the default view the fixture puts 88 labelled 44 px markers inside a 1.5 mi circle on a 390 px phone; they overlapped
+  into an unreadable pile (UX audit #3). `js/maplod.js` (module `S.maplod`, loaded after `boardbikes.js`) decides how each marker looks;
+  it never creates or removes vehicle markers, so `syncMarkers`, the glide, `vehSig`, the accessible names and every `.veh-wrap` stay as
+  described above.
+- **Levels.** Zoom 16 and closer: every marker full size and labelled, nothing folds or dims. Zoom 15 (`.lod-mid` on `#map`): full-size
+  drawings, labels collision-avoided, piles of 4 or more within 30 px fold. Zoom 14 and below (`.lod-far`): compact markers (the
+  drawing scaled to 0.6, still facing its direction; the route pill smaller; every direction badge hidden except on the selected
+  vehicle; the accessible name keeps the direction), labels collision-avoided, piles of 3 or more within 36 px fold.
+- **Folding.** Greedy over projected pixel points (`map.project` at the current zoom, so a pan never re-runs it) in priority order with a
+  uniform grid: an ordinary vehicle joins the first anchor within the radius, else becomes one. A group at or over the minimum becomes
+  a count badge (`.veh-clu`, an `L.marker` with `role=button`, keyboard focusable, named "12 vehicles close together, routes 21, 42, 9
+  and 4 more. Zoom in to see them") placed on its anchor vehicle; anchors are at least the radius apart, so badges never stack. Tap,
+  Enter or Space zooms to the group's bounds (at least one level, at most 17). Folded markers get `.inclu` (children hidden,
+  `pointer-events:none`, `tabindex=-1`, `aria-hidden=true`); they stay in the DOM so counts, keys and tests are unchanged.
+- **Labels.** Placed in priority order on a 48 px grid of boxes (badges first after the prominent vehicles); a label whose box would
+  overlap one already placed gets `.nolbl` (route pill hidden). Labels therefore never stack. The selected vehicle always keeps its label.
+- **Prominence.** Rank 0 is the selected vehicle, rank 1 ("hot", `.hot`) a vehicle on a starred route, or a bus or trolley on a route of
+  a pinned board stop (`S.board.pins()`), the open stop card (`state.stop`) or the Nearby stops list (read from `#nearList .near-chip`,
+  so `js/nearby.js` needed no change). Hot vehicles never fold, are labelled first, get their route pill in the mode colour, are
+  larger when zoomed out, and are raised (`zIndexOffset` 500; selected 1000, focused 2000). While any hot vehicle is on the map and
+  the zoom is under 16, every other marker and badge gets `.dim` (drawing at 40 % opacity, label at 78 %).
+- **When it runs.** At the end of every `syncMarkers` (each refresh), on `zoomend`/`viewreset`, on select and clear, when the stop card
+  opens or closes, and when the set of cared-for routes changes (board `onChange`, a `MutationObserver` on `#nearList`, `hashchange`);
+  duplicate feed keys count once. All geometry is computed first, then only the classes, tab indexes and badge markers that changed
+  are written: a layout that changes nothing writes nothing (tested), and 450 vehicles lay out in a few milliseconds.
+- **Vehicle card.** Route badge and "To <destination>" lead; then a "Next stop" panel with the stop name and, for a bus or trolley,
+  the measured estimate (`etaFor`, the stop board's method) as a large number, small "min" and the word "estimate", plus View stop;
+  then the late/on-time chip and crowding chip (colour and words) and Star as a pill toggle (`aria-pressed`, filled star and
+  "Starred" when on); then Direction, Position and the train rows. Close is a 44 px icon button. The card slides up in 200 ms
+  (`@keyframes card-up`, none with reduced motion); `panAboveCard` measures the card's resting position (`S.map.cardTop`).
+- **Stop card.** Title with 44 px icon buttons for Copy link and Close beside it, the stop line, one primary "Pin to board" button with
+  a pin icon, then the board. Each row: route badge, direction, distance and the late/on-time chip, and the minutes as the hero
+  (30 px tabular numerals, small "min", "estimate" or the reason there is none). While the stop list loads the card shows shimmer
+  rows and Close (`aria-busy`, a status line for screen readers); while the first positions load, shimmer rows in the board. Empty
+  and error states are an icon, a sentence and a second line; a failed stop list offers a primary Retry. Live data being down offers
+  no Retry because the refresh loop already retries with back-off (section 5).
+- **Indego card.** Three count tiles (bikes, electric, open docks), each a large number with an icon and a status word in colour
+  (none or full red, 1 to 2 amber, 3 or more green); the "5 bikes, 7 open docks" sentence stays for screen readers (the tiles are
+  `aria-hidden`). Walk here and Pin to board are pill buttons; Close is a 44 px icon button.
+- **Service alerts.** Route name first and largest, the kind as a coloured word, a coloured left edge per kind, shimmer rows while
+  loading, and Retry when alerts cannot be loaded.
+- **Map chrome.** The zoom buttons are one rounded 44 px column with a hairline between them; the attribution is a small rounded tag.
+- **Tests.** `tests/test_map_lod.py` (folding, badge counts and names, labels and badges never overlapping, zoom levels, badge tap and
+  keyboard, selection unfolds, starred, pinned and open-stop prominence and dimming, 450 vehicles and no-op layouts) and
+  `tests/test_cards_ux.py` (stop card skeleton, hierarchy, icon buttons, error and empty states; vehicle card estimate and Star toggle;
+  slide-up timing and reduced motion; Indego tiles; alerts hierarchy and Retry), each key behaviour with a `must_fail` mutation.
 
 ## 5. Refresh loop and failure states
 
@@ -455,7 +507,7 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 
 ## 14. Code layout (WP3 split, reshaped by WP-F)
 
-`index.html` keeps the markup, the Leaflet script tag (with its SRI hash, unchanged), twelve local `<link rel="stylesheet">` tags and 18 lines of inline script. The application code is nineteen classic scripts under `js/` and the styles are twelve stylesheets under `css/`. There is no bundler, no ES modules and no build step; GitHub Pages serves the files as they are. Prettier and ESLint (section 15.1) are dev tools only.
+`index.html` keeps the markup, the Leaflet script tag (with its SRI hash, unchanged), twelve local `<link rel="stylesheet">` tags and 18 lines of inline script. The application code is twenty-three classic scripts under `js/` and the styles are twelve stylesheets under `css/`. There is no bundler, no ES modules and no build step; GitHub Pages serves the files as they are. Prettier and ESLint (section 15.1) are dev tools only.
 
 ### 14.1 Files and load order
 
@@ -463,14 +515,15 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 |------|-------|-------|
 | `js/util.js` | 466 | constants, formatting and geometry, `$`, the `localStorage` wrapper, saved preferences, places, starred routes, the shared `state` object, the Leaflet-missing banner |
 | `js/feed.js` | 446 | `normBuses` (ghost filter), `normTrains`, `septa()` fetch through the Worker, idle pause, `refresh`, and `collect`/`apply`, the pipeline that turns feed data into what is drawn |
-| `js/map.js` | 583 | the Leaflet map, search-point and Home pins, vehicle markers, selection, the vehicle detail card |
+| `js/map.js` | 646 | the Leaflet map, search-point and Home pins, vehicle markers, selection, the vehicle detail card |
 | `js/landmarks.js` | 53 | the built-in list of about 40 well-known Philadelphia places (name, aliases, address, coordinates) as one string per place |
 | `js/suggest.js` | 531 | place and address suggestions: `attach(input, {onPick, biasProvider})` makes an ARIA 1.2 combobox; built-in places first, then Photon (debounce, abort, cache, rate limit) |
 | `js/panel.js` | 556 | the sidebar: status line, My routes, search box and geocoding, Use my location, `setCenter`/`setRadius`, mode chips, saved places, Get me home (sets the planner's From and To and plans), the empty-state actions; `setCenter` also asks `S.nearby.show` for Nearby stops |
-| `js/stops.js` | 532 | speed history and `etaFor`, stop links, stop card and live stop board |
-| `js/alerts.js` | 567 | service alerts and the leave-now rules (`evalRule`, `evalRules`, `notify`) |
+| `js/stops.js` | 661 | speed history and `etaFor`, stop links, stop card and live stop board |
+| `js/alerts.js` | 586 | service alerts and the leave-now rules (`evalRule`, `evalRules`, `notify`) |
 | `js/board.js` | 373 | My stops board logic: pins, walking time, captured arrival estimates, `rows(nowMs)` (section 15.8); no DOM |
 | `js/boardbikes.js` | 326 | Indego stations picked for the board: `septa.boardbikes.v1`, search over the station list, `rows(nowMs)`, `source()`, and the poller (section 16.1); no DOM |
+| `js/maplod.js` | 339 | map level of detail (section 4.1): compact markers zoomed out, collision-free labels, count badges, prominence of the vehicles the rider cares about |
 | `js/routing.js` | 514 | trip planner data clients: planner constants `TP`, bus network, Indego, the routing queue, `routeLeg`, `cancelPlan` (no DOM) |
 | `js/candidates.js` | 217 | trip planner bus candidates: nearby stops and stations, wait estimates, `buildBusCandidates` (pure) |
 | `js/planner.js` | 535 | trip planner: leg assembly, schedule state, `planTrips` (no DOM) |
@@ -481,10 +534,10 @@ Every register item closed with a test; fast suite under 90 s; CI green on main;
 | `js/boardsettings.js` | 461 | the board's settings sheet (section 16): get-ready minutes, snow or ice, night dimming, each pin's place and walk time, and the bike stations (list, Remove, search to add); creates `S.boardsettings` |
 | `js/boardadd.js` | 525 | the board's "Add a bus stop" sheet (section 16.2): search by street, intersection, address, stop name or location, pick a stop, pin it through `S.board.addPin`; creates `S.boardadd` |
 | `js/sheet.js` | 186 | phone bottom sheet (peek or open), keeps the map's size in step, on-screen keyboard handling through `visualViewport`, and the first-run pieces that live in the header and peek row (section 15.6) |
-| `js/indego.js` | 559 | Indego bike stations on the map: the mode chip's layer, markers, zoom hint, station card, status polling (section 15.5). Creates `S.indego` itself |
+| `js/indego.js` | 586 | Indego bike stations on the map: the mode chip's layer, markers, zoom hint, station card, status polling (section 15.5). Creates `S.indego` itself |
 | `js/main.js` | 115 | the `window.__SEPTA_TEST__` hook and the start-up calls |
 
-Load order is the table's order: `board.js` comes after `alerts.js` and `boardbikes.js` directly after `board.js` (it reaches `S.routing` and `S.boardview` only when it runs, both loaded later), `boardview.js` before `sheet.js`, `boardbikesview.js` and `boardsettings.js` directly after `boardview.js`, and `boardadd.js` after `boardsettings.js` (they need `S.boardview`, and do nothing without it). `tests/test_modules.py` pins the list and `tests/test_stability.py` counts the tags (22 scripts, 12 stylesheets).
+Load order is the table's order: `board.js` comes after `alerts.js` and `boardbikes.js` directly after `board.js` (it reaches `S.routing` and `S.boardview` only when it runs, both loaded later), `maplod.js` after `boardbikes.js` (it needs only `S.map` at load and reaches `S.board` when it runs), `boardview.js` before `sheet.js`, `boardbikesview.js` and `boardsettings.js` directly after `boardview.js`, and `boardadd.js` after `boardsettings.js` (they need `S.boardview`, and do nothing without it). `tests/test_modules.py` pins the list and `tests/test_stability.py` counts the tags (23 scripts, 12 stylesheets).
 
 | Stylesheet | Holds |
 |------------|-------|
@@ -503,7 +556,7 @@ Load order is the table's order: `board.js` comes after `alerts.js` and `boardbi
 
 The stylesheets load in the order of that table, and the rules inside each file keep the relative order they had in the old inline block. WP-F checked that no pair of rules with the same specificity and a shared property swapped order, and that computed styles of every element and screenshots at 390 and 1280 px, light and dark, were identical before and after.
 
-The inline script before the app scripts creates `window.SEPTA` (one object per file except `main`, which adds none, plus `failed` and `loadFailed`) and the load-error listener. `index.html` then loads `util`, `feed`, `map`, `landmarks`, `suggest`, `panel`, `stops`, `alerts`, `board`, `boardbikes`, `routing`, `candidates`, `planner`, `trip`, `nearby`, `boardview`, `boardbikesview`, `boardsettings`, `boardadd`, `sheet`, `indego`, `main` in that order, then a one-line check that `main.js` ran.
+The inline script before the app scripts creates `window.SEPTA` (one object per file except `main`, which adds none, plus `failed` and `loadFailed`) and the load-error listener. `index.html` then loads `util`, `feed`, `map`, `landmarks`, `suggest`, `panel`, `stops`, `alerts`, `board`, `boardbikes`, `maplod`, `routing`, `candidates`, `planner`, `trip`, `nearby`, `boardview`, `boardbikesview`, `boardsettings`, `boardadd`, `sheet`, `indego`, `main` in that order, then a one-line check that `main.js` ran.
 
 ### 14.2 How the files share code
 
@@ -623,7 +676,7 @@ Still open after that round:
 - **Preference.** `filters.indego` in `septa.prefs.v1`, validated like the other modes as a boolean. `DEFAULT_FILTERS.indego = false` in `js/util.js`; a saved object without the key reads as off and is not rewritten on load. The defaults migration is untouched. "Show all modes" turns the other four on in place (`Object.assign`) and leaves Indego as it was, on or off.
 - **Visibility.** Markers only at zoom 14 or closer. At zoom 14 and 15 at most about 150 markers are drawn, nearest the map centre first (a station already drawn stays while it ranks within the nearest 170, a new one enters at rank 150, so panning does not flicker the edge); at zoom 16 and closer every station in view. Below 14 a small pill at the top left says "Zoom in to see Indego stations" (not interactive, hidden while the banner or the idle bar shows). The chip's count is the number of stations in view, which can exceed the number drawn; then the pill reads "Zoom in to see all Indego stations".
 - **Marker.** A 44 px tap target holding a rounded tile with a bike icon and the number of bikes, and a tail at the station. Classes `av-none` (0, bike crossed out), `av-low` (1 to 2), `av-ok` (3 or more); the number is always shown. A station that is not renting counts as 0 bikes, one not taking returns as 0 docks, an out-of-service one has a dashed edge and says so in its name. `aria-label` "Indego station Broad & Race, 5 bikes, 7 open docks", `role=button`, `tabindex=0`, Enter and Space open the card. Tokens (`--ind-*`, `--indego`) live in `css/indego.css` for light, `prefers-color-scheme: dark` and `data-theme=dark`; badge text is at least 4.5:1 in all three (tested).
-- **Card.** `#indegoCard`, built by `js/indego.js`, sits where the vehicle card does (bottom left, and clear of the zoom buttons up to 840 px, using `S.map.CARD_NARROW`; the marker is panned into the strip above it). One card at a time: opening it clears the vehicle selection and closes the stop card; a vehicle or stop card opening closes it (a `MutationObserver` on their `hidden` attributes). Content: name, "5 bikes, 7 open docks", the split ("2 electric, 3 classic, 1 smart", zero parts left out) when electric, classic and smart add up to the total and hidden otherwise, "Updated 40 s ago", Walk here, Close. Escape and Close return focus to the marker. Walk here calls `S.trip.setDestination({lat, lng, name})` (the only change in `js/trip.js`, 4 lines), opens the sheet and focuses From (or Plan trip when From is filled).
+- **Card.** `#indegoCard`, built by `js/indego.js`, sits where the vehicle card does (bottom left, and clear of the zoom buttons up to 840 px, using `S.map.CARD_NARROW`; the marker is panned into the strip above it). One card at a time: opening it clears the vehicle selection and closes the stop card; a vehicle or stop card opening closes it (a `MutationObserver` on their `hidden` attributes). Content: name, "5 bikes, 7 open docks", the split ("2 electric, 3 classic, 1 smart", zero parts left out) when electric, classic and smart add up to the total and hidden otherwise, "Updated 40 s ago", Walk here, Close (since UX package C the counts are three tiles with icons and status words and the sentence is for screen readers: section 4.1). Escape and Close return focus to the marker. Walk here calls `S.trip.setDestination({lat, lng, name})` (the only change in `js/trip.js`, 4 lines), opens the sheet and focuses From (or Plan trip when From is filled).
 - **Freshness.** Station information once per page (Worker caches it an hour, `routing.js` keeps it in memory). Status through `loadIndego(55000)` every 60 s (a status answer younger than 55 s is reused, which is how this poller and the board's share one request, section 16.1), only while the chip is on, the map is at zoom 14 or closer, the tab is visible and `S.feed.idleNow()` is false (the one-hour idle pause of section 2); the timer is cleared otherwise and a once-a-second check (no network) restarts it, asking at once on return. A failed answer includes a malformed one: `loadIndego` rejects with `indego_unavailable` unless both information and status hold a non-empty `data.stations` array (a bad information answer is dropped from the page cache so the next call asks again), so a bad answer never shows as "0 stations". On failure the last data stays, the hint pill reads "Indego data unavailable right now. Showing the last known bikes." (or without the second sentence when nothing was ever loaded), markers dim once the last good answer is 3 minutes old (muted background and dotted edge, the number stays at full contrast, and the aria-label gains ", may be out of date"), the layer backs off (skips 1, then 2, then 4 polls, then 4 each time, reset by a good answer), and nothing throws. A card whose station is gone from a refresh closes.
 - **Request budget.** `/indego/information` at most once per page load (plus the planner's own use of the same cache); `/indego/status` at most 60 per active hour with the layer on while the feed works, 0 with it off, hidden, zoomed out or idle. During an outage the back-off spaces attempts 2, 3, then 5 minutes apart, so at most 12 attempts an hour, and each attempt is at most 3 requests (information if not cached, the Worker's status, then the direct status fallback). The Worker caches status 30 s and information 1 h, so upstream calls are bounded the same way. The map bounds are never sent anywhere: the request has no parameters, so the privacy text is unchanged.
 - **Tests.** `tests/test_indego_layer.py` (hermetic; chip and persistence, no request while off, zoom rules, cap and hysteresis, malformed answers, outage back-off, type split, Show all modes, classes and names, card and Walk here, keyboard, one card at a time, polling pause when hidden, off, zoomed out and idle, failure and dimming, phone layout at 360 and 390, contrast, reduced motion). `tests/shots_indego.py` writes screenshots (light and dark, 390 and 1280).

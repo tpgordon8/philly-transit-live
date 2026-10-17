@@ -62,7 +62,14 @@ def test_badge_hidden_at_low_zoom_shown_on_selected_and_unknown(root):
         unknown = [r for r in rows if r["none"]]
         assert known and unknown, "the fixture has vehicles with and without a direction"
         assert not any(r["shown"] for r in known), "letters hide below zoom 16"
-        assert all(r["shown"] for r in unknown), "the ? badge stays"
+        # zoomed out (14 and below, compact markers: js/maplod.js) the ? badge hides too; at 15 it stays
+        assert s.page.evaluate("window.SEPTA.map.map.getZoom()") <= 14
+        assert not any(r["shown"] for r in unknown), "compact markers show no badge"
+        s.page.evaluate("window.SEPTA.map.map.setZoom(15, {animate: false})")
+        s.page.wait_for_timeout(200)
+        rows = s.page.evaluate(disp)
+        assert all(r["shown"] for r in rows if r["none"]), "the ? badge stays at zoom 15"
+        assert not any(r["shown"] for r in rows if not r["none"]), "letters hide below zoom 16"
         # the accessible name keeps the direction while the letter is hidden
         assert any(re.search(r"(north|east|south|west)bound| heading ", r["label"]) for r in known), [r["label"] for r in known[:5]]
         # a selected vehicle always shows its letter
@@ -88,15 +95,18 @@ def test_focused_marker_is_raised_and_ringed(root):
     for scheme in SCHEMES:
         with Session(root, color_scheme=scheme) as s:
             boot(s)
+            # the first marker in the tab order (one folded into a count badge is out of it: js/maplod.js)
+            first = s.page.evaluate("[...document.querySelectorAll('.veh-wrap')].findIndex(e => !e.classList.contains('inclu'))")
+            assert first >= 0
             z = "i => document.querySelectorAll('.veh-wrap')[i].style.zIndex"
-            before = int(s.page.evaluate(z, 0))
-            s.page.evaluate("document.querySelectorAll('.veh-wrap')[0].focus()")
+            before = int(s.page.evaluate(z, first))
+            s.page.evaluate("(i) => document.querySelectorAll('.veh-wrap')[i].focus()", first)
             s.page.keyboard.press("Shift+Tab")  # keyboard modality: :focus-visible applies
             s.page.keyboard.press("Tab")
-            focused = s.page.evaluate("document.activeElement.classList.contains('veh-wrap')")
+            focused = s.page.evaluate("(i) => document.activeElement === document.querySelectorAll('.veh-wrap')[i]", first)
             if not focused:
-                s.page.evaluate("document.querySelectorAll('.veh-wrap')[0].focus()")
-            assert int(s.page.evaluate(z, 0)) >= before + 1500, "a focused marker is raised"
+                s.page.evaluate("(i) => document.querySelectorAll('.veh-wrap')[i].focus()", first)
+            assert int(s.page.evaluate(z, first)) >= before + 1500, "a focused marker is raised"
             ring = s.page.evaluate("""() => { const c = getComputedStyle(document.activeElement);
                 return {w: c.outlineWidth, st: c.outlineStyle, oc: c.outlineColor, sh: c.boxShadow, fv: document.activeElement.matches(':focus-visible')}; }""")
             assert ring["fv"] and ring["st"] == "solid" and ring["w"] == "3px", (scheme, ring)
@@ -107,7 +117,7 @@ def test_focused_marker_is_raised_and_ringed(root):
             ground = TILES_LIGHT[0] if scheme == "light" else s.page.evaluate("getComputedStyle(document.querySelector('#map')).backgroundColor")
             assert ratio(ring["oc"], ground) >= 3, (scheme, ring, ground)
             s.page.keyboard.press("Tab")
-            assert int(s.page.evaluate(z, 0)) == before, "blur restores the stacking"
+            assert int(s.page.evaluate(z, first)) == before, "blur restores the stacking"
 
 
 def test_selected_glow_has_its_own_colour_and_stale_stays_readable(root):
@@ -288,15 +298,19 @@ def test_vehicle_card_header_does_not_wrap_on_phones(root):
             assert close["w"] >= 44 and close["h"] >= 44, close
             assert abs(close["r"] - card["r"]) <= 2 and close["t"] - card["t"] <= 2, ("pinned top-right", close, card)
             assert s.page.get_attribute("#detailClose", "aria-label") == "Close vehicle details"
+            title = rect(s, "#detailHead")
             cy = lambda r: (r["t"] + r["b"]) / 2  # noqa: E731
-            assert abs(cy(badge) - cy(star)) <= 8, ("badge and star share one row", vp, badge, star)
-            assert star["r"] <= close["l"] + 1, ("star clears the close button", star, close)
-            # a long title may wrap to two lines in a wider fallback font (CI runners); Close and Star staying on the first row is asserted above
+            assert abs(cy(badge) - cy(head)) <= 8 and badge["r"] <= title["l"], ("badge and title share one row", vp, badge, title)
+            assert title["r"] <= close["l"] + 1, ("the title clears the close button", title, close)
+            # the Star toggle sits below the header with the status chips, a full 44 px target that clears Close
+            assert star["t"] >= head["b"] - 1 and star["h"] >= 44 and star["r"] <= card["r"], ("star below the header", star, head)
+            assert s.page.get_attribute("#starBtn", "aria-pressed") in ("true", "false")
+            # a long title may wrap to two lines in a wider fallback font (CI runners)
             assert head["h"] <= 130, ("header did not grow a third row", vp, head)
             vs = s.page.evaluate("""() => { const b = document.querySelector('#viewStop'); if (!b) return null; const c = getComputedStyle(b);
-                return {ghost: b.classList.contains('ghost'), border: c.borderTopColor, dd: b.closest('dd').getBoundingClientRect().height}; }""")
+                return {ghost: b.classList.contains('ghost'), border: c.borderTopColor, box: b.closest('.vnext').getBoundingClientRect().height}; }""")
             if vs:
-                assert vs["ghost"] and re.search(r"0\)$", vs["border"]) and vs["dd"] <= 72, vs
+                assert vs["ghost"] and re.search(r"0\)$", vs["border"]) and vs["box"] <= 140, vs
 
 
 def test_stop_card_order_buttons_and_alert_sentence(root):

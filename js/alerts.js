@@ -132,12 +132,31 @@
     var cnt = $('#alertCount');
     if (A.err && !A.items.length) {
       cnt.textContent = '';
-      ul.appendChild(el('li', 'empty-line', 'Alerts are unavailable right now.'));
+      var li0 = el('li', 'empty-line al-state'),
+        rb = el('button', 'btn small', 'Retry');
+      rb.type = 'button';
+      rb.id = 'alertsRetry';
+      rb.addEventListener('click', function () {
+        state.alerts.err = false;
+        renderAlerts();
+        loadAlerts();
+      });
+      li0.appendChild(el('span', null, 'Alerts are unavailable right now.'));
+      li0.appendChild(rb);
+      ul.appendChild(li0);
       return;
     }
     if (!A.ok) {
       cnt.textContent = '';
-      ul.appendChild(el('li', 'empty-line', 'Loading alerts…'));
+      /* shimmer placeholders while the first answer is on its way; the text stays for screen readers */
+      ul.appendChild(el('li', 'sr-only', 'Loading alerts…'));
+      for (var k = 0; k < 2; k++) {
+        var sk = el('li', 'alert al-sk');
+        sk.setAttribute('aria-hidden', 'true');
+        sk.appendChild(el('span', 'sk sk-a'));
+        sk.appendChild(el('span', 'sk sk-b'));
+        ul.appendChild(sk);
+      }
       return;
     }
     var near = new Set(['*']);
@@ -165,10 +184,10 @@
       return;
     }
     items.slice(0, 60).forEach(function (i) {
-      var li = el('li', 'alert'),
+      var li = el('li', 'alert t-' + i.type),
         top = el('div', 'top');
-      top.appendChild(el('span', 'tag k-' + i.type, i.type));
       top.appendChild(el('b', null, i.label));
+      top.appendChild(el('span', 'tag k-' + i.type, i.type));
       li.appendChild(top);
       li.appendChild(el('p', null, i.text));
       if (i.until)
