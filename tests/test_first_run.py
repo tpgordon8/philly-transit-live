@@ -168,6 +168,8 @@ def check_star_pill(root):
         assert 0 < s.markers() < total and ls(s, ROUTES)["onlyMine"] is True
         pill = s.page.locator("#myPill")
         assert pill.is_visible() and pill.inner_text().strip() == "My routes only. Show all", pill.inner_text()
+        s.page.wait_for_function("document.getAnimations().every(a => a.playState !== 'running' || !isFinite(a.effect.getComputedTiming().iterations))")  # the sheet glides 220 ms when the pill row appears
+        s.page.wait_for_timeout(60)
         r, panel, addr = rect(s, "#myPill"), rect(s, "#panel"), rect(s, "#addr")
         assert r["h"] >= 44 - 0.5 and r["w"] >= 44, r
         assert panel["t"] <= r["t"] and r["b"] <= panel["b"] <= 844, (r, panel)  # inside the closed sheet, in view

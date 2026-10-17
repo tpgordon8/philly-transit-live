@@ -121,6 +121,7 @@ def select_vehicle(s):
         el.click(); }""")
     s.page.wait_for_selector("#detail:not([hidden])")
     s.page.wait_for_timeout(400)
+    s.page.wait_for_function("document.getAnimations().every(a => a.playState !== 'running' || !isFinite(a.effect.getComputedTiming().iterations))")  # slow machines: the card slide may still run
 
 
 def open_suggestions(s):
