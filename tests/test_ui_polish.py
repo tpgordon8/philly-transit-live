@@ -189,7 +189,8 @@ def test_border_contrast_is_3_to_1_in_both_schemes(root):
               const bg = e => { for (let n = e; n; n = n.parentElement) { const c = getComputedStyle(n).backgroundColor; if (!/rgba\\(.*, 0\\)|transparent/.test(c)) return c; } return 'rgb(255,255,255)'; };
               const out = [];
               const add = (name, e) => { const c = getComputedStyle(e); out.push({name, border: c.borderTopColor, width: c.borderTopWidth, inside: bg(e), outside: bg(e.parentElement)}); };
-              for (const id of ['addr', 'tripFrom', 'tripTo', 'placeName']) add('#' + id, document.getElementById(id));
+              // From and To share one bordered card (css/trip.css): its outline is their boundary
+              for (const id of ['addr', 'tripFrom', 'tripTo', 'placeName']) add('#' + id, document.getElementById(id).closest('.tp-fields') || document.getElementById(id));
               add('chip:not(.on)', document.querySelector('.chip:not(.on)'));
               return out; }""")
             assert len(rows) == 5
@@ -272,7 +273,7 @@ def test_empty_note_leaves_no_gap_above_radius(root):
         assert s.page.evaluate("document.querySelector('#note').textContent") == ""
         assert s.page.get_attribute("#note", "aria-live") == "polite", "the live region stays in the page"
         assert rect(s, "#note")["h"] == 0
-        gap = rect(s, ".radius")["t"] - rect(s, "#btnLocate")["b"]
+        gap = rect(s, ".sec-find")["b"] - rect(s, "#btnLocate")["b"]  # the quick actions end the search section
         assert gap <= 16, gap
         s.page.evaluate("document.querySelector('#note').textContent = 'Located you'")
         assert rect(s, "#note")["h"] > 0, "text still shows when there is some"

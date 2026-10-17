@@ -80,7 +80,20 @@ def set_sheet(s, want_open):
     """Open or close the phone bottom sheet; a no-op where the panel is a sidebar."""
     if handle_visible(s) and sheet_open(s) != want_open:
         s.page.click("#sheetHandle")
-        s.page.wait_for_timeout(120)
+        s.page.wait_for_timeout(300)  # the sheet glides for 220 ms
+
+
+def tabs_shown(s):
+    return s.page.evaluate("(() => { const b = document.querySelector('#tabbar'); return !!b && b.getClientRects().length > 0 })()")
+
+
+def go_tab(s, name):
+    """Switch the phone tab bar to Map, Trip, Alerts or More; a no-op where every section shows (wide screens, phone landscape).
+    The bar steps aside while a text field has focus and returns a moment after it leaves: wait for it."""
+    if s.page.evaluate("matchMedia('(max-width: 760px)').matches && !matchMedia('(max-height: 500px) and (orientation: landscape)').matches"):
+        s.page.wait_for_selector("#tabbar", state="visible", timeout=2000)
+        s.page.click("#tab" + name.capitalize())
+        s.page.wait_for_timeout(300)
 
 
 def pick(s, sel, text, label):
@@ -91,6 +104,7 @@ def pick(s, sel, text, label):
 
 
 def plan_trip(s):
+    go_tab(s, "trip")
     set_sheet(s, True)
     pick(s, "#tripFrom", "city hall", "Philadelphia City Hall")
     pick(s, "#tripTo", "30th street", "30th Street Station")
@@ -194,6 +208,14 @@ def run_layout(root, vp):
         set_sheet(s, True)
         check_overflow(s, vp, "open")
         check_taps(s, vp, "open")
+        for name in ("map", "trip", "alerts", "more"):  # on a phone each tab shows its own sections; elsewhere this is one panel
+            go_tab(s, name)
+            if name == "map" and tabs_shown(s):
+                s.page.click("#filtersBtn")
+            set_sheet(s, True)
+            check_overflow(s, vp, name)
+            check_taps(s, vp, name)
+        go_tab(s, "map")
         # the panel can be scrolled to its end without the page growing sideways
         s.page.evaluate("document.querySelector('#panel').scrollTop = 99999")
         check_overflow(s, vp, "open, scrolled")
@@ -258,18 +280,19 @@ def test_sheet_toggle_and_keyboard_reach(root):
         addr = rect(s, "#addr")
         assert addr["b"] <= vp[1] and addr["t"] > closed_map, ("search field reachable while the sheet is closed", addr)
         s.page.click("#sheetHandle")
-        s.page.wait_for_timeout(150)
+        s.page.wait_for_timeout(350)
         assert sheet_open(s) and rect(s, "#map")["h"] < closed_map - 100
         # Leaflet was told: its own size matches the box
         assert s.page.evaluate("document.querySelector('.leaflet-container').clientHeight") == round(rect(s, "#map")["h"])
         s.page.click("#sheetHandle")
-        s.page.wait_for_timeout(150)
+        s.page.wait_for_timeout(350)
         assert not sheet_open(s) and abs(rect(s, "#map")["h"] - closed_map) < 2
         # Tab into a control below the search field opens the sheet; the search field does not
         s.page.focus("#addr")
         assert not sheet_open(s)
-        s.page.focus("#tripFrom")
+        s.page.focus("#filtersBtn")
         assert sheet_open(s)
+        go_tab(s, "trip")
         # keyboard: the layout shrinks (Android) -> the typed-in field and its list stay on screen
         s.page.set_viewport_size({"width": 390, "height": 844 - 340})
         s.page.wait_for_timeout(200)
@@ -308,7 +331,10 @@ def check_kb_released_without_events(root, blur):
             s.page.evaluate("document.activeElement.blur()")
         s.page.wait_for_timeout(1100)
         assert s.page.evaluate(kb) == "0px", "the page stayed shrunk for a keyboard that is gone"
-        assert s.page.evaluate("document.querySelector('#app').getBoundingClientRect().bottom") >= 843
+        # the tab bar is back once no field has focus (56 px), and stays aside while one still has it
+        bar = s.page.evaluate("parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tabbar-row')) || 0")
+        assert bar == (56 if blur else 0), bar
+        assert s.page.evaluate("document.querySelector('#app').getBoundingClientRect().bottom") >= 843 - bar
 
 
 def test_page_is_not_left_shrunk_when_the_keyboard_goes_without_an_event(root):
@@ -368,6 +394,10 @@ def test_tap_targets_and_fonts_when_populated(root):
             set_sheet(s, True)
             check_taps(s, vp, "populated")
             check_overflow(s, vp, "populated")
+            for name in ("trip", "alerts", "more"):
+                go_tab(s, name)
+                check_taps(s, vp, "populated " + name)
+                check_overflow(s, vp, "populated " + name)
 
 
 def test_peek_wraps_the_status_and_keeps_the_search_field(root):
@@ -377,10 +407,9 @@ def test_peek_wraps_the_status_and_keeps_the_search_field(root):
         with session(root, vp) as s:
             boot(s)
             set_sheet(s, False)
-            s.page.evaluate("t => { document.querySelector('#statusText').textContent = t }", long_status)
-            s.page.wait_for_timeout(100)
-            st = s.page.evaluate("""() => { const e = document.querySelector('#statusText'), c = getComputedStyle(e);
-                return {ws: c.whiteSpace, to: c.textOverflow, sw: e.scrollWidth, cw: e.clientWidth, h: e.getBoundingClientRect().height, lh: parseFloat(c.lineHeight)}; }""")
+            # set and measured in one go: the status line re-renders itself every second
+            st = s.page.evaluate("""(t) => { const e = document.querySelector('#statusText'); e.textContent = t; const c = getComputedStyle(e);
+                return {ws: c.whiteSpace, to: c.textOverflow, sw: e.scrollWidth, cw: e.clientWidth, h: e.getBoundingClientRect().height, lh: parseFloat(c.lineHeight)}; }""", long_status)
             assert st["ws"] == "normal" and st["to"] != "ellipsis" and st["sw"] <= st["cw"] + 1, (vp, st)
             assert st["h"] >= st["lh"] * 1.5, (vp, "a long status wraps onto a second line", st)
             addr, btn = rect(s, "#addr"), rect(s, "#btnSearch")
@@ -407,7 +436,7 @@ def check_pan_is_undone(root):
     with Session(root=root, viewport=(390, 844), touch=True, mobile=True) as s:
         s.open()
         s.wait_live()
-        s.page.tap("#sheetHandle")
+        s.page.tap("#tabTrip")
         s.page.focus("#tripTo")
         s.page.evaluate("""() => { window.__scrolls = []; const sc = window.scrollTo.bind(window);
             window.scrollTo = (...a) => { window.__scrolls.push(a); return sc(...a); };

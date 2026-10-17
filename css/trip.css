@@ -6,11 +6,29 @@
 .tp-lab{display:block;margin:10px 0 4px;font-size:12.5px;font-weight:600;color:var(--mute)}
 #tripForm .tp-lab:first-child{margin-top:0}
 .tp-err{margin-top:4px;min-height:0}
-.tp-mid{margin-top:8px}
-.tp-mid .btn{min-width:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
-.tp-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.tp-chips .btn{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+/* From and To share one card: label, field and Use Home on a row each, a hairline between them. */
+.tp-fields{border:1px solid var(--line-strong);border-radius:12px;background:var(--paper);overflow:hidden}
+.tp-field{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center;padding-left:12px}
+.tp-fields .tp-field~.tp-field{border-top:1px solid var(--line-strong)}
+#tripForm .tp-field .tp-lab{margin:0}
+.tp-field input[type=text]{border:0;border-radius:0;background:transparent;padding-left:2px}
+.tp-field input[type=text]:focus-visible{outline-offset:-2px}
+.tp-field .btn{margin:0 4px 0 0;padding:5px 10px;align-self:center;border-radius:999px;border-color:transparent;background:transparent;color:var(--accent)}
+.tp-field .btn:hover{border-color:var(--line)}
+.tp-fields .tp-err{margin:0;padding:0 12px 8px 58px}
+.tp-mid{margin-top:8px;justify-content:space-between}
+.tp-mid .btn{min-width:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:999px}
+.tp-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px}
+.tp-chips::before{content:"Go to" / "";color:var(--mute);font-size:12.5px;font-weight:600;margin-right:2px}
+.tp-chips .btn{max-width:100%;overflow:hidden;text-overflow:ellipsis;border-radius:999px;border-color:color-mix(in srgb,var(--accent) 28%,var(--line));background:color-mix(in srgb,var(--accent) 8%,var(--panel));color:var(--accent)}
+@media (max-width:760px){
+  .tp-chips{flex-wrap:nowrap;overflow-x:auto;margin:10px -18px 0;padding:0 18px;scrollbar-width:none}
+  .tp-chips::-webkit-scrollbar{display:none}
+  .tp-chips .btn{flex:none;max-width:70vw}
+  .tp-go{min-height:48px;border-radius:24px}
+}
 .tp-go{width:100%;margin-top:12px}
+.tp-scope{font-size:12.5px}
 #tripResults{margin-top:14px;min-width:0}
 #tripResults h3{margin:0 0 4px;font:700 20px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.04em}
 #tripResults h3:focus{outline:none}

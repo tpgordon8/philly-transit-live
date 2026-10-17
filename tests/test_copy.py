@@ -47,10 +47,10 @@ def rider_html(root):
 def test_index_html_wording_and_no_jargon(root):
     html = (pathlib.Path(root) / "index.html").read_text()
     for part in (
-        "Suggestions by <a", "map data <a", "Privacy details</a>", '<summary>Privacy details</summary>', 'aria-label="Street address or intersection"',
+        "Suggestions by <a", "map data <a", "Privacy details</a>", '<summary>Privacy details</summary>', 'aria-label="Search an address or stop"',
         ">Use Home</button>", ">Set as Home</button>", ">Near here</button>", ">All of SEPTA</button>",
         "Tap a stop on the map or in Nearby stops, then tap Add alert.",
-        "Walking, Indego, one bus or trolley, or driving. No subway, Regional Rank or transfers yet.".replace("Rank", "Rail"),
+        "Walk, Indego, one bus or trolley, or drive. No rail or transfers yet.",
         "Positions from SEPTA's data, refreshed about every 15 seconds.",
         "When you type an address, the text and your approximate area (within about 1 km) are sent to Photon, a free place-search service, to suggest places.",
         "An address you type and submit in the main search box that you did not pick from the suggestions is sent to Nominatim (OpenStreetMap's address search) for exact matches and intersections.",
@@ -230,7 +230,7 @@ def test_trip_results_wording_and_order(root):
         order = s.page.evaluate("[...document.querySelectorAll('#tripList .tp-card')].map(b => b.querySelector('.tp-badge.drive') ? 'car' : 'other')")
         assert order.count("car") == 1 and order[-1] == "car", order
         assert s.page.inner_text("#tripResults .tp-badge.drive") == "By car"
-        assert s.page.inner_text("#tripScope") == "Walking, Indego, one bus or trolley, or driving. No subway, Regional Rail or transfers yet."
+        assert s.page.inner_text("#tripScope") == "Walk, Indego, one bus or trolley, or drive. No rail or transfers yet."
         steps = s.page.evaluate("[...document.querySelectorAll('#tripResults .tp-sub')].map(e => e.textContent)")
         waits = [x for x in steps if x.startswith("Wait:")]
         assert all(re.fullmatch(r"Wait: (about \d+|under 1) min \((typical, no bus tracked|next bus tracked live)\)", w) for w in waits), waits

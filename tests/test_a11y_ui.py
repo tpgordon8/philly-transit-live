@@ -192,7 +192,8 @@ def test_phone_one_toast_at_bottom_queue_not_lost(root):
         assert len(visible_toasts(s)) == 1
         t = rect(s, "#toasts .toast:last-child")
         assert t["l"] >= 7.5 and t["r"] <= 360 - 7.5 and abs(t["w"] - (360 - 16)) < 2, t
-        assert t["b"] <= 640 and t["b"] >= 640 - 16, t
+        bar = s.page.evaluate("document.querySelector('#tabbar').getBoundingClientRect().top")  # toasts sit just above the tab bar
+        assert bar == 640 - 56 and t["b"] <= bar and t["b"] >= bar - 16, (t, bar)
         card = rect(s, "#stopCard")
         title = rect(s, "#stopCard b")
         assert not overlap(t, title) and not overlap(t, rect(s, "#copyStop")) and not overlap(t, card), (t, card)
@@ -370,6 +371,13 @@ def test_touch_targets_at_least_40(root):
         with Session(root, viewport=vp) as s:
             _prepare_controls(s)
             rows = s.page.evaluate(SIZE_JS)
+            if vp == PHONE:  # a phone shows one tab's sections at a time: measure every tab
+                for tab in ("Map", "Alerts", "More"):
+                    s.page.click("#tab" + tab)
+                    if tab == "Map" and s.page.get_attribute("#filtersBtn", "aria-expanded") == "false":
+                        s.page.click("#filtersBtn")
+                    rows += s.page.evaluate(SIZE_JS)
+                s.page.click("#tabAlerts")
             kinds = {r[0] for r in rows}
             for need in (".btn", ".seg button", "#modes .chip", "#myRoutes .chip", "#alertMin", ".rule .rtog", ".rule .rrm", ".leaflet-bar a", "#radius", "#places .btn"):
                 assert need in kinds, (need, kinds)
@@ -385,6 +393,8 @@ def test_touch_targets_at_least_40(root):
             assert s.page.evaluate("document.querySelector('.rule .rtog input').checked") != before
             sw = s.page.evaluate("[document.documentElement.scrollWidth, window.innerWidth, document.querySelector('#panel').scrollWidth, document.querySelector('#panel').clientWidth]")
             assert sw[0] <= sw[1] and sw[2] <= sw[3] + 1, (vp, sw)
+            if vp == PHONE:
+                s.page.click("#tabMap")
             s.page.locator("#radius").scroll_into_view_if_needed()
             s.shot(f"a11y_controls_{vp[0]}")
 

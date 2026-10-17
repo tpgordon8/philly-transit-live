@@ -1155,21 +1155,28 @@ def test_one_polite_live_region_in_the_board(root):
 
 
 def test_phone_entry_button_is_below_the_peek_and_the_sheet_survives(root):
+    """On a phone held upright the entry is the Board tab of the tab bar (ARCHITECTURE.md 15.9); the panel's Board button is not shown.
+    Opening and closing the board leaves the sheet, its tab and the map exactly as they were."""
     with sess(root, viewport=PHONE, mobile=True, touch=True) as s:
         s.open()
         s.wait_live()
         assert s.page.get_attribute("#app", "data-sheet") == "peek"
-        box = s.page.evaluate("(() => { const b = document.querySelector('#btnBoard').getBoundingClientRect(), p = document.querySelector('#panel').getBoundingClientRect(); return [b.top, p.bottom]; })()")
-        assert box[0] >= box[1], "the Board button is in the opened More area, not the peek row"
+        assert not s.page.locator("#btnBoard").is_visible(), "the tab bar has Board; the panel's button is for wide screens"
         before = s.page.evaluate("(() => { const r = document.querySelector('#panel').getBoundingClientRect(); return [r.top, r.height]; })()")
-        s.page.click("#sheetHandle")
-        s.page.evaluate("document.querySelector('#btnBoard').scrollIntoView()")
-        s.page.tap("#btnBoard")
+        s.page.tap("#tabBoard")
         s.page.wait_for_selector(BV, state="visible")
         s.page.tap("#bvClose")
-        assert s.page.evaluate("document.activeElement.id") == "btnBoard"
+        s.page.wait_for_function("document.activeElement && document.activeElement.id === 'tabBoard'")
+        assert s.page.get_attribute("#app", "data-sheet") == "peek" and s.page.get_attribute("#app", "data-tab") == "map"
+        assert s.page.evaluate("(() => { const r = document.querySelector('#panel').getBoundingClientRect(); return [r.top, r.height]; })()") == before
+        s.page.click("#sheetHandle")
+        s.page.tap("#tabBoard")
+        s.page.wait_for_selector(BV, state="visible")
+        s.page.tap("#bvClose")
+        s.page.wait_for_function("document.activeElement && document.activeElement.id === 'tabBoard'")
         assert s.page.get_attribute("#app", "data-sheet") == "open"
         s.page.click("#sheetHandle")
+        s.page.wait_for_timeout(350)
         assert s.page.get_attribute("#app", "data-sheet") == "peek"
         assert s.page.evaluate("(() => { const r = document.querySelector('#panel').getBoundingClientRect(); return [r.top, r.height]; })()") == before
         assert s.page.evaluate("(() => { const m = window.SEPTA.map.map, z = m.getSize(), c = m.getContainer(); return z.x === c.clientWidth && z.y === c.clientHeight; })()")

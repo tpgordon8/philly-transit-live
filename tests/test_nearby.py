@@ -303,7 +303,8 @@ def test_get_me_home_plans_from_location_to_home(root):
         assert btn.inner_text() == "Get me home" and btn.is_visible()
         box = btn.bounding_box()
         panel = s.page.locator("#h-find").bounding_box()
-        assert box["height"] >= 44 and box["width"] > 250 and box["y"] > panel["y"]
+        assert box["height"] >= 44 and box["width"] >= 120 and box["y"] > panel["y"]  # a quick action under the search bar
+        assert abs(box["y"] - s.page.locator("#btnLocate").bounding_box()["y"]) < 1, "next to Near me"
         assert s.page.evaluate("document.querySelector('#btnHome').closest('section').querySelector('#h-find') !== null")
         btn.click()
         wait_cards(s)

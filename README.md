@@ -22,7 +22,7 @@ loaded with ordinary `<script src>` tags in dependency order: `util` (helpers, s
 feed, ghost filter, idle pause, refresh), `map` (Leaflet map, markers, vehicle card), `landmarks` (about 40 well-known Philadelphia places), `suggest` (place and address suggestions as you type), `panel` (sidebar: status, search,
 saved places, Home, radius, filters), `stops` (stop links, stop board, ETA), `alerts` (service alerts, leave-now rules), `board` (My stops board logic),
 `routing` (trip planner data clients), `candidates` (bus candidates), `planner` (trip planner), `trip` (trip planner
-interface), `nearby` (Nearby stops under the search area; Get me home is in `panel`), `boardview` (the My stops board screen), `boardsettings` (its settings sheet), `boardadd` (its Add a bus stop search), `sheet` (phone bottom sheet, on-screen keyboard), `indego` (Indego bike stations) and `main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else
+interface), `nearby` (Nearby stops under the search area; Get me home is in `panel`), `boardview` (the My stops board screen), `boardsettings` (its settings sheet), `boardadd` (its Add a bus stop search), `sheet` (phone bottom sheet, tab bar, on-screen keyboard), `indego` (Indego bike stations) and `main` (test hook and start). Each file except `main` adds one object to `window.SEPTA`, and nothing else
 is global. If a file fails to load, a red banner at the top of the page tells the visitor to reload (the file names go to the browser console and `SEPTA.failed`). How the files fit together and how to
 add one: [ARCHITECTURE.md](ARCHITECTURE.md) section 14. There is no build step; GitHub Pages serves the files as they are.
 
@@ -43,9 +43,12 @@ ES5 on purpose (`var`, classic scripts); Prettier only changes layout, so format
 
 ## Phones and small screens
 
-Up to 760 px wide the map takes the screen and the controls are a bottom sheet under it: the closed sheet shows the Septer name, the
-status line and the search field; the More handle (or reaching any control below the peek row) opens it. A search or location error opens it so the message shows. Wide screens keep the
-sidebar, and so does a phone held sideways. Every button, chip, field and link is at least 44 px, text fields are 16 px so iOS does not
+Up to 760 px wide the map takes the screen, the controls are a bottom sheet under it and a tab bar at the bottom picks what the
+sheet shows: Map (search, Near me, Get me home, nearby stops, filters), Trip (the planner), Board (opens the full-screen board),
+Alerts (leave-now and service alerts, with a count badge) and More (saved places, privacy, about and data credits). The closed sheet
+shows the Septer name, the status line, the search bar and the quick actions; the grab bar, a tab, or reaching any control below
+them opens it. A search or location error opens it so the message shows. The tab bar steps aside while you type. The last tab you
+picked is remembered (`septa.tab.v1`). Wide screens keep the sidebar with every section, and so does a phone held sideways. Every button, chip, field and link is at least 44 px, text fields are 16 px so iOS does not
 zoom, and the page keeps clear of notches. `python3 tests/shots_responsive.py` saves a matrix of screenshots to `/tmp/claude-0/shots/`
 (ten widths plus phone landscape; panel closed and open, trip planner, suggestions, vehicle and stop cards) for a visual check.
 

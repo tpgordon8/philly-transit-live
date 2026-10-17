@@ -1,39 +1,90 @@
-/* layout.css: app shell, sidebar, map stage, the phone bottom sheet and their responsive rules.
-   Wide screens: sidebar left, map right. Up to 760px wide the map takes the screen and the panel is a bottom sheet (js/sheet.js
-   sets #app[data-sheet] to peek or open; without it the sheet is simply open). Phone landscape goes back to a side panel. */
-:root{--peek:196px;--pillrow:34px}
+/* layout.css: app shell, sidebar, map stage, the phone bottom sheet, the phone tab bar and their responsive rules.
+   Wide screens: sidebar left, map right, every section in one scrolling panel. Up to 760px wide the map takes the screen, the panel
+   is a bottom sheet (js/sheet.js sets #app[data-sheet] to peek or open; without it the sheet is simply open) and a tab bar at the
+   bottom picks which sections the sheet shows (#app[data-tab], the sections carry data-tab). Phone landscape goes back to a side
+   panel with every section and no tab bar. Without js/sheet.js the bar's room is kept but the bar is not shown, and every
+   section shows. */
+:root{--peek:196px;--pillrow:34px;--tabbar-row:0px;--tabbar-h:0px}
 #app{display:grid;grid-template-columns:392px minmax(0,1fr);height:100%}
 #panel{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;min-width:0}
 #stage{position:relative;min-width:0;min-height:0}
 #map{position:absolute;inset:0;background:var(--map-bg)}
 .sheet-handle{display:none}
+.tabbar{display:none}
 @media (max-width:760px){
-  #app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(50%,1fr) minmax(0,50%)}
-  #app[data-sheet=peek]{grid-template-rows:minmax(0,1fr) var(--peek)}
+  /* --tabbar-row is the bar's own 56 px (the page already keeps clear of the home indicator); --tabbar-h adds the safe area, so a
+     fixed element at bottom:var(--tabbar-h) sits just above the bar. Both are 0 while a text field has focus (the keyboard is up).
+     The room is kept from the first paint, so nothing moves when js/sheet.js arrives and shows the bar (data-tabs on the root). */
+  :root{--tabbar-row:56px;--tabbar-h:calc(56px + env(safe-area-inset-bottom,0px))}
+  :root[data-typing]{--tabbar-row:0px;--tabbar-h:0px}
+  #app{height:calc(100% - var(--tabbar-row));grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(50%,1fr) minmax(0,50%)}
+  #app[data-sheet=peek]{grid-template-rows:minmax(0,1fr) minmax(0,var(--peek))}
+  /* Alerts and More are read in the sheet: it opens a little higher there, and the map keeps 40%. Trip keeps half for the map,
+     where the plan is drawn. */
+  #app[data-sheet=open]:is([data-tab=alerts],[data-tab=more]){grid-template-rows:minmax(40%,1fr) minmax(0,60%)}
   /* While the "My routes only" pill shows in the header the closed sheet is one pill row taller, so the search field stays in view. */
-  #app[data-sheet=peek]:has(#myPillRow:not([hidden])){grid-template-rows:minmax(0,1fr) calc(var(--peek) + var(--pillrow))}
-  #panel{order:2;border-right:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0;box-shadow:0 -6px 18px rgba(15,28,44,.14);z-index:1085}
+  #app[data-sheet=peek]:has(#myPillRow:not([hidden])){grid-template-rows:minmax(0,1fr) minmax(0,calc(var(--peek) + var(--pillrow)))}
+  #panel{order:2;border-right:0;border-top:1px solid var(--line);border-radius:16px 16px 0 0;box-shadow:0 -8px 24px rgba(15,28,44,.12);z-index:1085}
   #app[data-sheet=peek] #panel{overflow:hidden}
   #stage{order:1}
-  .sheet-handle{display:flex;flex:none;position:sticky;top:0;z-index:3;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:100%;min-height:44px;padding:6px 16px 2px;border:0;border-radius:14px 14px 0 0;background:var(--panel);color:var(--mute);font-size:12px;font-weight:600;line-height:1.2}
-  .sheet-label::after{content:"";display:inline-block;width:7px;height:7px;margin-left:8px;border:solid currentColor;border-width:2px 2px 0 0;transform:translateY(1px) rotate(-45deg)}
-  .sheet-handle[aria-expanded=true] .sheet-label::after{transform:translateY(-2px) rotate(135deg)}
-  .sheet-handle::before{content:"";width:40px;height:5px;border-radius:3px;background:var(--mute);opacity:.55}
-  /* Compact header on a phone: wordmark and status share a line so the closed sheet shows the search field. */
-  .brand{display:flex;flex-wrap:wrap;align-items:center;column-gap:12px;padding:0 18px 8px;border-bottom:0}
-  .pillrow{flex:0 0 100%;margin:-6px 0 -4px}
+  .sheet-handle{display:flex;flex:none;position:sticky;top:0;z-index:3;align-items:flex-start;justify-content:center;width:100%;min-height:44px;margin-bottom:-18px;padding:8px 16px 0;border:0;border-radius:16px 16px 0 0;background:linear-gradient(var(--panel) 0 22px,transparent 22px);color:var(--mute);-webkit-tap-highlight-color:transparent}
+  .sheet-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .sheet-handle::before{content:"";width:36px;height:5px;border-radius:3px;background:var(--line-strong);opacity:.6}
+  .sheet-handle:focus-visible{outline-offset:-4px}
+  /* Compact header on a phone: wordmark and a small status line share a row, so the closed sheet shows the search bar and the quick actions. */
+  .brand{position:relative;flex:none;display:flex;flex-wrap:wrap;align-items:center;column-gap:10px;min-height:32px;padding:0 18px 4px;border-bottom:0}
+  .pillrow{flex:0 0 100%;margin:-8px 0 -14px}
   .brand h1{font-size:22px}
-  /* Two lines tall from the start: the status wraps when "Live, updated ..." replaces "Connecting...", and the header must not grow then (no layout shift). */
-  .brand .status{margin-top:0;flex:1;min-height:34px}
+  /* Up to two lines, reserved from the start: the status may wrap at 320 px when "Live, updated ..." replaces "Connecting...", and the header must not grow then (no layout shift). */
+  .brand .status{margin-top:0;flex:1;min-height:30px;font-size:12px}
   .status #statusText{white-space:normal;min-width:0;line-height:1.25}
+  /* The tab bar: five equal buttons, 56 px tall, over the home indicator's safe area. */
+  .tabbar{display:flex;position:fixed;z-index:1095;left:0;right:0;bottom:0;height:var(--tabbar-h);padding:0 env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);background:var(--panel);border-top:1px solid var(--line);box-shadow:0 -1px 0 rgba(15,28,44,.02)}
+  :root:not([data-tabs]) .tabbar{visibility:hidden}
+  :root[data-typing] .tabbar{display:none}
+  .tab{position:relative;flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:44px;height:56px;padding:4px 2px 5px;border:0;border-radius:0;background:none;color:var(--mute);font:500 11.5px/1.1 var(--f-body);letter-spacing:.01em;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+  .tab svg{position:relative;z-index:1;display:block}
+  .tab-ic{position:relative;display:block}
+  .tab-l{position:relative;z-index:1}
+  /* The current tab is not shown by colour alone: a pill sits behind its icon and the label is bold. */
+  .tab::before{content:"";position:absolute;top:5px;left:50%;width:52px;height:30px;margin-left:-26px;border-radius:15px;background:color-mix(in srgb,var(--accent) 15%,transparent);opacity:0;transform:scaleX(.6)}
+  .tab[aria-current=page]{color:var(--accent);font-weight:700}
+  .tab[aria-current=page]::before{opacity:1;transform:none}
+  .tab:active::before{opacity:.6;transform:none}
+  .tab:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;border-radius:12px}
+  .tab-badge{position:absolute;z-index:2;top:-5px;left:15px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--accent-ink);font:700 11px/18px var(--f-body);text-align:center;box-shadow:0 0 0 2px var(--panel)}
+  /* Only the sections of the current tab show in the sheet. */
+  #app[data-tab=map] #panel>[data-tab]:not([data-tab=map]),
+  #app[data-tab=trip] #panel>[data-tab]:not([data-tab=trip]),
+  #app[data-tab=alerts] #panel>[data-tab]:not([data-tab=alerts]),
+  #app[data-tab=more] #panel>[data-tab]:not([data-tab=more]){display:none}
+  #app[data-tab]:not([data-tab=map]) #welcome{display:none}
+  #panel::after{content:"";flex:none;height:16px}
 }
-/* Phone landscape is too short for a stacked layout: the panel is a column on the left again and the sheet handle is gone. */
+@media (max-width:760px) and (prefers-reduced-motion:no-preference){
+  /* Short and calm: the sheet glides between peek and open, and a tab's content fades in. */
+  #app{transition:grid-template-rows .22s cubic-bezier(.2,.8,.2,1)}
+  #app[data-tab] #panel>[data-tab]{animation:tab-in .16s ease-out}
+  .tab::before{transition:opacity .16s ease-out,transform .2s cubic-bezier(.2,.8,.2,1)}
+}
+@keyframes tab-in{from{opacity:0}to{opacity:1}}
+/* Phone landscape is too short for a stacked layout: the panel is a column on the left again, the sheet handle and the tab bar are gone
+   and every section shows. */
 @media (max-width:760px) and (max-height:500px) and (orientation:landscape){
-  #app,#app[data-sheet]{grid-template-columns:minmax(280px,44%) minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+  :root{--tabbar-row:0px;--tabbar-h:0px}
+  .tabbar{display:none}
+  #app,#app[data-sheet],#app[data-sheet=peek]:has(#myPillRow:not([hidden])){grid-template-columns:minmax(280px,44%) minmax(0,1fr);grid-template-rows:minmax(0,1fr);transition:none}
+  #app[data-tab] #panel>[data-tab]:not([hidden]){display:block;animation:none}
   #panel,#app[data-sheet=peek] #panel{order:0;overflow-y:auto;border-top:0;border-right:1px solid var(--line);border-radius:0;box-shadow:none}
+  #panel::after{content:none}
+  #app[data-tab]:not([data-tab=map]) #welcome:not([hidden]){display:flex}
   #stage{order:0}
   .sheet-handle{display:none}
   .brand{display:block;padding:12px 18px 10px;border-bottom:1px solid var(--line)}
-  .brand .status{margin-top:8px;min-height:0}
+  .brand .status{margin-top:8px;min-height:0;font-size:13px}
   .pillrow{margin:2px 0 0}
+}
+/* Toasts (css/alerts.css) sit just above the tab bar on a phone, and above the home indicator where there is no bar. */
+@media (max-width:760px),(max-height:500px){
+  body>#toasts{bottom:calc(8px + max(var(--tabbar-h),env(safe-area-inset-bottom,0px)))}
 }

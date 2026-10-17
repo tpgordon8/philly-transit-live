@@ -62,6 +62,7 @@ def boot(s, bikes=5, net=NET, bus_route="X47"):
 
 
 def fill(s, frm="Origin St", to="Dest Ave"):
+    s.page.evaluate("window.SEPTA.sheet.reveal(document.querySelector('#tripFrom'))")  # a phone shows the planner in its Trip tab
     s.page.fill("#tripFrom", frm)
     s.page.fill("#tripTo", to)
 
@@ -130,7 +131,7 @@ def test_a_form_labels_placement_and_geocoding(root):
                 btn: tripGo.textContent, hasLoc: !!document.querySelector('#tripLocate'), hasSwap: !!document.querySelector('#tripSwap'),
                 homeBtns: [tripFromHome.hidden, tripToHome.hidden], priv: document.querySelector('#privacyDetails .tp-priv').textContent, attr: document.querySelector('#tripAttr').textContent}; }""")
         assert info["labelled"] == "h-trip" and info["h"] == "Plan a trip"
-        assert info["prev"] == "h-near" and info["next"] == "h-places"  # Nearby stops sits between Find and Plan a trip
+        assert info["prev"] == "h-filters" and info["next"] == "h-leave"  # Plan a trip follows the Map tab's sections (Find, Nearby stops, Filters)
         assert (info["from"], info["to"]) == ("From", "To") and info["vals"] == ["", ""]
         assert info["ph"] == ["Start: address or intersection", "Destination: address or intersection"]
         assert info["btn"] == "Plan trip" and info["hasLoc"] and info["hasSwap"] and info["homeBtns"] == [True, True]
@@ -849,8 +850,9 @@ def test_k_phone_map_size_and_show_on_map(root):
             plan_ui(s)
             s.settle()
             h = s.page.evaluate("document.querySelector('#map').getBoundingClientRect().height")
-            assert h >= 0.45 * size[1], (size, h)
-            assert h >= 0.49 * size[1], ("the map gets half the phone screen while planning", size, h)
+            room = size[1] - 56  # the screen above the tab bar
+            assert h >= 0.45 * room, (size, h)
+            assert h >= 0.49 * room, ("the map gets half the phone screen (above the tab bar) while planning", size, h)
             sv0 = len(s.page.evaluate("window.__sv"))
             # pan the map far away, then Show on map: it scrolls to the map and refits the plan
             planned = view(s)

@@ -566,6 +566,7 @@ def test_list_is_visible_unclipped_and_tall_enough_at_390_and_1280(root):
             s.photon.features.append(F("Place bare", lng=-75.155, lat=39.95, city="", state=""))  # no second line: a one-line row must still be 44 px
             boot(s)
             for sel in sels:
+                s.page.evaluate("(sel) => window.SEPTA.sheet.reveal(document.querySelector(sel))", sel)  # a phone shows one tab at a time
                 s.page.locator(sel).scroll_into_view_if_needed()
                 type_in(s, sel, "place")
                 s.page.wait_for_selector(".sug-list:not([hidden]) [role=option]")
@@ -669,11 +670,13 @@ def test_privacy_text_and_attribution_in_page_and_docs(root):
     html = (root / "index.html").read_text()
     readme = (root / "README.md").read_text()
     arch = (root / "ARCHITECTURE.md").read_text()
-    assert html.count("Suggestions by ") == 2 and html.count('https://photon.komoot.io/"') == 2
+    # one credit line, in About (it used to repeat under both search forms)
+    assert html.count("Suggestions by ") == 1 and html.count('https://photon.komoot.io/"') == 1
+    assert html.index('id="sugAttrFind"') > html.index('id="h-about"')
     with session() as s:
         s.open()
         s.wait_live()
-        for sel in ("#sugAttrFind", "#sugAttrTrip"):
+        for sel in ("#sugAttrFind",):
             assert s.page.inner_text(sel) == "Suggestions by Photon, map data OpenStreetMap. Privacy details", s.page.inner_text(sel)
         priv = s.page.text_content(".tp-priv")  # inside the closed "Privacy details" disclosure
     for text in (priv, readme, arch[arch.index("### 12.4"):arch.index("## 13.")]):

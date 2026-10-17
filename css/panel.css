@@ -57,7 +57,6 @@ select{min-height:44px;font-size:16px}
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .rbadge{color:#fff}}
 
 .sp{flex:1}
-.foot{margin-top:auto;padding:12px 18px;color:var(--mute);font-size:12px}
 #myRoutes{margin-top:12px}
 #myRoutes .hint{margin:0;color:var(--mute);font-size:13px}
 #myRoutes .mylist{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
@@ -66,35 +65,67 @@ select{min-height:44px;font-size:16px}
 #myRoutes .chip{padding:0 0 0 12px;gap:2px}
 #myRoutes .chip .btn{padding:2px 7px;line-height:1.2;min-width:44px}
 /* Links are 44px tall hit areas too: the padding grows the box a finger lands on without changing the line height of the text. */
-.sec a,.foot a{padding:15px 4px}
-@media (max-width:760px){
-  .foot{padding-bottom:72px}
-}
+.sec a{padding:15px 4px}
 /* Rings drawn inside clipping boxes (the segmented control hides overflow). */
 .seg button:focus-visible{outline-offset:-3px}
 /* Privacy details: a native disclosure after a short lead (copy pass). */
 #privacyDetails{margin-top:8px}
 #privacyDetails summary{cursor:pointer;font-size:13px;font-weight:600;min-height:44px;display:flex;align-items:center}
 
-/* First run and hints (js/sheet.js). The icon button sits in the phone peek row next to Search; wide screens have the full-width
-   Use my location button just below, so it is only drawn up to 760 px (and not in phone landscape, where the panel is a column). */
-.iconbtn{display:none;padding:0;place-items:center;flex:none;width:44px}
-.iconbtn:disabled{opacity:.5}
-@media (max-width:760px){.iconbtn{display:grid}}
-@media (max-width:760px) and (max-height:500px) and (orientation:landscape){.iconbtn{display:none}}
+/* First run and hints (js/sheet.js). */
 .pillrow{margin-top:2px}
 .mypill{display:flex;align-items:center;flex:none;min-height:44px;min-width:44px;padding:0;border:0;background:none;color:var(--accent);font:600 12.5px/1.2 var(--f-body);text-align:left}
 .mypill span{padding:3px 10px;border:1px solid var(--accent);border-radius:999px;background:color-mix(in srgb,var(--accent) 10%,var(--panel))}
-.legend{margin:0;padding:0 18px 10px}
+.legend{margin:12px 0 0;font-size:12.5px}
 /* The panel sits above the map panes on a phone (z-index in layout.css) so this card is not painted under them. The welcome card sits in the panel under the header on wide screens. On a phone it floats just above the closed sheet (over the
    map's bottom edge, clear of the search row) and steps aside when the sheet opens or a vehicle or stop card shows. */
 #welcome{display:flex;gap:10px;align-items:center;margin:10px 18px 0;padding:10px 12px;background:var(--panel);border:1px solid var(--accent);border-radius:10px}
 #welcome[hidden]{display:none}
 #welcome p{flex:1;margin:0;font-weight:600}
 @media (max-width:760px){
-  #welcome{position:fixed;z-index:1090;left:8px;right:64px;bottom:calc(var(--peek) + 24px);margin:0;border-color:var(--line);box-shadow:var(--shadow)}
+  #welcome{position:fixed;z-index:1090;left:8px;right:64px;bottom:calc(var(--peek) + var(--tabbar-h) + 24px);margin:0;border-color:var(--line);border-radius:14px;box-shadow:var(--shadow)}
   #app[data-sheet=open] #welcome,#app:has(#detail:not([hidden])) #welcome,#app:has(#stopCard:not([hidden])) #welcome,#app:has(#indegoCard:not([hidden])) #welcome,#app:has(#panel :is(input,select,textarea):focus) #welcome{display:none}
 }
 @media (max-width:760px) and (max-height:500px) and (orientation:landscape){
   #welcome{position:static;margin:10px 18px 0;box-shadow:none}
+}
+
+/* Search bar, quick actions and the Filters disclosure (the Map tab on a phone; the top of the side panel on wide screens). */
+.sbox{position:relative;flex:1;display:flex;min-width:0}
+.sbox input[type=text]{padding-left:38px}
+.sbox-ic{position:absolute;left:12px;top:50%;margin-top:-9px;color:var(--mute);pointer-events:none}
+.quick{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.qpill{display:inline-flex;align-items:center;gap:7px;padding:9px 15px 9px 12px;border-radius:999px;border-color:color-mix(in srgb,var(--accent) 28%,var(--line));background:color-mix(in srgb,var(--accent) 8%,var(--panel));color:var(--accent)}
+.qpill svg{flex:none}
+.qpill:active{background:color-mix(in srgb,var(--accent) 16%,var(--panel))}
+.sec-filters h2{margin:0}
+.filters-btn{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;margin:-6px 0 0;padding:0;border:0;background:none;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;text-align:left}
+.filters-btn::after{content:"";flex:none;width:7px;height:7px;margin:0 4px 3px auto;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.filters-btn[aria-expanded=true]::after{margin-bottom:-3px;transform:rotate(-135deg)}
+.filters-sum{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 13px/1.3 var(--f-body);letter-spacing:0;text-transform:none;color:var(--ink)}
+.filters-btn[aria-expanded=true] .filters-sum{visibility:hidden}
+#filtersBody .modes{margin-top:4px}
+.sec-about p{font-size:12.5px}
+.sec-about p:first-of-type{margin-top:0}
+@media (max-width:760px){
+  .sec-find{padding:4px 18px 10px;border-bottom:0}
+  .sec-find h2{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .search-bar input[type=text]{min-height:48px;border-radius:24px;background:var(--paper)}
+  .search-bar .btn{min-height:48px;border-radius:24px;padding:9px 16px}
+  .quick{flex-wrap:nowrap;overflow-x:auto;margin:10px -18px 0;padding:0 18px;scrollbar-width:none}
+  .quick::-webkit-scrollbar{display:none}
+  .qpill{flex:none}
+  /* Mode chips scroll sideways in one row inside the Filters disclosure. */
+  #filtersBody .modes{position:relative;flex-wrap:nowrap;overflow-x:auto;margin:4px -18px 0;padding:2px 18px 4px;scrollbar-width:none}
+  #filtersBody .modes::-webkit-scrollbar{display:none}
+  #filtersBody .chip{flex:none}
+  .sec{padding:12px 18px}
+  .sec h2{margin-bottom:12px}
+  .sec-filters h2{margin:0}
+  .places li{padding:6px 6px 6px 12px;border-radius:12px}
+}
+@media (max-width:760px) and (max-height:500px) and (orientation:landscape){
+  .sec-find{padding:14px 18px;border-bottom:1px solid var(--line)}
+  .sec-find h2{position:static;width:auto;height:auto;overflow:visible;clip-path:none}
+  .search-bar input[type=text],.search-bar .btn{min-height:44px;border-radius:6px}
 }

@@ -26,91 +26,118 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="css/leaflet.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/base.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/layout.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/map.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/panel.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/trip.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/suggest.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/stops.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/alerts.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/nearby.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/indego.css?v=bfe2d40b13">
-<link rel="stylesheet" href="css/board.css?v=bfe2d40b13">
+<link rel="stylesheet" href="css/leaflet.css?v=530f16b8f4">
+<link rel="stylesheet" href="css/base.css?v=530f16b8f4">
+<link rel="stylesheet" href="css/layout.css?v=530f16b8f4">
+<link rel="stylesheet" href="css/map.css?v=530f16b8f4">
+<link rel="stylesheet" href="css/panel.css?v=530f16b8f4">
+<link rel="stylesheet" href="css/trip.css?v=530f16b8f4">
+<link rel="stylesheet" href="css/suggest.css?v=530f16b8f4">
+<link rel="stylesheet" href="css/stops.css?v=530f16b8f4">
+<link rel="stylesheet" href="css/alerts.css?v=530f16b8f4">
+<link rel="stylesheet" href="css/nearby.css?v=530f16b8f4">
+<link rel="stylesheet" href="css/indego.css?v=530f16b8f4">
+<link rel="stylesheet" href="css/board.css?v=530f16b8f4">
 </head>
 <body>
 <div id="app" data-sheet="peek">
   <aside id="panel" aria-label="Controls">
-    <button class="sheet-handle" id="sheetHandle" type="button" aria-expanded="false"><span class="sheet-label">More</span></button>
+    <button class="sheet-handle" id="sheetHandle" type="button" aria-expanded="false"><span class="sheet-label">Panel</span></button>
     <div class="brand">
       <h1>Septer</h1>
       <div class="status" id="status"><span class="dot" id="dot"></span><span id="statusText" aria-hidden="true">Connecting to SEPTA…</span><span class="sr-only" id="statusLive" role="status" aria-live="polite">Connecting to SEPTA</span></div>
       <div class="pillrow" id="myPillRow" hidden><button class="mypill" id="myPill" type="button"><span>My routes only. Show all</span></button></div>
     </div>
 
-    <div id="welcome" hidden role="region" aria-label="Welcome"><p>Live SEPTA vehicles near you. Tap Use my location or type an address.</p><button class="btn primary" type="button" id="welcomeOk">Got it</button></div>
+    <div id="welcome" hidden role="region" aria-label="Welcome"><p>Live SEPTA vehicles near you. Tap Near me or search an address.</p><button class="btn primary" type="button" id="welcomeOk">Got it</button></div>
 
-    <section class="sec" aria-labelledby="h-find">
+    <section class="sec sec-find" aria-labelledby="h-find" data-tab="map">
       <h2 id="h-find">Find vehicles near</h2>
-      <form class="row" id="searchForm" autocomplete="off">
-        <input type="text" id="addr" placeholder="Street address or intersection" aria-label="Street address or intersection">
-        <button class="btn iconbtn" type="button" id="btnLocatePeek" aria-label="Use my location"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="4.5"/><circle cx="10" cy="10" r="1.2" fill="currentColor"/><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3"/></svg></button>
+      <form class="row search-bar" id="searchForm" role="search" aria-labelledby="h-find" autocomplete="off">
+        <div class="sbox"><svg class="sbox-ic" width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4.5 4.5"/></svg><input type="text" id="addr" placeholder="Search an address or stop" aria-label="Search an address or stop"></div>
         <button class="btn primary" type="submit" id="btnSearch">Search</button>
       </form>
-      <p class="empty-line sug-attr" id="sugAttrFind">Suggestions by <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, map data <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>. <a href="#privacyDetails" class="priv-link">Privacy details</a></p>
-      <div class="row" style="margin-top:8px">
-        <button class="btn" type="button" id="btnLocate" style="flex:1">Use my location</button>
+      <div class="quick" role="group" aria-label="Quick actions">
+        <button class="btn qpill" type="button" id="btnLocate"><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="4.5"/><circle cx="10" cy="10" r="1.2" fill="currentColor"/><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3"/></svg>Near me</button>
+        <button class="btn qpill near-home" type="button" id="btnHome" hidden><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 9.5 10 3l7.5 6.5"/><path d="M4.5 8v9h11V8"/><path d="M8.5 17v-4.5h3V17"/></svg>Get me home</button>
+        <button class="btn qpill" type="button" id="btnSavePlace" hidden><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 2.5h10v15l-5-3.5-5 3.5z"/></svg>Save place</button>
       </div>
-      <button class="btn near-home" type="button" id="btnHome" hidden>Get me home</button>
       <p class="note" id="note" aria-live="polite"></p>
-      <div class="radius">
-        <label for="radius">Radius</label>
-        <input type="range" id="radius" min="0.25" max="5" step="0.25" value="0.5">
-        <output id="radiusOut" for="radius">0.5 mi</output>
-      </div>
-      <div class="modes" id="modes">
-        <label class="chip k-bus on"><input type="checkbox" data-mode="bus" checked><span class="sw"></span>Bus <span class="n" data-n="bus"></span></label>
-        <label class="chip k-trolley"><input type="checkbox" data-mode="trolley"><span class="sw"></span>Trolley <span class="n" data-n="trolley"></span></label>
-        <label class="chip k-subway"><input type="checkbox" data-mode="subway"><span class="sw"></span>Subway <span class="n" data-n="subway"></span></label>
-        <label class="chip k-train"><input type="checkbox" data-mode="train"><span class="sw"></span>Regional Rail <span class="n" data-n="train"></span></label>
-        <label class="chip k-indego"><input type="checkbox" data-mode="indego"><span class="sw"></span>Indego <span class="n" id="indegoN"></span></label>
-      </div>
-      <div id="myRoutes"></div>
     </section>
 
-    <section class="sec" aria-labelledby="h-near" id="nearSec" hidden>
+    <section class="sec" aria-labelledby="h-near" id="nearSec" data-tab="map" hidden>
       <h2 id="h-near">Nearby stops</h2>
       <p class="empty-line sr-only" id="nearStatus" role="status" aria-live="polite"></p>
       <ul class="near-list" id="nearList" aria-labelledby="h-near"></ul>
       <p class="empty-line" id="nearHint" hidden>Tap a stop for arrivals and alerts</p>
     </section>
 
-    <section class="sec" aria-labelledby="h-trip" id="tripSec">
+    <section class="sec sec-filters" aria-labelledby="h-filters" data-tab="map">
+      <h2 id="h-filters"><button type="button" class="filters-btn" id="filtersBtn" aria-expanded="true" aria-controls="filtersBody"><span class="filters-t">Filters</span><span class="filters-sum" id="filtersSum"></span></button></h2>
+      <div id="filtersBody">
+        <div class="modes" id="modes">
+          <label class="chip k-bus on"><input type="checkbox" data-mode="bus" checked><span class="sw"></span>Bus <span class="n" data-n="bus"></span></label>
+          <label class="chip k-trolley"><input type="checkbox" data-mode="trolley"><span class="sw"></span>Trolley <span class="n" data-n="trolley"></span></label>
+          <label class="chip k-subway"><input type="checkbox" data-mode="subway"><span class="sw"></span>Subway <span class="n" data-n="subway"></span></label>
+          <label class="chip k-train"><input type="checkbox" data-mode="train"><span class="sw"></span>Regional Rail <span class="n" data-n="train"></span></label>
+          <label class="chip k-indego"><input type="checkbox" data-mode="indego"><span class="sw"></span>Indego <span class="n" id="indegoN"></span></label>
+        </div>
+        <div class="radius">
+          <label for="radius">Radius</label>
+          <input type="range" id="radius" min="0.25" max="5" step="0.25" value="0.5">
+          <output id="radiusOut" for="radius">0.5 mi</output>
+        </div>
+        <div id="myRoutes"></div>
+      </div>
+      <p class="legend empty-line" id="legend">Letter on a bus is its direction. Faded marker is an old position.</p>
+    </section>
+
+    <section class="sec" aria-labelledby="h-trip" id="tripSec" data-tab="trip">
       <h2 id="h-trip">Plan a trip</h2>
       <form id="tripForm" autocomplete="off" novalidate>
-        <label class="tp-lab" for="tripFrom">From</label>
-        <div class="row"><input type="text" id="tripFrom" placeholder="Start: address or intersection"><button class="btn small" type="button" id="tripFromHome" aria-label="Use Home as start" hidden>Use Home</button></div>
-        <p class="note bad tp-err" id="tripFromErr" role="alert" hidden></p>
-        <div class="row tp-mid"><button class="btn small" type="button" id="tripLocate" style="flex:1">Use my location</button><button class="btn small" type="button" id="tripSwap" aria-label="Swap From and To"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12V2M1.5 4.5 4 2l2.5 2.5M10 2v10M7.5 9.5 10 12l2.5-2.5"/></svg> Swap</button></div>
-        <label class="tp-lab" for="tripTo">To</label>
-        <div class="row"><input type="text" id="tripTo" placeholder="Destination: address or intersection"><button class="btn small" type="button" id="tripToHome" aria-label="Use Home as destination" hidden>Use Home</button></div>
-        <p class="note bad tp-err" id="tripToErr" role="alert" hidden></p>
+        <div class="tp-fields">
+          <div class="tp-field"><label class="tp-lab" for="tripFrom">From</label><div class="row"><input type="text" id="tripFrom" placeholder="Start: address or intersection"><button class="btn small" type="button" id="tripFromHome" aria-label="Use Home as start" hidden>Use Home</button></div></div>
+          <p class="note bad tp-err" id="tripFromErr" role="alert" hidden></p>
+          <div class="tp-field"><label class="tp-lab" for="tripTo">To</label><div class="row"><input type="text" id="tripTo" placeholder="Destination: address or intersection"><button class="btn small" type="button" id="tripToHome" aria-label="Use Home as destination" hidden>Use Home</button></div></div>
+          <p class="note bad tp-err" id="tripToErr" role="alert" hidden></p>
+        </div>
+        <div class="row tp-mid"><button class="btn small" type="button" id="tripLocate"><svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="4.5"/><circle cx="10" cy="10" r="1.2" fill="currentColor"/><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3"/></svg>Use my location</button><button class="btn small" type="button" id="tripSwap" aria-label="Swap From and To"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12V2M1.5 4.5 4 2l2.5 2.5M10 2v10M7.5 9.5 10 12l2.5-2.5"/></svg> Swap</button></div>
         <div class="tp-chips" id="tripChips" role="group" aria-label="Saved places for the destination" hidden></div>
         <button class="btn primary tp-go" type="submit" id="tripGo">Plan trip</button>
-        <p class="empty-line tp-scope" id="tripScope">Walking, Indego, one bus or trolley, or driving. No subway, Regional Rail or transfers yet.</p>
-        <p class="empty-line sug-attr" id="sugAttrTrip">Suggestions by <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, map data <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>. <a href="#privacyDetails" class="priv-link">Privacy details</a></p>
+        <p class="empty-line tp-scope" id="tripScope">Walk, Indego, one bus or trolley, or drive. No rail or transfers yet.</p>
       </form>
       <div id="tripResults" aria-busy="false" hidden></div>
       <div id="tripLive" class="sr-only" role="status" aria-live="polite"></div>
-      <p class="empty-line tp-attr" id="tripAttr">Routing by <a href="https://routing.openstreetmap.de/" target="_blank" rel="noopener">OSRM</a> / data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></p>
     </section>
 
-    <section class="sec" aria-labelledby="h-places">
+    <section class="sec" aria-labelledby="h-leave" data-tab="alerts">
+      <h2 id="h-leave" tabindex="-1">Leave-now alerts</h2>
+      <p class="empty-line" style="margin-top:0">Alerts only work while this page is open. Phones may pause background tabs.</p>
+      <div id="notifyBox"></div>
+      <p class="empty-line" id="rulesEmpty">Tap a stop on the map or in Nearby stops, then tap Add alert.</p>
+      <ul class="rules" id="rules"></ul>
+    </section>
+
+    <section class="sec" aria-labelledby="h-board" data-tab="board">
+      <h2 id="h-board">My stops board</h2>
+      <p class="empty-line" style="margin-top:0">A full-screen list of when to leave for the stops you pin. Made for a tablet on the wall.</p>
+      <button class="btn" type="button" id="btnBoard" style="margin-top:8px">Board</button>
+    </section>
+
+    <section class="sec" aria-labelledby="h-alerts" data-tab="alerts">
+      <h2 id="h-alerts">Service alerts <span id="alertCount"></span></h2>
+      <div class="seg" role="group" aria-label="Alert scope">
+        <button type="button" id="scopeNear" aria-pressed="true">Near here</button>
+        <button type="button" id="scopeAll" aria-pressed="false">All of SEPTA</button>
+      </div>
+      <ul class="alerts" id="alerts"></ul>
+    </section>
+
+    <section class="sec" aria-labelledby="h-places" id="placesSec" data-tab="more">
       <h2 id="h-places">Saved places</h2>
       <ul class="places" id="places"></ul>
       <p class="empty-line" id="homeHelp">Set a Home to use Get me home</p>
-      <p class="empty-line" id="placesEmpty">Search an address or use your location, then save it here.</p>
+      <p class="empty-line" id="placesEmpty">Search an address or use Near me, then save it here.</p>
       <div class="saveform" id="saveForm" hidden>
         <input type="text" id="placeName" placeholder="Name this place" aria-label="Place name" maxlength="40">
         <div class="row">
@@ -120,30 +147,7 @@
       </div>
     </section>
 
-    <section class="sec" aria-labelledby="h-leave">
-      <h2 id="h-leave" tabindex="-1">Leave-now alerts</h2>
-      <p class="empty-line" style="margin-top:0">Alerts only work while this page is open. Phones may pause background tabs.</p>
-      <div id="notifyBox"></div>
-      <p class="empty-line" id="rulesEmpty">Tap a stop on the map or in Nearby stops, then tap Add alert.</p>
-      <ul class="rules" id="rules"></ul>
-    </section>
-
-    <section class="sec" aria-labelledby="h-board">
-      <h2 id="h-board">My stops board</h2>
-      <p class="empty-line" style="margin-top:0">A full-screen list of when to leave for the stops you pin. Made for a tablet on the wall.</p>
-      <button class="btn" type="button" id="btnBoard" style="margin-top:8px">Board</button>
-    </section>
-
-    <section class="sec" aria-labelledby="h-alerts">
-      <h2 id="h-alerts">Service alerts <span id="alertCount"></span></h2>
-      <div class="seg" role="group" aria-label="Alert scope">
-        <button type="button" id="scopeNear" aria-pressed="true">Near here</button>
-        <button type="button" id="scopeAll" aria-pressed="false">All of SEPTA</button>
-      </div>
-      <ul class="alerts" id="alerts"></ul>
-    </section>
-
-    <section class="sec" aria-labelledby="h-priv">
+    <section class="sec" aria-labelledby="h-priv" data-tab="more">
       <h2 id="h-priv">Privacy</h2>
       <p class="empty-line" id="privLead" style="margin-top:0">When you type an address, the text and your approximate area (within about 1 km) are sent to Photon, a free place-search service, to suggest places. An address you type and submit in the main search box that you did not pick from the suggestions is sent to Nominatim (OpenStreetMap's address search) for exact matches and intersections. When you plan a trip, the start and end points (within about 10 m, or closer if our server cannot be reached) are sent to our server and the free OpenStreetMap routing service. Your saved places and alerts stay in this browser, and our server keeps nothing except a short-lived cache of each route answer.</p>
       <details id="privacyDetails">
@@ -152,9 +156,13 @@
       </details>
     </section>
 
-    <p class="legend empty-line" id="legend">Letter on a bus is its direction. Faded marker is an old position.</p>
-
-    <div class="foot">Positions from SEPTA's data, refreshed about every 15 seconds. Only vehicles with a recent position report are shown. Rail positions carry no timestamp in SEPTA's data.</div>
+    <section class="sec sec-about" aria-labelledby="h-about" data-tab="more">
+      <h2 id="h-about">About</h2>
+      <p class="empty-line about-lead">Positions from SEPTA's data, refreshed about every 15 seconds. Only vehicles with a recent position report are shown. Rail positions carry no timestamp in SEPTA's data.</p>
+      <p class="empty-line sug-attr" id="sugAttrFind">Suggestions by <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, map data <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>. <a href="#privacyDetails" class="priv-link">Privacy details</a></p>
+      <p class="empty-line tp-attr" id="tripAttr">Routing by <a href="https://routing.openstreetmap.de/" target="_blank" rel="noopener">OSRM</a> / data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></p>
+      <p class="empty-line">Bike station counts from Indego. Address lookup by Nominatim. Septer is independent and not affiliated with SEPTA.</p>
+    </section>
   </aside>
 
   <main id="stage">
@@ -167,6 +175,14 @@
     <div id="detailLive" class="sr-only" role="status" aria-live="polite"></div>
     <div id="stopCard" hidden role="region" tabindex="-1" aria-label="Stop details"></div>
   </main>
+
+  <nav class="tabbar" id="tabbar" aria-label="Sections">
+    <button type="button" class="tab" id="tabMap" data-go="map" aria-current="page"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z"/><path d="M9 4v14M15 6v14"/></svg><span class="tab-l">Map</span></button>
+    <button type="button" class="tab" id="tabTrip" data-go="trip"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="6" cy="18.5" r="2.2"/><circle cx="18" cy="5.5" r="2.2"/><path d="M8.2 18.5H16a3.3 3.3 0 0 0 0-6.6H8a3.3 3.3 0 0 1 0-6.6h7.8"/></svg><span class="tab-l">Trip</span></button>
+    <button type="button" class="tab" id="tabBoard" data-go="board"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7 9.5h5M7 13h10M7 16.5h3.5M15.5 9.5h1.5"/></svg><span class="tab-l">Board</span></button>
+    <button type="button" class="tab" id="tabAlerts" data-go="alerts"><span class="tab-ic"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16.5v-5.5a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 21a2.2 2.2 0 0 0 4 0"/></svg><span class="tab-badge" id="tabAlertN" aria-hidden="true" hidden></span></span><span class="tab-l">Alerts</span><span class="sr-only" id="tabAlertSr"></span></button>
+    <button type="button" class="tab" id="tabMore" data-go="more"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg><span class="tab-l">More</span></button>
+  </nav>
 </div>
 <div id="boardView" hidden role="region" aria-label="My stops board" lang="en" tabindex="-1">
   <header class="bv-head">
@@ -217,28 +233,28 @@ window.addEventListener('error',function(e){
   if(t&&t.tagName==='SCRIPT'&&/\/js\/[^\/]+\.js/.test(t.src||''))window.SEPTA.loadFailed(t.src.split('/').pop().split('?')[0]);
 },true);
 </script>
-<script src="js/util.js?v=bfe2d40b13"></script>
-<script src="js/feed.js?v=bfe2d40b13"></script>
-<script src="js/map.js?v=bfe2d40b13"></script>
-<script src="js/landmarks.js?v=bfe2d40b13"></script>
-<script src="js/suggest.js?v=bfe2d40b13"></script>
-<script src="js/panel.js?v=bfe2d40b13"></script>
-<script src="js/stops.js?v=bfe2d40b13"></script>
-<script src="js/alerts.js?v=bfe2d40b13"></script>
-<script src="js/board.js?v=bfe2d40b13"></script>
-<script src="js/boardbikes.js?v=bfe2d40b13"></script>
-<script src="js/routing.js?v=bfe2d40b13"></script>
-<script src="js/candidates.js?v=bfe2d40b13"></script>
-<script src="js/planner.js?v=bfe2d40b13"></script>
-<script src="js/trip.js?v=bfe2d40b13"></script>
-<script src="js/nearby.js?v=bfe2d40b13"></script>
-<script src="js/boardview.js?v=bfe2d40b13"></script>
-<script src="js/boardbikesview.js?v=bfe2d40b13"></script>
-<script src="js/boardsettings.js?v=bfe2d40b13"></script>
-<script src="js/boardadd.js?v=bfe2d40b13"></script>
-<script src="js/sheet.js?v=bfe2d40b13"></script>
-<script src="js/indego.js?v=bfe2d40b13"></script>
-<script src="js/main.js?v=bfe2d40b13"></script>
+<script src="js/util.js?v=530f16b8f4"></script>
+<script src="js/feed.js?v=530f16b8f4"></script>
+<script src="js/map.js?v=530f16b8f4"></script>
+<script src="js/landmarks.js?v=530f16b8f4"></script>
+<script src="js/suggest.js?v=530f16b8f4"></script>
+<script src="js/panel.js?v=530f16b8f4"></script>
+<script src="js/stops.js?v=530f16b8f4"></script>
+<script src="js/alerts.js?v=530f16b8f4"></script>
+<script src="js/board.js?v=530f16b8f4"></script>
+<script src="js/boardbikes.js?v=530f16b8f4"></script>
+<script src="js/routing.js?v=530f16b8f4"></script>
+<script src="js/candidates.js?v=530f16b8f4"></script>
+<script src="js/planner.js?v=530f16b8f4"></script>
+<script src="js/trip.js?v=530f16b8f4"></script>
+<script src="js/nearby.js?v=530f16b8f4"></script>
+<script src="js/boardview.js?v=530f16b8f4"></script>
+<script src="js/boardbikesview.js?v=530f16b8f4"></script>
+<script src="js/boardsettings.js?v=530f16b8f4"></script>
+<script src="js/boardadd.js?v=530f16b8f4"></script>
+<script src="js/sheet.js?v=530f16b8f4"></script>
+<script src="js/indego.js?v=530f16b8f4"></script>
+<script src="js/main.js?v=530f16b8f4"></script>
 <script>if(!window.SEPTA.started&&window.SEPTA.failed.indexOf('main.js')<0)window.SEPTA.loadFailed('main.js (the app did not start)');</script>
 
 </body>

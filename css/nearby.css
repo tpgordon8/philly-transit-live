@@ -1,6 +1,5 @@
 /* Nearby stops (js/nearby.js) and the Get me home button. */
-.near-home{width:100%;margin-top:8px}
-.near-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.near-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .near-list li+li{border-top:1px solid var(--line)}
 .near-row{width:100%;min-height:44px;display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;text-align:left;padding:9px 12px;border:0;background:var(--panel)}
 .near-row:hover{background:var(--paper)}

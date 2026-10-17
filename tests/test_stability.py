@@ -70,7 +70,7 @@ def test_sheet_ships_closed(root):
         s.open()
         s.page.wait_for_selector("#panel")
         panel = s.page.locator("#panel").bounding_box()
-        assert panel["height"] < 200 and panel["y"] > 600, panel
+        assert panel["height"] < 200 and panel["y"] > 580 and panel["y"] + panel["height"] <= 844 - 56 + 1, panel  # above the tab bar's room
     # wide screen: sidebar fully visible, handle hidden (so its aria-expanded is not exposed), nothing collapsed
     with Session(root, viewport=(1280, 800)) as s:
         boot(s)

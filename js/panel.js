@@ -8,6 +8,10 @@
   function nearbyStops() {
     return S.nearby.show.apply(null, arguments);
   }
+  /* js/sheet.js loads later (and may not load at all): switch the phone tab when it is there. */
+  function sheetShow(t, opts) {
+    if (S.sheet && S.sheet.show) S.sheet.show(t, opts);
+  }
   if (S.halt) return;
   var $ = S.util.$;
   var widenedRadius = S.util.widenedRadius,
@@ -247,6 +251,7 @@
   document.addEventListener('click', function (e) {
     if (!(e.target.closest && e.target.closest('.priv-link'))) return;
     e.preventDefault();
+    sheetShow('more', { open: true });
     var d = $('#privacyDetails');
     d.open = true;
     d.scrollIntoView({ block: 'nearest', behavior: S.map.animOK() ? 'smooth' : 'auto' });
@@ -270,6 +275,7 @@
     state.radius = r;
     $('#radius').value = r;
     $('#radiusOut').textContent = r + ' mi';
+    syncFilterSummary();
     savePrefs();
     drawCenter();
     if (fit) fitRadius();
@@ -279,6 +285,7 @@
     var r = Number(e.target.value);
     state.radius = r;
     $('#radiusOut').textContent = r + ' mi';
+    syncFilterSummary();
     drawCenter();
     apply();
   });
@@ -291,7 +298,36 @@
       inp.checked = !!state.filters[inp.dataset.mode];
       ch.classList.toggle('on', inp.checked);
     });
+    syncFilterSummary();
   }
+  /* The Filters disclosure. Open on wide screens and in phone landscape (the side panel has the room), closed on a phone in portrait,
+     where its summary line says what is on: "Bus, Trolley, Subway · 0.5 mi". */
+  var filtersBtn = $('#filtersBtn'),
+    filtersBody = $('#filtersBody');
+  function setFiltersOpen(open) {
+    filtersBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    filtersBody.hidden = !open;
+  }
+  function syncFilterSummary() {
+    var on = [];
+    document.querySelectorAll('#modes .chip').forEach(function (ch) {
+      if (!ch.querySelector('input').checked) return;
+      var words = '';
+      ch.childNodes.forEach(function (n) {
+        if (n.nodeType === 3) words += n.textContent; /* the label without its count */
+      });
+      on.push(words.trim());
+    });
+    $('#filtersSum').textContent =
+      (on.length ? on.join(', ') : 'No vehicle types') + ' \u00b7 ' + state.radius + ' mi';
+  }
+  filtersBtn.addEventListener('click', function () {
+    setFiltersOpen(filtersBody.hidden);
+  });
+  setFiltersOpen(
+    !window.matchMedia('(max-width: 760px)').matches ||
+      window.matchMedia('(max-height: 500px) and (orientation: landscape)').matches
+  );
   $('#modes').addEventListener('change', function (e) {
     var inp = e.target;
     if (!inp.dataset.mode) return;
@@ -452,6 +488,7 @@
       h = state.places.home;
     ul.replaceChildren();
     function goTo(p) {
+      sheetShow('map', { open: false });
       setNote('');
       setCenter({ lat: p.lat, lng: p.lng, label: p.name }, true);
       $('#addr').value = '';
@@ -523,6 +560,7 @@
       T = S.trip;
     if (!h || btn.disabled) return;
     btn.disabled = true;
+    sheetShow('trip', { open: true });
     T.tripSetField('to', h.name, { pt: { lat: h.lat, lng: h.lng, name: h.name } });
     T.tripSetField('from', '', null);
     $('#tripLive').textContent = 'Finding your location';

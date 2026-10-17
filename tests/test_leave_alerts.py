@@ -525,6 +525,7 @@ def test_mobile_no_hscroll_with_section_rule_and_toast(root):
         assert s.page.evaluate("document.body.scrollWidth <= window.innerWidth")
         r = s.page.evaluate("(() => { const b = document.querySelector('#toasts .toast').getBoundingClientRect(); return [b.left, b.right, b.top, b.bottom] })()")
         assert r[0] >= 0 and r[1] <= 390 and r[2] >= 0, r
+        s.page.click("#tabAlerts")  # a phone lists the alerts in the Alerts tab
         s.page.locator("#rules li").scroll_into_view_if_needed()
         assert s.page.evaluate("(() => { const p = document.querySelector('#panel'); return p.scrollWidth <= p.clientWidth + 1 })()")
         c = s.page.evaluate("(() => { const b = document.querySelector('#stopCard').getBoundingClientRect(); return [b.left, b.right] })()")

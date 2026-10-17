@@ -1,6 +1,6 @@
 """WP-J1 first run and everyday clarity (ARCHITECTURE.md 6 and 15.4): all buses by default (septa.defaults.v3), the star toast and the
-"My routes only" pill, errors and Use my location in the phone peek, the welcome card, the one-time vehicle tip and the legend, the
-"More" sheet handle, and the Barlow wordmark's contrast.
+"My routes only" pill, errors and Near me in the phone peek, the welcome card, the one-time vehicle tip and the legend, the
+sheet handle, and the Barlow wordmark's contrast.
 
 Every fast test runs its check on the real page and then again on a copy of the site with one line of the code under test broken
 (`must_fail`): a check that still passes on the broken copy would not notice a regression."""
@@ -190,17 +190,17 @@ def test_star_toast_and_my_routes_pill(root):
     must_fail(check_star_pill, root, ("js/sheet.js", "util.routesStore.onlyMine = on;", "util.routesStore.onlyMine = true;"))
 
 
-# ---------------------------------------------------------------- 3. errors and Use my location in the phone peek
+# ---------------------------------------------------------------- 3. errors and Near me in the phone peek
 def check_peek(root):
     with Session(root, viewport=PHONE, mobile=True, touch=True) as s:
         boot(s)
         handle = s.page.locator("#sheetHandle")
-        assert handle.inner_text().strip() == "More" and handle.get_attribute("aria-expanded") == "false"
+        assert handle.text_content().strip() == "Panel" and handle.get_attribute("aria-expanded") == "false"
         assert s.page.get_attribute("#app", "data-sheet") == "peek"
-        icon = s.page.locator("#btnLocatePeek")
-        r, search, addr = rect(s, "#btnLocatePeek"), rect(s, "#btnSearch"), rect(s, "#addr")
-        assert icon.get_attribute("aria-label") == "Use my location" and r["w"] >= 44 - 0.5 and r["h"] >= 44 - 0.5, r
-        assert addr["r"] <= r["l"] <= r["r"] <= search["l"] and r["b"] <= 844, (addr, r, search)  # in the peek row, next to Search
+        icon = s.page.locator("#btnLocate")
+        r, search, addr, panel = rect(s, "#btnLocate"), rect(s, "#btnSearch"), rect(s, "#addr"), rect(s, "#panel")
+        assert icon.inner_text().strip() == "Near me" and r["w"] >= 44 - 0.5 and r["h"] >= 44 - 0.5, r
+        assert r["t"] >= max(addr["b"], search["b"]) and r["b"] <= panel["b"] <= rect(s, "#tabbar")["t"] + 0.5, (addr, r, search, panel)  # the quick actions, in the closed sheet
         # a search error (empty submit) opens the sheet and the message is on screen
         s.page.click("#btnSearch")
         assert s.page.get_attribute("#app", "data-sheet") == "open" and handle.get_attribute("aria-expanded") == "true"
@@ -214,15 +214,15 @@ def check_peek(root):
         assert s.page.get_attribute("#app", "data-sheet") == "open"
         n = rect(s, "#note")
         assert 0 <= n["t"] and n["b"] <= 844, n
-        assert s.page.locator("#btnLocatePeek").is_enabled() and s.page.locator("#btnLocate").is_enabled()
+        assert s.page.locator("#btnLocate").is_enabled()
         assert not s.console_errors, s.console_errors
 
 
 def check_peek_locate(root):
-    # the icon runs the same handler as the Use my location button: a granted location moves the search point
+    # Near me in the peek: a granted location moves the search point and leaves the sheet closed
     with Session(root, viewport=PHONE, mobile=True, touch=True, geolocation={"latitude": 39.9526, "longitude": -75.1652}) as s:
         boot(s)
-        s.page.locator("#btnLocatePeek").tap()
+        s.page.locator("#btnLocate").tap()
         s.page.wait_for_function("document.querySelector('#note').textContent === 'Showing vehicles around your current location.'")
         assert s.page.evaluate("JSON.parse(localStorage.getItem('septa.prefs.v1')).center.label") == "Your location"
         assert s.page.get_attribute("#app", "data-sheet") == "peek", "a success note does not open the sheet"
@@ -231,8 +231,8 @@ def check_peek_locate(root):
 def test_errors_and_location_icon_in_the_phone_peek(root):
     check_peek(root)
     check_peek_locate(root)
-    must_fail(check_peek, root, ("js/sheet.js", "setOpen(true);\n    note.scrollIntoView", "note.scrollIntoView"))
-    must_fail(check_peek_locate, root, ("js/sheet.js", "    loc.click();", "    /* nothing */"))
+    must_fail(check_peek, root, ("js/sheet.js", "show('map', { open: true });\n    note.scrollIntoView", "note.scrollIntoView"))
+    must_fail(check_peek_locate, root, ("js/sheet.js", "/^(addr|btnSearch|btnLocate|", "/^(addr|btnSearch|"))
 
 
 # ---------------------------------------------------------------- 4. welcome card, vehicle tip, legend
@@ -249,17 +249,17 @@ def check_welcome(root):
         s.page.wait_for_timeout(600)
         card = s.page.locator("#welcome")
         assert s.page.evaluate("localStorage.getItem('septa.seen.v1')") is None
-        assert card.is_visible() and card.locator("p").inner_text() == "Live SEPTA vehicles near you. Tap Use my location or type an address."
+        assert card.is_visible() and card.locator("p").inner_text() == "Live SEPTA vehicles near you. Tap Near me or search an address."
         ok = s.page.locator("#welcomeOk")
         assert ok.inner_text() == "Got it" and rect(s, "#welcomeOk")["h"] >= 44 - 0.5
         c, panel = rect(s, "#welcome"), rect(s, "#panel")
         assert c["l"] >= 0 and c["r"] <= 390 and c["t"] >= 0 and c["b"] <= panel["t"] + 0.5, (c, panel)  # above the closed sheet, inside the screen
-        for sel in ("#addr", "#btnSearch", "#btnLocatePeek", "#sheetHandle"):
+        for sel in ("#addr", "#btnSearch", "#btnLocate", "#sheetHandle"):
             assert not overlap(c, rect(s, sel)), sel
         zoom = rect(s, ".leaflet-control-zoom")
         assert not overlap(c, zoom), (c, zoom)
         moved = s.page.evaluate("window.__shifts")  # the status text may re-wrap by a hair when "Live" replaces "Connecting"; nothing else moves
-        assert not [m for m in moved if m in ("welcome", "welcomeOk", "addr", "btnSearch", "btnLocatePeek", "sheetHandle", "map", "stage")], moved
+        assert not [m for m in moved if m in ("welcome", "welcomeOk", "addr", "btnSearch", "btnLocate", "sheetHandle", "map", "stage")], moved
         assert s.page.evaluate("window.__cls") < 0.001, s.page.evaluate("window.__cls")
         assert s.page.get_attribute("#app", "data-sheet") == "peek"
         ok.tap()
@@ -331,7 +331,7 @@ def test_welcome_card_vehicle_tip_and_legend(root):
     must_fail(check_welcome, root, ("js/map.js", "markSeen('vehicleTip');", "0;"))
 
 
-# ---------------------------------------------------------------- 5. wordmark font and the "More" handle
+# ---------------------------------------------------------------- 5. wordmark font and the sheet handle
 def check_brand_and_handle(root):
     with Session(root, viewport=PHONE, mobile=True, touch=True) as s:
         boot(s)
@@ -341,15 +341,15 @@ def check_brand_and_handle(root):
         assert got["family"].split(",")[0].strip("\"' ") == "Barlow Condensed" and got["weight"] == "700", got
         assert got["ls"].endswith("px") and 0 < float(got["ls"][:-2]) <= 1, got  # about .02em of 22 px on a phone
         assert "Barlow Condensed:wght@600;700" in got["fonts"], got  # the 700 weight is loaded by the page
-        assert s.page.inner_text("#sheetHandle").strip() == "More"
-        assert "Controls" not in s.page.inner_text("#sheetHandle")
+        assert s.page.text_content("#sheetHandle").strip() == "Panel"
+        assert "Controls" not in s.page.text_content("#sheetHandle")
 
 
 def test_wordmark_font_and_more_label(root):
     check_brand_and_handle(root)
     must_fail(check_brand_and_handle, root, ("css/base.css", "letter-spacing:.02em;text-transform:none;color:var(--accent)}", "letter-spacing:normal;text-transform:none;color:var(--accent)}"))
     must_fail(check_brand_and_handle, root, ("css/base.css", '--f-title:"Barlow Condensed",', '--f-title:"Helvetica Neue",'))
-    must_fail(check_brand_and_handle, root, ("index.html", '<span class="sheet-label">More</span>', '<span class="sheet-label">Controls</span>'))
+    must_fail(check_brand_and_handle, root, ("index.html", '<span class="sheet-label">Panel</span>', '<span class="sheet-label">Controls</span>'))
     must_fail(check_brand_and_handle, root, ("index.html", "Barlow+Condensed:wght@600;700", "Barlow+Condensed:wght@600"))
 
 
@@ -371,7 +371,7 @@ def test_welcome_card_geometry_across_layouts(root):
             if vp[0] > 760 or vp[1] <= 500:
                 assert panel["l"] <= c["l"] and c["r"] <= panel["r"], (vp, c, panel)  # in the panel
             moved = s.page.evaluate("window.__shifts")
-            assert not [m for m in moved if m in ("map", "stage", "addr", "btnSearch", "btnLocatePeek", "sheetHandle") or "leaflet" in m], (vp, moved)
+            assert not [m for m in moved if m in ("map", "stage", "addr", "btnSearch", "btnLocate", "sheetHandle") or "leaflet" in m], (vp, moved)
             assert s.page.evaluate("document.documentElement.scrollWidth <= innerWidth"), vp
             if vp[0] <= 760 and vp[1] > 500:
                 marker_tap(s)
@@ -383,16 +383,17 @@ def test_welcome_card_geometry_across_layouts(root):
 
 
 def test_peek_row_fits_without_wrapping_at_small_widths(root):
-    """Wordmark, status line, search field, Search and the location button all sit in the closed sheet at 320 and 360 px, each on one line."""
+    """Wordmark, status line, search field, Search and Near me all sit in the closed sheet at 320 and 360 px, each on one line."""
     for vp in ((320, 640), (360, 740)):
         with Session(root, viewport=vp, mobile=True, touch=True) as s:
             boot(s)
             panel = rect(s, "#panel")
-            for sel in ("#sheetHandle", ".brand h1", "#statusText", "#addr", "#btnSearch", "#btnLocatePeek"):
+            for sel in ("#sheetHandle", ".brand h1", "#statusText", "#addr", "#btnSearch", "#btnLocate"):
                 r = rect(s, sel)
                 assert r["h"] > 0 and r["l"] >= 0 and r["r"] <= vp[0] and r["b"] <= panel["b"] + 0.5, (vp, sel, r)
-            row = [rect(s, x) for x in ("#addr", "#btnLocatePeek", "#btnSearch")]
-            assert max(r["t"] for r in row) - min(r["t"] for r in row) < 2 and row[0]["r"] <= row[1]["l"] and row[1]["r"] <= row[2]["l"], (vp, row)
+            row = [rect(s, x) for x in ("#addr", "#btnSearch")]
+            assert max(r["t"] for r in row) - min(r["t"] for r in row) < 2 and row[0]["r"] <= row[1]["l"], (vp, row)
+            assert rect(s, "#btnLocate")["t"] >= row[0]["b"] and s.page.evaluate("document.querySelector('#btnLocate').getClientRects().length") == 1
             assert rect(s, "#btnSearch")["h"] < 60 and s.page.evaluate("document.querySelector('#btnSearch').getClientRects().length") == 1
             h1 = s.page.evaluate("(() => { const e = document.querySelector('.brand h1'); return e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight); })()")
             assert h1 <= 1.05, (vp, "wordmark wraps")
@@ -406,7 +407,7 @@ def test_saved_filter_pill_is_there_at_load_without_layout_shift(root):
         assert s.page.locator("#myPill").is_visible()
         # the pill is in place from the first paint: nothing it or the search row sits in moves (the status text may re-wrap by a hair when "Live" replaces "Connecting")
         moved = s.page.evaluate("window.__shifts")
-        assert not [m for m in moved if m in ("myPill", "myPillRow", "addr", "btnSearch", "btnLocatePeek", "searchForm")], moved
+        assert not [m for m in moved if m in ("myPill", "myPillRow", "addr", "btnSearch", "btnLocate", "searchForm")], moved
         assert s.page.evaluate("window.__cls") < 0.001, s.page.evaluate("window.__cls")
         assert rect(s, "#addr")["b"] <= rect(s, "#panel")["b"] <= 844
 
@@ -500,7 +501,8 @@ def check_pill_resizes_the_map(root):
 
 def test_my_routes_pill_keeps_the_map_size_and_taps_exact(root):
     check_pill_resizes_the_map(root)
-    must_fail(check_pill_resizes_the_map, root, ("js/sheet.js", "resizeMap(); /* in peek the row changes the map row's height by --pillrow */", ""))
+    must_fail(check_pill_resizes_the_map, root, ("js/sheet.js", "followSheet(); /* in peek the row changes the map row's height by --pillrow */", ""),
+              ("js/sheet.js", "if (e.target === app) resizeMap();", ""))
 
 
 def check_escape_rules(root):
@@ -536,7 +538,7 @@ def check_escape_rules(root):
 def test_escape_dismisses_the_welcome_card_only_when_it_is_the_target(root):
     check_escape_rules(root)
     must_fail(check_escape_rules, root, ("js/sheet.js", "#detail:not([hidden]), ", ""),
-              ("js/sheet.js", "    true\n  );\n  syncPill()", "    false\n  );\n  syncPill()"))
+              ("js/sheet.js", "    true\n  );\n  /* ----- Tabs", "    false\n  );\n  /* ----- Tabs"))
     must_fail(check_escape_rules, root, ("js/sheet.js", "welcome.getClientRects().length &&", ""))
     must_fail(check_escape_rules, root, ("js/sheet.js", "if (inside) $('#addr').focus();", ""))
 
@@ -588,7 +590,7 @@ def check_welcome_phone_extras(root):
 
 def test_welcome_card_on_a_phone_clears_attribution_indego_card_and_keyboard(root):
     check_welcome_phone_extras(root)
-    must_fail(check_welcome_phone_extras, root, ("css/panel.css", "bottom:calc(var(--peek) + 24px)", "bottom:calc(var(--peek) + 8px)"))
+    must_fail(check_welcome_phone_extras, root, ("css/panel.css", "bottom:calc(var(--peek) + var(--tabbar-h) + 24px)", "bottom:calc(var(--peek) + 8px)"))
     must_fail(check_welcome_phone_extras, root, ("css/panel.css", "#app:has(#indegoCard:not([hidden])) #welcome,", ""))
     must_fail(check_welcome_phone_extras, root, ("css/panel.css", "#app:has(#panel :is(input,select,textarea):focus) #welcome", "#app:has(#nonesuch) #welcome"))
 
