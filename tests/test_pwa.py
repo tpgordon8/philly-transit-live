@@ -223,6 +223,8 @@ def test_offline_reload_serves_the_shell_and_never_stale_vehicles(root):
             wait_controlled(s)
             assert s.markers() > 0
             s.ctx.set_offline(True)
+            s._srv.shutdown()  # context.set_offline does not stop a service worker's own fetches; a dead server does
+            s._srv.server_close()
             s.worker.mode = "abort"  # routed requests are answered by the mock even offline; make the feed fail like a real dead network
             s.page.reload()
             s.page.wait_for_function("window.SEPTA && window.SEPTA.started === true", timeout=10000, polling=100)
@@ -233,7 +235,7 @@ def test_offline_reload_serves_the_shell_and_never_stale_vehicles(root):
             assert s.page.is_visible("#panel") or s.page.is_visible("#sheetHandle")
             s.page.wait_for_timeout(500)
             assert s.markers() == 0, "no vehicle from an earlier visit may be drawn as live"
-            assert not re.search(r"Live", s.page.inner_text("#statusText")), s.page.inner_text("#statusText")
+            assert not re.search(r"Live(?! data)", s.page.inner_text("#statusText")), s.page.inner_text("#statusText")  # "Live data unavailable" is the honest offline text
             s.ctx.set_offline(False)
             s.worker.mode = "ok"
             assert s.page.evaluate("navigator.onLine")
