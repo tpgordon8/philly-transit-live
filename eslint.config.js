@@ -27,6 +27,14 @@ module.exports = [
     }
   },
   {
+    files: ['sw.js'],
+    languageOptions: { ecmaVersion: 2018, sourceType: 'script', globals: globals.serviceworker },
+    rules: {
+      'no-unused-vars': ['error', { args: 'after-used', caughtErrors: 'none' }],
+      'no-undef': 'error'
+    }
+  },
+  {
     files: ['eslint.config.js'],
     languageOptions: { ecmaVersion: 2018, sourceType: 'commonjs', globals: globals.node }
   }
