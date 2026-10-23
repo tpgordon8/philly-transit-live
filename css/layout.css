@@ -88,3 +88,11 @@
 @media (max-width:760px),(max-height:500px){
   body>#toasts{bottom:calc(8px + max(var(--tabbar-h),env(safe-area-inset-bottom,0px)))}
 }
+
+/* Swiping the sheet (js/swipe.js): vertical drags belong to the sheet on its handle, header and, when closed, its body; sideways pans still scroll. */
+@media (max-width:760px){
+  #sheetHandle,#panel .brand{touch-action:pan-x}
+  #app[data-sheet=peek] #panel{touch-action:pan-x}
+  #app.sheet-drag{transition:none;user-select:none;-webkit-user-select:none}
+  #app.sheet-drag #panel{touch-action:none}
+}

@@ -366,5 +366,7 @@
   S.sheet.syncPill = syncPill;
   S.sheet.starTip = starTip;
   S.sheet.setOpen = setOpen;
+  S.sheet.resizeMap = resizeMap;
+  S.sheet.follow = followSheet;
   S.sheet.fitKeyboard = fitKeyboard;
 })();
