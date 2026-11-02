@@ -12,6 +12,7 @@ FAST = {
     "test_dead_code_removed",
     "test_null_elements_do_not_throw",
     "test_places_validated_capped_and_truncated",
+    "test_places_work_validated_and_old_data_untouched",
     "test_unit_kinds",
 }
 
@@ -69,6 +70,29 @@ def test_corrupt_prefs_junk_types(root):
 def test_corrupt_places_home_without_coords(root):
     raw = boot_with(root, [seed("septa.places.v1", '{"home":{"name":"x"},"list":[]}')])
     assert raw[1] == '{"home":{"name":"x"},"list":[]}'
+
+
+def test_corrupt_places_work_without_coords(root):
+    raw = boot_with(root, [seed("septa.places.v1", '{"home":null,"work":{"name":"x"},"list":[]}')])
+    assert raw[1] == '{"home":null,"work":{"name":"x"},"list":[]}'
+
+
+def test_places_work_validated_and_old_data_untouched(root):
+    long_work = '{"work":{"name":"' + "W" * 60 + '","lat":39.95,"lng":-75.17},"list":[]}'
+    for text, expect_bak, tags in ((long_work, False, ["Work"]),
+                                   ('{"work":{"name":"w","lat":"39.9","lng":-75.17},"list":[]}', True, []),
+                                   ('{"work":5,"list":[]}', True, []),
+                                   ('{"home":{"name":"h","lat":39.9,"lng":-75.1},"list":[]}', False, ["Home"])):
+        with Session(root, init_scripts=[seed("septa.places.v1", text)]) as s:
+            s.open()
+            s.wait_live()
+            assert s.page.evaluate("[...document.querySelectorAll('#places .tag')].map(e => e.textContent)") == tags
+            bak = s.page.evaluate("localStorage.getItem('septa.places.v1.bak')")
+            assert (bak is not None) == expect_bak, (text, bak)
+            assert s.page.evaluate("localStorage.getItem('septa.places.v1')") == text, "load never rewrites the stored text"
+            if text == long_work:
+                assert max(s.page.evaluate("[...document.querySelectorAll('#places .nm')].map(e => e.textContent.length)")) == 40
+            assert not s.console_errors, s.console_errors
 
 
 def test_corrupt_places_null_item(root):

@@ -469,25 +469,32 @@
     f.hidden = !has;
     if (has && document.activeElement !== $('#placeName')) $('#placeName').value = state.center.label || '';
   }
-  function savePlace(asHome) {
+  /* kind: 'home', 'work' or falsy for an ordinary saved place. Home and Work are the two named places (same shape, same UI). */
+  function savePlace(kind) {
     var name = $('#placeName').value.trim() || state.center.label || 'Saved place';
     var p = { id: 'p' + Date.now(), name: name.slice(0, 40), lat: state.center.lat, lng: state.center.lng };
-    if (asHome) {
-      state.places.home = { name: p.name, lat: p.lat, lng: p.lng };
+    if (kind) {
+      state.places[kind] = { name: p.name, lat: p.lat, lng: p.lng };
     } else state.places.list.push(p);
     persistPlaces();
     renderPlaces();
     drawHome();
   }
   $('#btnSave').addEventListener('click', function () {
-    savePlace(false);
+    savePlace(null);
   });
   $('#btnSaveHome').addEventListener('click', function () {
-    savePlace(true);
+    savePlace('home');
   });
+  $('#btnSaveWork').addEventListener('click', function () {
+    savePlace('work');
+  });
+  var NAMED = ['home', 'work'],
+    NAME_OF = { home: 'Home', work: 'Work' };
   function renderPlaces() {
     var ul = $('#places'),
-      h = state.places.home;
+      h = state.places.home,
+      w = state.places.work;
     ul.replaceChildren();
     function goTo(p) {
       sheetShow('map', { open: false });
@@ -495,20 +502,22 @@
       setCenter({ lat: p.lat, lng: p.lng, label: p.name }, true);
       $('#addr').value = '';
     }
-    if (h) {
+    NAMED.forEach(function (k) {
+      var np = state.places[k];
+      if (!np) return;
       var li = el('li');
-      li.appendChild(el('span', 'tag', 'Home'));
-      li.appendChild(el('span', 'nm', h.name));
+      li.appendChild(el('span', 'tag', NAME_OF[k]));
+      li.appendChild(el('span', 'nm', np.name));
       var go = el('button', 'btn small', 'Go');
       go.type = 'button';
       go.addEventListener('click', function () {
-        goTo(h);
+        goTo(np);
       });
       var rm = el('button', 'btn small ghost', 'Remove');
       rm.type = 'button';
-      rm.setAttribute('aria-label', 'Remove Home');
+      rm.setAttribute('aria-label', 'Remove ' + NAME_OF[k]);
       rm.addEventListener('click', function () {
-        state.places.home = null;
+        state.places[k] = null;
         persistPlaces();
         renderPlaces();
         drawHome();
@@ -516,7 +525,7 @@
       li.appendChild(go);
       li.appendChild(rm);
       ul.appendChild(li);
-    }
+    });
     state.places.list.forEach(function (p) {
       var li = el('li');
       li.appendChild(el('span', 'nm', p.name));
@@ -525,14 +534,17 @@
       go.addEventListener('click', function () {
         goTo(p);
       });
-      var mk = el('button', 'btn small ghost', 'Set as Home');
-      mk.type = 'button';
-      mk.setAttribute('aria-label', 'Set as Home: ' + p.name);
-      mk.addEventListener('click', function () {
-        state.places.home = { name: p.name, lat: p.lat, lng: p.lng };
-        persistPlaces();
-        renderPlaces();
-        drawHome();
+      var mks = NAMED.map(function (k) {
+        var mk = el('button', 'btn small ghost', 'Set as ' + NAME_OF[k]);
+        mk.type = 'button';
+        mk.setAttribute('aria-label', 'Set as ' + NAME_OF[k] + ': ' + p.name);
+        mk.addEventListener('click', function () {
+          state.places[k] = { name: p.name, lat: p.lat, lng: p.lng };
+          persistPlaces();
+          renderPlaces();
+          drawHome();
+        });
+        return mk;
       });
       var rm = el('button', 'btn small ghost', 'Remove');
       rm.type = 'button';
@@ -545,23 +557,36 @@
         renderPlaces();
       });
       li.appendChild(go);
-      li.appendChild(mk);
+      mks.forEach(function (mk) {
+        li.appendChild(mk);
+      });
       li.appendChild(rm);
       ul.appendChild(li);
     });
-    $('#placesEmpty').hidden = !!(h || state.places.list.length);
+    $('#placesEmpty').hidden = !!(h || w || state.places.list.length);
     $('#homeHelp').hidden = !!h;
+    $('#workHelp').hidden = !!w;
     tripRenderPlaces();
   }
-  /* ----- Get me home -----
-   From = Your location, To = Home, planned exactly as if both had been typed (the planner's own functions, js/trip.js). Without a
-   location nothing is guessed: the planner opens with To filled and the cursor in From. The saved search center is never written. */
-  $('#btnHome').addEventListener('click', function () {
-    var h = state.places.home,
-      btn = $('#btnHome'),
+  /* ----- Get me home / Get me to work -----
+   From = Your location, To = the saved place (Home or Work), planned exactly as if both had been typed (the planner's own functions,
+   js/trip.js). Without a location nothing is guessed: the planner opens with To filled and the cursor in From. The saved search
+   center is never written. One code path serves both buttons. */
+  var GET_ME = {
+    home: { btn: '#btnHome', unset: 'Set a Home in More to use this.', start: 'Add a start to get home' },
+    work: {
+      btn: '#btnWork',
+      unset: 'Set a Work place in More to use this.',
+      start: 'Add a start to get to work'
+    }
+  };
+  function getMeTo(kind) {
+    var cfg = GET_ME[kind],
+      h = state.places[kind],
+      btn = $(cfg.btn),
       T = S.trip;
     if (!h) {
-      setNote('Set a Home in More to use this.'); /* the button stays focusable; this is its answer */
+      setNote(cfg.unset); /* the button stays focusable; this is its answer */
       return;
     }
     if (btn.disabled) return;
@@ -581,12 +606,18 @@
       })
       .catch(function () {
         $('#tripLive').textContent = '';
-        T.tripErr('from', 'Add a start to get home');
+        T.tripErr('from', cfg.start);
         T.tripFieldEl('from').focus();
       })
       .finally(function () {
         btn.disabled = false;
       });
+  }
+  $('#btnHome').addEventListener('click', function () {
+    getMeTo('home');
+  });
+  $('#btnWork').addEventListener('click', function () {
+    getMeTo('work');
   });
   S.panel.renderMyRoutes = renderMyRoutes;
   S.panel.renderStatus = renderStatus;

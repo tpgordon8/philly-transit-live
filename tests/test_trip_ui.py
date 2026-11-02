@@ -17,6 +17,8 @@ FAST = {
     "test_i_phone_no_horizontal_scroll_touch_targets_and_show_map",
     "test_s_out_of_region_is_refused_before_any_call",
     "test_s_leg_rounding_note_and_total_from_exact_sum",
+    "test_gmaps_button_visibility_and_exact_url",
+    "test_gmaps_button_after_no_trip",
 }
 
 NET = json.loads((FIX / "bus-network.test.json").read_text())
@@ -135,8 +137,8 @@ def test_a_form_labels_placement_and_geocoding(root):
         assert (info["from"], info["to"]) == ("From", "To") and info["vals"] == ["", ""]
         assert info["ph"] == ["Start: address or intersection", "Destination: address or intersection"]
         assert info["btn"] == "Plan trip" and info["hasLoc"] and info["hasSwap"] and info["homeBtns"] == [True, True]
-        for part in ("go to Photon (photon.komoot.io, OpenStreetMap data)", "rounded to 2 decimals", "A typed From or To address you did not pick from the suggestions", "go to Nominatim (OpenStreetMap) to be looked up", "rounds them to 4 decimals", "saved Home and place buttons", "Use my location and the map center",
-                     "exactly the same way as a typed address", "cannot be reached, is an older version", "the same as through our server", "is not a failure and is never re-sent"):
+        for part in ("go to Photon (photon.komoot.io, OpenStreetMap data)", "rounded to 2 decimals", "A typed From or To address you did not pick from the suggestions", "go to Nominatim (OpenStreetMap) to be looked up", "rounds them to 4 decimals", "saved Home, Work and place buttons", "Use my location and the map center",
+                     "exactly the same way as a typed address", "cannot be reached, is an older version", "the same as through our server", "is not a failure and is never re-sent", "Open this trip in Google Maps", "sends Google the start and end points"):
             assert part in info["priv"], part
         assert info["attr"] == "Routing by OSRM / data \u00a9 OpenStreetMap contributors", info["attr"]
         # an intersection gets ", Philadelphia, PA" appended once; text with a comma is sent as typed
@@ -1001,4 +1003,76 @@ def test_s_leg_rounding_note_and_total_from_exact_sum(root):
                 assert note == "Steps are rounded, so they may not add up exactly to the total.", (o["structure"], note)
             else:
                 assert note is None, (o["structure"], note)
+        no_errors(s)
+
+
+# ------------------------------------------------------------------ Open in Google Maps (rail hand-off)
+GM_HOME = {"name": "Home Base", "lat": 39.95, "lng": -75.17}
+GM_WORK = {"name": "Work Spot", "lat": 39.9575, "lng": -75.1582}
+GM_URL = "https://www.google.com/maps/dir/?api=1&origin=39.95,-75.17&destination=39.9575,-75.1582&travelmode=transit"
+
+
+def gm_state(s):
+    return s.page.evaluate("""() => { const a = document.querySelector('#tripGm'), b = document.querySelector('#tripGmBox');
+        return {box: !b.hidden, href: a.getAttribute('href'), target: a.target, rel: a.rel, text: a.textContent, note: document.querySelector('#tripGmNote').textContent}; }""")
+
+
+def set_rail(s, on):
+    s.page.evaluate("(on) => { const i = document.querySelector('#modes input[data-mode=train]'); if (i.checked !== on) i.click(); }", on)
+
+
+def test_gmaps_button_visibility_and_exact_url(root):
+    places = {"home": GM_HOME, "work": GM_WORK, "list": []}
+    seed = f"try {{ localStorage.setItem('septa.places.v1', {json.dumps(json.dumps(places))}); }} catch (e) {{}}"
+    with session(init_scripts=[HOOK, SEED_PREFS, seed]) as s:
+        boot(s)
+        google = []
+        s.page.on("request", lambda r: google.append(r.url) if "google.com" in r.url else None)
+        s.page.evaluate("window.SEPTA.sheet.reveal(document.querySelector('#tripFrom'))")
+        s.page.click("#tripFromHome")
+        s.page.click("#tripToWork")
+        set_rail(s, False)
+        assert gm_state(s)["box"] is False, "Regional Rail is off: no button"
+        set_rail(s, True)
+        g = gm_state(s)
+        assert g["box"] is True and g["href"] == GM_URL, g
+        assert (g["target"], g["rel"]) == ("_blank", "noopener noreferrer")
+        assert g["text"] == "Open this trip in Google Maps" and g["note"] == "Opens Google Maps, which sees your start and end points."
+        # swap moves the points; the URL follows
+        s.page.click("#tripSwap")
+        assert gm_state(s)["href"] == "https://www.google.com/maps/dir/?api=1&origin=39.9575,-75.1582&destination=39.95,-75.17&travelmode=transit"
+        # an end that is typed but not resolved to coordinates hides it (nothing is guessed or looked up)
+        s.page.fill("#tripTo", "Dest Ave")
+        assert gm_state(s)["box"] is False and gm_state(s)["href"] is None
+        s.page.fill("#tripTo", "")
+        assert gm_state(s)["box"] is False
+        s.page.click("#tripToHome")
+        assert gm_state(s)["box"] is True
+        set_rail(s, False)
+        assert gm_state(s)["box"] is False
+        assert google == [], "nothing is sent to Google until the person taps the link"
+        assert s.page.evaluate("Object.keys(localStorage).filter(k => /google/i.test(localStorage.getItem(k))).length") == 0, "nothing is stored"
+        no_errors(s)
+
+
+def test_gmaps_button_after_no_trip(root):
+    with session() as s:
+        boot(s, bikes=0)
+        s.page.evaluate(NO_ROUTE_FOOT)
+        fill(s)
+        assert gm_state(s)["box"] is False
+        s.page.click("#tripGo")
+        s.page.wait_for_selector("#tripNone", timeout=15000)
+        s.page.wait_for_selector("#tripGmBox:not([hidden])")
+        assert gm_state(s)["href"] == "https://www.google.com/maps/dir/?api=1&origin=39.94,-75.15824&destination=39.9575,-75.15824&travelmode=transit"
+        # editing a field takes it away again
+        s.page.fill("#tripFrom", "Origin")
+        assert gm_state(s)["box"] is False
+        # Clear trip also hides it
+        s.page.fill("#tripFrom", "Origin St")
+        s.page.click("#tripGo")
+        s.page.wait_for_selector("#tripGmBox:not([hidden])")
+        s.page.click("#tripClear") if s.page.locator("#tripClear").count() else None
+        s.page.evaluate("document.querySelector('#tripResults').replaceChildren()")
+        s.page.wait_for_selector("#tripGmBox", state="hidden")
         no_errors(s)
