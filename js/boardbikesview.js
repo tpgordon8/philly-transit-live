@@ -9,7 +9,8 @@
     el = util.el;
   var sec = null,
     tiles = null,
-    els = {};
+    els = {},
+    warned = {}; /* station id -> the warning text last announced, so a change is spoken once */
   function plural(n, one, many) {
     return n + ' ' + (n === 1 ? one : many);
   }
@@ -66,13 +67,26 @@
     var view = src === 'down' ? 'down' : src === 'loading' ? 'loading' : r.state,
       age = view === 'down' || view === 'loading' || view === 'unknown' ? null : r.ageMin,
       f = facts(r, view, age);
-    var sig = [r.name, view, f.big, f.unit, f.word, f.bikes, f.docks, f.age, f.say].join('|');
+    var warn = view === 'down' || view === 'loading' ? [] : r.warn || [],
+      wt = warn
+        .map(function (w) {
+          return w.text;
+        })
+        .join('. ');
+    var sig = [r.name, view, f.big, f.unit, f.word, f.bikes, f.docks, f.age, f.say, wt].join('|');
     if (li.dataset.sig === sig) return;
     li.dataset.sig = sig;
     li.dataset.state = view;
-    li.setAttribute('aria-label', 'Indego ' + spoken(r.name) + ', ' + f.say);
+    if (wt) li.dataset.warn = '1';
+    else delete li.dataset.warn;
+    li.setAttribute('aria-label', 'Indego ' + spoken(r.name) + ', ' + (wt ? wt + ', ' : '') + f.say);
     li.replaceChildren();
-    li.appendChild(el('div', 'bv-tn', r.name));
+    var tn = el('div', 'bv-tn', r.name);
+    /* a text badge, never colour alone; it sits beside the name so the tile does not grow a row */
+    warn.forEach(function (w) {
+      tn.appendChild(el('span', 'bv-warn', w.text));
+    });
+    li.appendChild(tn);
     var m = el('div', 'bv-tm');
     if (f.word) m.appendChild(el('span', 'bv-tw', f.word));
     else {
@@ -85,6 +99,30 @@
     if (f.docks) d.appendChild(el('span', null, f.docks));
     if (f.age) d.appendChild(el('span', 'bv-ta', f.age));
     li.appendChild(d);
+  }
+  /* Speak a station's warning once when it appears or changes, and once when it goes. Only live answers count: while the data is
+     stale or down the warning is hidden but not "cleared", so a flaky feed does not talk. */
+  function announce(rows, src) {
+    var say = S.boardview && S.boardview.say,
+      seen = {};
+    rows.forEach(function (r) {
+      seen[r.id] = 1;
+      if (src !== 'live' || r.state === 'unknown') return;
+      var t = (r.warn || [])
+        .map(function (w) {
+          return w.text;
+        })
+        .join('. ');
+      if ((warned[r.id] || '') === t) return;
+      var had = warned[r.id];
+      if (t) warned[r.id] = t;
+      else delete warned[r.id];
+      if (typeof say === 'function')
+        say('Indego ' + spoken(r.name) + ': ' + (t || 'no longer ' + had.toLowerCase()));
+    });
+    Object.keys(warned).forEach(function (id) {
+      if (!seen[id]) delete warned[id];
+    });
   }
   function setBanner(node, msg) {
     node.hidden = !msg;
@@ -100,6 +138,7 @@
     if (!picked.length) {
       if (sec && sec.parentNode) sec.remove();
       els = {};
+      warned = {};
       if (banner) setBanner(banner, '');
       if (fine) fine.hidden = true;
       return;
@@ -135,6 +174,7 @@
       fillTile(li, r, src);
       if (tiles.children[i] !== li) tiles.insertBefore(li, tiles.children[i] || null);
     });
+    announce(rows, src);
     Object.keys(els).forEach(function (id) {
       if (ids[id]) return;
       if (els[id].parentNode) els[id].remove();

@@ -598,4 +598,39 @@
   S.panel.renderPlaces = renderPlaces;
   S.panel.toggleStar = toggleStar;
   S.panel.starName = starName;
+  /* ----- Theme: System, Light or Dark (ARCHITECTURE.md 16.4). The head script in index.html applies the saved choice before first
+     paint; this draws the control, applies a change and saves it. ----- */
+  (function () {
+    var KEY = 'septa.theme.v1',
+      seg = $('#themeSeg');
+    if (!seg) return;
+    function valid(t) {
+      return t === 'light' || t === 'dark' ? t : 'system';
+    }
+    /* the same apply step as the head script in index.html: data-theme for Light and Dark (none for System), and both theme-color tags */
+    function apply(t) {
+      var root = document.documentElement,
+        tags = document.querySelectorAll('meta[name="theme-color"]'),
+        pick = t === 'light' || t === 'dark';
+      if (pick) root.setAttribute('data-theme', t);
+      else root.removeAttribute('data-theme');
+      [].forEach.call(tags, function (m, i) {
+        m.setAttribute('content', pick ? (t === 'dark' ? '#111b27' : '#1f5fae') : i ? '#111b27' : '#1f5fae');
+      });
+    }
+    function mark(t) {
+      [].forEach.call(seg.querySelectorAll('button'), function (b) {
+        b.setAttribute('aria-pressed', String(b.getAttribute('data-theme-pick') === t));
+      });
+    }
+    mark(valid(store.get(KEY, 'system')));
+    seg.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('button[data-theme-pick]') : null;
+      if (!b) return;
+      var t = valid(b.getAttribute('data-theme-pick'));
+      apply(t);
+      mark(t);
+      store.set(KEY, t);
+    });
+  })();
 })();

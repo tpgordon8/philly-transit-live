@@ -11,6 +11,7 @@
   var KEY = 'septa.boardbikes.v1',
     MAX_STATIONS = 4,
     MAX_NAME = 60,
+    MAX_LOW = 5 /* the "bikes at or below" warning is 0 to 5 */,
     MAX_RESULTS = 8,
     POLL_MS = 60000 /* status every minute while the board shows */,
     DIM_POLL_MS = 120000 /* every two minutes while the board is dimmed (night) */,
@@ -27,10 +28,17 @@
   }
   function cleanStation(r) {
     if (!isObj(r) || typeof r.id !== 'string' || !ID_RE.test(r.id)) return null;
-    return {
+    var out = {
       id: r.id,
       name: shortText(typeof r.name === 'string' ? r.name : '', MAX_NAME) || 'Indego station'
     };
+    /* Optional warnings (16.1): absent means off, so data saved before they existed loads unchanged. */
+    if (isLow(r.lowBikes)) out.lowBikes = r.lowBikes;
+    if (r.noDocks === true) out.noDocks = true;
+    return out;
+  }
+  function isLow(n) {
+    return typeof n === 'number' && n % 1 === 0 && n >= 0 && n <= MAX_LOW;
   }
   function cleanStore(raw) {
     var out = [],
@@ -49,7 +57,12 @@
       !Array.isArray(r.stations) ||
       r.stations.length !== c.stations.length ||
       c.stations.some(function (s, i) {
-        return typeof r.stations[i].name === 'string' && r.stations[i].name !== s.name;
+        var o = r.stations[i];
+        return (
+          (typeof o.name === 'string' && o.name !== s.name) ||
+          (o.lowBikes != null && o.lowBikes !== s.lowBikes) ||
+          (o.noDocks != null && o.noDocks !== s.noDocks)
+        );
       })
     );
   });
@@ -79,8 +92,31 @@
   /* ----- Picked stations ----- */
   function stations() {
     return stored.stations.map(function (s) {
-      return { id: s.id, name: s.name };
+      var o = { id: s.id, name: s.name };
+      if (s.lowBikes !== undefined) o.lowBikes = s.lowBikes;
+      if (s.noDocks) o.noDocks = true;
+      return o;
     });
+  }
+  /* setAlert(id, {lowBikes: 0..5 | null, noDocks: boolean}): either key may be left out to keep it. Answers false for an unknown
+     station or a bad value (nothing changes), else whether it was saved. */
+  function setAlert(id, o) {
+    var st = null;
+    stored.stations.forEach(function (s) {
+      if (s.id === id) st = s;
+    });
+    if (!st || !isObj(o)) return false;
+    if ('lowBikes' in o && o.lowBikes !== null && !isLow(o.lowBikes)) return false;
+    if ('noDocks' in o && typeof o.noDocks !== 'boolean') return false;
+    if ('lowBikes' in o) {
+      if (o.lowBikes === null) delete st.lowBikes;
+      else st.lowBikes = o.lowBikes;
+    }
+    if ('noDocks' in o) {
+      if (o.noDocks) st.noDocks = true;
+      else delete st.noDocks;
+    }
+    return save();
   }
   function has(id) {
     return stored.stations.some(function (s) {
@@ -183,12 +219,31 @@
     if (min >= 120) return 'over ' + Math.floor(min / 60) + ' hours ago';
     return min + (short ? ' min' : min === 1 ? ' minute' : ' minutes') + ' ago';
   }
+  /* The warnings a station's row shows: [{kind: 'bikes' | 'docks', text}]. Only when the answer is live and the station is renting
+     (bikes) or taking returns (docks); "Low: 1 bike left" when bikes are at or below the chosen number, "No free docks" at 0 docks. */
+  function warnings(r, live) {
+    var out = [];
+    if (!live || r.state === 'closed') return out;
+    if (r.lowBikes !== null && r.bikes <= r.lowBikes)
+      out.push({
+        kind: 'bikes',
+        text:
+          r.bikes <= 0
+            ? 'Low: no bikes left'
+            : 'Low: ' + r.bikes + (r.bikes === 1 ? ' bike left' : ' bikes left')
+      });
+    if (r.noDocks && r.returning && r.docks <= 0) out.push({ kind: 'docks', text: 'No free docks' });
+    return out;
+  }
   /* One entry per picked station, in the order picked. electric = e-bikes; classic = every other bike (classic and smart together, so
      total bikes minus e-bikes); docks = open docks. state: closed (not installed or not renting), nobike (no bikes at all), noebike
      (bikes, but no e-bikes), ok, unknown (no usable data for it: loading, down, or the station is missing from the feed). */
   function rows(nowMs) {
     nowMs = isFin(nowMs) ? nowMs : Date.now();
-    var up = source(nowMs) !== 'down';
+    /* a warning needs fresh data: stale, failed and loading answers never raise one */
+    var src = source(nowMs),
+      up = src !== 'down',
+      live = src === 'live';
     return stored.stations.map(function (p) {
       var s = up ? byId[p.id] : null,
         r = {
@@ -205,7 +260,10 @@
           installed: false,
           lastReported: 0,
           ageMin: null,
-          state: 'unknown'
+          state: 'unknown',
+          lowBikes: p.lowBikes === undefined ? null : p.lowBikes,
+          noDocks: !!p.noDocks,
+          warn: []
         };
       if (!s) return r;
       var at = s.asOf > 0 && s.asOf <= fetchedAt + SKEW_MS ? s.asOf : fetchedAt;
@@ -223,6 +281,7 @@
       r.ageMin = Math.max(0, Math.floor((nowMs - at) / 60000));
       r.state =
         !s.installed || !s.renting ? 'closed' : tot <= 0 ? 'nobike' : r.typed && el <= 0 ? 'noebike' : 'ok';
+      r.warn = warnings(r, live);
       return r;
     });
   }
@@ -302,6 +361,8 @@
   S.boardbikes.KEY = KEY;
   S.boardbikes.MAX_STATIONS = MAX_STATIONS;
   S.boardbikes.MAX_RESULTS = MAX_RESULTS;
+  S.boardbikes.MAX_LOW = MAX_LOW;
+  S.boardbikes.setAlert = setAlert;
   S.boardbikes.STALE_MIN = STALE_MIN;
   S.boardbikes.stations = stations;
   S.boardbikes.has = has;

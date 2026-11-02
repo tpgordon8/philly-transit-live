@@ -35,28 +35,34 @@ html:not(.app-ready)::before{content:"Septer";position:fixed;z-index:2147483000;
 html:not(.app-ready)::after{content:"";position:fixed;z-index:2147483001;left:50%;top:calc(50% + 34px);width:96px;height:4px;margin-left:-48px;border-radius:2px;background:linear-gradient(90deg,transparent 0,#1f5fae 50%,transparent 100%);background-size:200% 100%;animation:splashSweep 1.2s ease-in-out infinite}
 @keyframes splashSweep{0%{background-position:100% 0}100%{background-position:-100% 0}}
 @media (prefers-color-scheme:dark){html:not(.app-ready)::before{background:#0a1119;color:#e7eef6}html:not(.app-ready)::after{background-image:linear-gradient(90deg,transparent 0,#5da4f3 50%,transparent 100%)}}
+html[data-theme="dark"]:not(.app-ready)::before{background:#0a1119;color:#e7eef6}html[data-theme="dark"]:not(.app-ready)::after{background-image:linear-gradient(90deg,transparent 0,#5da4f3 50%,transparent 100%)}
+html[data-theme="light"]:not(.app-ready)::before{background:#eef1f4;color:#1f5fae}html[data-theme="light"]:not(.app-ready)::after{background-image:linear-gradient(90deg,transparent 0,#1f5fae 50%,transparent 100%)}
 @media (prefers-reduced-motion:reduce){html:not(.app-ready)::after{animation:none;background:#1f5fae;opacity:.5}}
 </style>
 <noscript><style>html::before,html::after{display:none!important}</style></noscript>
 <script>setTimeout(function(){document.documentElement.classList.add("app-ready")},8000);</script>
+<script>
+/* Theme (ARCHITECTURE.md 16.4): applied before first paint so there is no flash. septa.theme.v1 holds "light", "dark" or "system"; anything else, a blocked or empty store, or an error means System (no data-theme, the CSS follows the device). js/panel.js repeats this apply step when the More tab's control changes. */
+(function(){try{var t=JSON.parse(localStorage.getItem("septa.theme.v1")),d=document.documentElement;if(t!=="light"&&t!=="dark")return;d.setAttribute("data-theme",t);var m=document.querySelectorAll('meta[name="theme-color"]'),c=t==="dark"?"#111b27":"#1f5fae";for(var i=0;i<m.length;i++)m[i].setAttribute("content",c)}catch(e){}})();
+</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="css/leaflet.css?v=ed0bb59489">
-<link rel="stylesheet" href="css/base.css?v=ed0bb59489">
-<link rel="stylesheet" href="css/layout.css?v=ed0bb59489">
-<link rel="stylesheet" href="css/map.css?v=ed0bb59489">
-<link rel="stylesheet" href="css/panel.css?v=ed0bb59489">
-<link rel="stylesheet" href="css/trip.css?v=ed0bb59489">
-<link rel="stylesheet" href="css/suggest.css?v=ed0bb59489">
-<link rel="stylesheet" href="css/stops.css?v=ed0bb59489">
-<link rel="stylesheet" href="css/alerts.css?v=ed0bb59489">
-<link rel="stylesheet" href="css/nearby.css?v=ed0bb59489">
-<link rel="stylesheet" href="css/indego.css?v=ed0bb59489">
-<link rel="stylesheet" href="css/board.css?v=ed0bb59489">
-<link rel="stylesheet" href="css/install.css?v=ed0bb59489">
+<link rel="stylesheet" href="css/leaflet.css?v=7a2dc8bff4">
+<link rel="stylesheet" href="css/base.css?v=7a2dc8bff4">
+<link rel="stylesheet" href="css/layout.css?v=7a2dc8bff4">
+<link rel="stylesheet" href="css/map.css?v=7a2dc8bff4">
+<link rel="stylesheet" href="css/panel.css?v=7a2dc8bff4">
+<link rel="stylesheet" href="css/trip.css?v=7a2dc8bff4">
+<link rel="stylesheet" href="css/suggest.css?v=7a2dc8bff4">
+<link rel="stylesheet" href="css/stops.css?v=7a2dc8bff4">
+<link rel="stylesheet" href="css/alerts.css?v=7a2dc8bff4">
+<link rel="stylesheet" href="css/nearby.css?v=7a2dc8bff4">
+<link rel="stylesheet" href="css/indego.css?v=7a2dc8bff4">
+<link rel="stylesheet" href="css/board.css?v=7a2dc8bff4">
+<link rel="stylesheet" href="css/install.css?v=7a2dc8bff4">
 </head>
 <body>
 <div id="app" data-sheet="peek">
@@ -167,6 +173,16 @@ html:not(.app-ready)::after{content:"";position:fixed;z-index:2147483001;left:50
       </div>
     </section>
 
+    <section class="sec" aria-labelledby="h-theme" data-tab="more">
+      <h2 id="h-theme">Theme</h2>
+      <div class="seg" role="group" aria-label="Theme" id="themeSeg">
+        <button type="button" data-theme-pick="system" aria-pressed="true">System</button>
+        <button type="button" data-theme-pick="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-pick="dark" aria-pressed="false">Dark</button>
+      </div>
+      <p class="empty-line" style="margin-top:0">System follows your device. The My stops board is always dark.</p>
+    </section>
+
     <section class="sec" aria-labelledby="h-priv" data-tab="more">
       <h2 id="h-priv">Privacy</h2>
       <p class="empty-line" id="privLead" style="margin-top:0">When you type an address, the text and your approximate area (within about 1 km) are sent to Photon, a free place-search service, to suggest places. An address you type and submit in the main search box that you did not pick from the suggestions is sent to Nominatim (OpenStreetMap's address search) for exact matches and intersections. When you plan a trip, the start and end points (within about 10 m, or closer if our server cannot be reached) are sent to our server and the free OpenStreetMap routing service. Your saved places and alerts stay in this browser, and our server keeps nothing except a short-lived cache of each route answer.</p>
@@ -253,31 +269,31 @@ window.addEventListener('error',function(e){
   if(t&&t.tagName==='SCRIPT'&&/\/js\/[^\/]+\.js/.test(t.src||''))window.SEPTA.loadFailed(t.src.split('/').pop().split('?')[0]);
 },true);
 </script>
-<script src="js/util.js?v=ed0bb59489"></script>
-<script src="js/feed.js?v=ed0bb59489"></script>
-<script src="js/map.js?v=ed0bb59489"></script>
-<script src="js/landmarks.js?v=ed0bb59489"></script>
-<script src="js/suggest.js?v=ed0bb59489"></script>
-<script src="js/panel.js?v=ed0bb59489"></script>
-<script src="js/stops.js?v=ed0bb59489"></script>
-<script src="js/alerts.js?v=ed0bb59489"></script>
-<script src="js/board.js?v=ed0bb59489"></script>
-<script src="js/boardbikes.js?v=ed0bb59489"></script>
-<script src="js/maplod.js?v=ed0bb59489"></script>
-<script src="js/routing.js?v=ed0bb59489"></script>
-<script src="js/candidates.js?v=ed0bb59489"></script>
-<script src="js/planner.js?v=ed0bb59489"></script>
-<script src="js/trip.js?v=ed0bb59489"></script>
-<script src="js/nearby.js?v=ed0bb59489"></script>
-<script src="js/boardview.js?v=ed0bb59489"></script>
-<script src="js/boardbikesview.js?v=ed0bb59489"></script>
-<script src="js/boardsettings.js?v=ed0bb59489"></script>
-<script src="js/boardadd.js?v=ed0bb59489"></script>
-<script src="js/sheet.js?v=ed0bb59489"></script>
-<script src="js/swipe.js?v=ed0bb59489"></script>
-<script src="js/indego.js?v=ed0bb59489"></script>
-<script src="js/main.js?v=ed0bb59489"></script>
-<script src="js/install.js?v=ed0bb59489"></script>
+<script src="js/util.js?v=7a2dc8bff4"></script>
+<script src="js/feed.js?v=7a2dc8bff4"></script>
+<script src="js/map.js?v=7a2dc8bff4"></script>
+<script src="js/landmarks.js?v=7a2dc8bff4"></script>
+<script src="js/suggest.js?v=7a2dc8bff4"></script>
+<script src="js/panel.js?v=7a2dc8bff4"></script>
+<script src="js/stops.js?v=7a2dc8bff4"></script>
+<script src="js/alerts.js?v=7a2dc8bff4"></script>
+<script src="js/board.js?v=7a2dc8bff4"></script>
+<script src="js/boardbikes.js?v=7a2dc8bff4"></script>
+<script src="js/maplod.js?v=7a2dc8bff4"></script>
+<script src="js/routing.js?v=7a2dc8bff4"></script>
+<script src="js/candidates.js?v=7a2dc8bff4"></script>
+<script src="js/planner.js?v=7a2dc8bff4"></script>
+<script src="js/trip.js?v=7a2dc8bff4"></script>
+<script src="js/nearby.js?v=7a2dc8bff4"></script>
+<script src="js/boardview.js?v=7a2dc8bff4"></script>
+<script src="js/boardbikesview.js?v=7a2dc8bff4"></script>
+<script src="js/boardsettings.js?v=7a2dc8bff4"></script>
+<script src="js/boardadd.js?v=7a2dc8bff4"></script>
+<script src="js/sheet.js?v=7a2dc8bff4"></script>
+<script src="js/swipe.js?v=7a2dc8bff4"></script>
+<script src="js/indego.js?v=7a2dc8bff4"></script>
+<script src="js/main.js?v=7a2dc8bff4"></script>
+<script src="js/install.js?v=7a2dc8bff4"></script>
 <script>if(!window.SEPTA.started&&window.SEPTA.failed.indexOf('main.js')<0)window.SEPTA.loadFailed('main.js (the app did not start)');</script>
 
 </body>

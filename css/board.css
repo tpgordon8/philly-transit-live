@@ -75,6 +75,8 @@ body.board-on{background:#000} /* the dimmed board shows through to black, never
 .bv-tile{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"n n" "m d";align-items:center;gap:0 18px;min-width:0;padding:8px 14px 8px 14px;border-radius:12px;background:var(--row);border:2px solid var(--line)}
 .bv-tile[data-state=noebike],.bv-tile[data-state=nobike],.bv-tile[data-state=closed]{border-style:dashed}
 .bv-tn{grid-area:n;font:600 clamp(20px,3.3vh,26px)/1.1 var(--f-display);overflow-wrap:anywhere}
+.bv-tile[data-warn]{border-color:var(--amber)}
+.bv-warn{display:inline-block;margin:0 0 0 10px;padding:1px 9px;border:2px solid var(--amber);border-radius:7px;background:#2a2008;color:#ffd678;font:700 .8em/1.2 var(--f-display);letter-spacing:.02em;vertical-align:middle}
 .bv-tm{grid-area:m;display:flex;flex-direction:column;min-width:0}
 .bv-tv{font:700 var(--bnum)/1 var(--f-display);font-variant-numeric:tabular-nums}
 .bv-tk{font-size:clamp(14px,2.2vh,17px);font-weight:600;letter-spacing:.08em;color:var(--mute)}

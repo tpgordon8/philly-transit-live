@@ -323,6 +323,45 @@
     bikeResults();
     return true;
   }
+  /* Per station, two optional in-page warnings (ARCHITECTURE.md 16.3): bikes at or below N (Off, then 0 to MAX_LOW) and no free docks. */
+  function warnSettings(bb, s, n) {
+    if (typeof bb.setAlert !== 'function') return;
+    var low = s.lowBikes === undefined ? null : s.lowBikes,
+      max = bb.MAX_LOW,
+      line = el('div', 'bv-line'),
+      lab = el('span', null, 'Warn me when bikes are at or below');
+    lab.appendChild(el('small', null, s.name));
+    line.appendChild(lab);
+    line.appendChild(
+      stepper(
+        'low-bike warning for ' + s.name,
+        low === null ? 'Off' : String(low),
+        function () {
+          saved(bb.setAlert(s.id, { lowBikes: low === 0 ? null : low - 1 }));
+          renderSettings();
+        },
+        function () {
+          saved(bb.setAlert(s.id, { lowBikes: low === null ? 0 : low + 1 }));
+          renderSettings();
+        },
+        low === null,
+        low !== null && low >= max,
+        'bl' + n
+      )
+    );
+    settings.appendChild(line);
+    var chk = check(
+      'Warn me when no docks are free',
+      !!s.noDocks,
+      function (v) {
+        saved(bb.setAlert(s.id, { noDocks: v }));
+        renderSettings();
+      },
+      'bn' + n
+    );
+    chk.querySelector('input').setAttribute('aria-label', 'Warn me when no docks are free at ' + s.name);
+    settings.appendChild(chk);
+  }
   function bikeSettings() {
     var bb = S.boardbikes,
       picked = bb.stations();
@@ -345,6 +384,7 @@
       });
       line.appendChild(rm);
       settings.appendChild(line);
+      warnSettings(bb, s, n);
     });
     if (picked.length >= bb.MAX_STATIONS) {
       settings.appendChild(
