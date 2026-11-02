@@ -131,7 +131,7 @@ def test_search_and_trip_errors_set_aria_invalid(root):
         assert attr("#tripTo", "aria-invalid") is None and attr("#tripTo", "aria-describedby") is None
         s.page.click("#tripGo")
         s.page.wait_for_selector("#tripToErr:not([hidden])")
-        assert s.page.inner_text("#tripToErr") == "Couldn't find that address. Add a cross street or ZIP code."
+        assert s.page.inner_text("#tripToErr") == "No match for that address. Try adding a cross street or a ZIP code."
         assert attr("#tripTo", "aria-invalid") == "true" and attr("#tripTo", "aria-describedby") == "tripToErr"
         s.page.fill("#tripTo", "Dest")
         assert attr("#tripTo", "aria-invalid") is None

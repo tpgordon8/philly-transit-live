@@ -9,8 +9,8 @@
    fall back (once) to the direct provider URL are a network error, a Worker 404 (an older Worker) and a Worker 500/502/503/504; any other
    Worker answer, a 422 NoRoute included, is final. These run only when a caller (the planner UI) invokes them, so a user action
    works even when the page is idle-paused: they deliberately do not go through fetchOnce().
-   Third parties receive only leg endpoints (routing service, via the Worker, rounded to 4 decimals there; unrounded 5 decimals in
-   the direct fallback) or nothing (Indego, own static file). */
+   Third parties receive only leg endpoints (routing service, via the Worker, rounded to 4 decimals there, and rounded to 4 decimals in
+   the direct fallback too) or nothing (Indego, own static file). */
   /* The ?v= token tests/stamp_version.py puts on this script's own tag. The network file is stamped with the same token, so the
    planner code and the network it reads change together. Without a token (a page opened from an unstamped file) there is no query. */
   var STAMP = (function () {
@@ -438,13 +438,13 @@
       TP.ROUTE_DIRECT +
       profile +
       '/route/v1/driving/' +
-      a.lng.toFixed(5) +
+      a.lng.toFixed(4) +
       ',' +
-      a.lat.toFixed(5) +
+      a.lat.toFixed(4) +
       ';' +
-      b.lng.toFixed(5) +
+      b.lng.toFixed(4) +
       ',' +
-      b.lat.toFixed(5) +
+      b.lat.toFixed(4) +
       '?overview=full&geometries=geojson';
     var p = new Promise(function (resolve, reject) {
       tpQueue.push({

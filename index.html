@@ -18,7 +18,12 @@
 <meta property="og:site_name" content="Septer">
 <meta property="og:title" content="Septer: live Philadelphia transit">
 <meta property="og:description" content="Live SEPTA buses, trolleys and Regional Rail trains near any Philadelphia address, with stop boards, leave-now alerts and trip planning.">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://septer.tarapaigegordon.com/icons/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Septer: live Philadelphia transit">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://septer.tarapaigegordon.com/icons/og-image.png">
 <meta name="twitter:title" content="Septer: live Philadelphia transit">
 <meta name="twitter:description" content="Live SEPTA buses, trolleys and Regional Rail trains near any Philadelphia address, with stop boards, leave-now alerts and trip planning.">
 <link rel="preconnect" href="https://septa-proxy.tpgordon8.workers.dev" crossorigin>
@@ -39,19 +44,19 @@ html:not(.app-ready)::after{content:"";position:fixed;z-index:2147483001;left:50
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="css/leaflet.css?v=2b7f38a3aa">
-<link rel="stylesheet" href="css/base.css?v=2b7f38a3aa">
-<link rel="stylesheet" href="css/layout.css?v=2b7f38a3aa">
-<link rel="stylesheet" href="css/map.css?v=2b7f38a3aa">
-<link rel="stylesheet" href="css/panel.css?v=2b7f38a3aa">
-<link rel="stylesheet" href="css/trip.css?v=2b7f38a3aa">
-<link rel="stylesheet" href="css/suggest.css?v=2b7f38a3aa">
-<link rel="stylesheet" href="css/stops.css?v=2b7f38a3aa">
-<link rel="stylesheet" href="css/alerts.css?v=2b7f38a3aa">
-<link rel="stylesheet" href="css/nearby.css?v=2b7f38a3aa">
-<link rel="stylesheet" href="css/indego.css?v=2b7f38a3aa">
-<link rel="stylesheet" href="css/board.css?v=2b7f38a3aa">
-<link rel="stylesheet" href="css/install.css?v=2b7f38a3aa">
+<link rel="stylesheet" href="css/leaflet.css?v=34305c98a3">
+<link rel="stylesheet" href="css/base.css?v=34305c98a3">
+<link rel="stylesheet" href="css/layout.css?v=34305c98a3">
+<link rel="stylesheet" href="css/map.css?v=34305c98a3">
+<link rel="stylesheet" href="css/panel.css?v=34305c98a3">
+<link rel="stylesheet" href="css/trip.css?v=34305c98a3">
+<link rel="stylesheet" href="css/suggest.css?v=34305c98a3">
+<link rel="stylesheet" href="css/stops.css?v=34305c98a3">
+<link rel="stylesheet" href="css/alerts.css?v=34305c98a3">
+<link rel="stylesheet" href="css/nearby.css?v=34305c98a3">
+<link rel="stylesheet" href="css/indego.css?v=34305c98a3">
+<link rel="stylesheet" href="css/board.css?v=34305c98a3">
+<link rel="stylesheet" href="css/install.css?v=34305c98a3">
 </head>
 <body>
 <div id="app" data-sheet="peek">
@@ -63,7 +68,7 @@ html:not(.app-ready)::after{content:"";position:fixed;z-index:2147483001;left:50
       <div class="pillrow" id="myPillRow" hidden><button class="mypill" id="myPill" type="button"><span>My routes only. Show all</span></button></div>
     </div>
 
-    <div id="welcome" hidden role="region" aria-label="Welcome"><p>Live SEPTA vehicles near you. Tap Near me or search an address.</p><button class="btn primary" type="button" id="welcomeOk">Got it</button></div>
+    <div id="welcome" hidden role="region" aria-label="Welcome"><p>Live SEPTA vehicles near you. Tap Near me or search an address. Trip plans a route, Board pins your stops, and Alerts tells you when to leave.</p><button class="btn primary" type="button" id="welcomeOk">Got it</button></div>
 
     <section class="sec sec-find" aria-labelledby="h-find" data-tab="map">
       <h2 id="h-find">Find vehicles near</h2>
@@ -73,7 +78,7 @@ html:not(.app-ready)::after{content:"";position:fixed;z-index:2147483001;left:50
       </form>
       <div class="quick" role="group" aria-label="Quick actions">
         <button class="btn qpill" type="button" id="btnLocate"><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="4.5"/><circle cx="10" cy="10" r="1.2" fill="currentColor"/><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3"/></svg>Near me</button>
-        <button class="btn qpill near-home" type="button" id="btnHome" hidden><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 9.5 10 3l7.5 6.5"/><path d="M4.5 8v9h11V8"/><path d="M8.5 17v-4.5h3V17"/></svg>Get me home</button>
+        <button class="btn qpill near-home" type="button" id="btnHome" aria-disabled="true" title="Set a Home in More first"><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 9.5 10 3l7.5 6.5"/><path d="M4.5 8v9h11V8"/><path d="M8.5 17v-4.5h3V17"/></svg>Get me home</button>
         <button class="btn qpill" type="button" id="btnSavePlace" hidden><svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 2.5h10v15l-5-3.5-5 3.5z"/></svg>Save place</button>
       </div>
       <p class="note" id="note" aria-live="polite"></p>
@@ -109,6 +114,7 @@ html:not(.app-ready)::after{content:"";position:fixed;z-index:2147483001;left:50
     <section class="sec" aria-labelledby="h-trip" id="tripSec" data-tab="trip">
       <h2 id="h-trip">Plan a trip</h2>
       <form id="tripForm" autocomplete="off" novalidate>
+        <p class="empty-line tp-scope" id="tripScope">Walk, Indego, one bus or trolley, or drive. No rail or transfers yet.</p>
         <div class="tp-fields">
           <div class="tp-field"><label class="tp-lab" for="tripFrom">From</label><div class="row"><input type="text" id="tripFrom" placeholder="Start: address or intersection"><button class="btn small" type="button" id="tripFromHome" aria-label="Use Home as start" hidden>Use Home</button></div></div>
           <p class="note bad tp-err" id="tripFromErr" role="alert" hidden></p>
@@ -118,7 +124,6 @@ html:not(.app-ready)::after{content:"";position:fixed;z-index:2147483001;left:50
         <div class="row tp-mid"><button class="btn small" type="button" id="tripLocate"><svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="4.5"/><circle cx="10" cy="10" r="1.2" fill="currentColor"/><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3"/></svg>Use my location</button><button class="btn small" type="button" id="tripSwap" aria-label="Swap From and To"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12V2M1.5 4.5 4 2l2.5 2.5M10 2v10M7.5 9.5 10 12l2.5-2.5"/></svg> Swap</button></div>
         <div class="tp-chips" id="tripChips" role="group" aria-label="Saved places for the destination" hidden></div>
         <button class="btn primary tp-go" type="submit" id="tripGo">Plan trip</button>
-        <p class="empty-line tp-scope" id="tripScope">Walk, Indego, one bus or trolley, or drive. No rail or transfers yet.</p>
       </form>
       <div id="tripResults" aria-busy="false" hidden></div>
       <div id="tripLive" class="sr-only" role="status" aria-live="polite"></div>
@@ -129,6 +134,7 @@ html:not(.app-ready)::after{content:"";position:fixed;z-index:2147483001;left:50
       <p class="empty-line" style="margin-top:0">Alerts only work while this page is open. Phones may pause background tabs.</p>
       <div id="notifyBox"></div>
       <p class="empty-line" id="rulesEmpty">Tap a stop on the map or in Nearby stops, then tap Add alert.</p>
+      <button class="btn small" type="button" id="rulesGoMap">Go to Map</button>
       <ul class="rules" id="rules"></ul>
     </section>
 
@@ -166,7 +172,7 @@ html:not(.app-ready)::after{content:"";position:fixed;z-index:2147483001;left:50
       <p class="empty-line" id="privLead" style="margin-top:0">When you type an address, the text and your approximate area (within about 1 km) are sent to Photon, a free place-search service, to suggest places. An address you type and submit in the main search box that you did not pick from the suggestions is sent to Nominatim (OpenStreetMap's address search) for exact matches and intersections. When you plan a trip, the start and end points (within about 10 m, or closer if our server cannot be reached) are sent to our server and the free OpenStreetMap routing service. Your saved places and alerts stay in this browser, and our server keeps nothing except a short-lived cache of each route answer.</p>
       <details id="privacyDetails">
         <summary>Privacy details</summary>
-        <p class="empty-line tp-priv">What is sent where. While you type in the search box or in From or To, the typed text and a search point, rounded to 2 decimals (about 1 km), go to Photon (photon.komoot.io, OpenStreetMap data) to suggest places and addresses. The search point is your current search location (your located position after Use my location); in From and To it is your saved Home, or the search point when no Home is saved. Places on the built-in list of well-known Philadelphia places are suggested without any request. A typed From or To address you did not pick from the suggestions, and intersections such as 10th and Race, go to Nominatim (OpenStreetMap) to be looked up, as in search. Every leg's start and end coordinates then go to this site's Worker, which rounds them to 4 decimals (about 10 m), forwards them to the OpenStreetMap-based routing service (routing.openstreetmap.de), and keeps nothing beyond a short-lived cache of each answer. Your saved Home and place buttons, Use my location and the map center are not looked up, but their coordinates are sent as route legs in exactly the same way as a typed address. Indego's public station feed is read through the Worker. If the Worker cannot be reached, is an older version, or reports a server error (502, 503 or 504), the page asks the routing service and Indego directly instead, and then the routing service receives the leg coordinates unrounded, to 5 decimals (about 1 m). An answer such as "no route" is not a failure and is never re-sent. Your saved places, settings, alerts and one backup copy of any damaged saved data are kept only in this browser's storage.</p>
+        <p class="empty-line tp-priv">What is sent where. While you type in the search box or in From or To, the typed text and a search point, rounded to 2 decimals (about 1 km), go to Photon (photon.komoot.io, OpenStreetMap data) to suggest places and addresses. The search point is your current search location (your located position after Use my location); in From and To it is your saved Home, or the search point when no Home is saved. Places on the built-in list of well-known Philadelphia places are suggested without any request. A typed From or To address you did not pick from the suggestions, and intersections such as 10th and Race, go to Nominatim (OpenStreetMap) to be looked up, as in search. Every leg's start and end coordinates then go to this site's Worker, which rounds them to 4 decimals (about 10 m), forwards them to the OpenStreetMap-based routing service (routing.openstreetmap.de), and keeps nothing beyond a short-lived cache of each answer. Your saved Home and place buttons, Use my location and the map center are not looked up, but their coordinates are sent as route legs in exactly the same way as a typed address. Indego's public station feed is read through the Worker. If the Worker cannot be reached, is an older version, or reports a server error (502, 503 or 504), the page asks the routing service and Indego directly instead, and then the routing service receives the leg coordinates rounded to 4 decimals (about 10 m), the same as through our server. An answer such as "no route" is not a failure and is never re-sent. Your saved places, settings, alerts and one backup copy of any damaged saved data are kept only in this browser's storage.</p>
       </details>
     </section>
 
@@ -247,31 +253,31 @@ window.addEventListener('error',function(e){
   if(t&&t.tagName==='SCRIPT'&&/\/js\/[^\/]+\.js/.test(t.src||''))window.SEPTA.loadFailed(t.src.split('/').pop().split('?')[0]);
 },true);
 </script>
-<script src="js/util.js?v=2b7f38a3aa"></script>
-<script src="js/feed.js?v=2b7f38a3aa"></script>
-<script src="js/map.js?v=2b7f38a3aa"></script>
-<script src="js/landmarks.js?v=2b7f38a3aa"></script>
-<script src="js/suggest.js?v=2b7f38a3aa"></script>
-<script src="js/panel.js?v=2b7f38a3aa"></script>
-<script src="js/stops.js?v=2b7f38a3aa"></script>
-<script src="js/alerts.js?v=2b7f38a3aa"></script>
-<script src="js/board.js?v=2b7f38a3aa"></script>
-<script src="js/boardbikes.js?v=2b7f38a3aa"></script>
-<script src="js/maplod.js?v=2b7f38a3aa"></script>
-<script src="js/routing.js?v=2b7f38a3aa"></script>
-<script src="js/candidates.js?v=2b7f38a3aa"></script>
-<script src="js/planner.js?v=2b7f38a3aa"></script>
-<script src="js/trip.js?v=2b7f38a3aa"></script>
-<script src="js/nearby.js?v=2b7f38a3aa"></script>
-<script src="js/boardview.js?v=2b7f38a3aa"></script>
-<script src="js/boardbikesview.js?v=2b7f38a3aa"></script>
-<script src="js/boardsettings.js?v=2b7f38a3aa"></script>
-<script src="js/boardadd.js?v=2b7f38a3aa"></script>
-<script src="js/sheet.js?v=2b7f38a3aa"></script>
-<script src="js/swipe.js?v=2b7f38a3aa"></script>
-<script src="js/indego.js?v=2b7f38a3aa"></script>
-<script src="js/main.js?v=2b7f38a3aa"></script>
-<script src="js/install.js?v=2b7f38a3aa"></script>
+<script src="js/util.js?v=34305c98a3"></script>
+<script src="js/feed.js?v=34305c98a3"></script>
+<script src="js/map.js?v=34305c98a3"></script>
+<script src="js/landmarks.js?v=34305c98a3"></script>
+<script src="js/suggest.js?v=34305c98a3"></script>
+<script src="js/panel.js?v=34305c98a3"></script>
+<script src="js/stops.js?v=34305c98a3"></script>
+<script src="js/alerts.js?v=34305c98a3"></script>
+<script src="js/board.js?v=34305c98a3"></script>
+<script src="js/boardbikes.js?v=34305c98a3"></script>
+<script src="js/maplod.js?v=34305c98a3"></script>
+<script src="js/routing.js?v=34305c98a3"></script>
+<script src="js/candidates.js?v=34305c98a3"></script>
+<script src="js/planner.js?v=34305c98a3"></script>
+<script src="js/trip.js?v=34305c98a3"></script>
+<script src="js/nearby.js?v=34305c98a3"></script>
+<script src="js/boardview.js?v=34305c98a3"></script>
+<script src="js/boardbikesview.js?v=34305c98a3"></script>
+<script src="js/boardsettings.js?v=34305c98a3"></script>
+<script src="js/boardadd.js?v=34305c98a3"></script>
+<script src="js/sheet.js?v=34305c98a3"></script>
+<script src="js/swipe.js?v=34305c98a3"></script>
+<script src="js/indego.js?v=34305c98a3"></script>
+<script src="js/main.js?v=34305c98a3"></script>
+<script src="js/install.js?v=34305c98a3"></script>
 <script>if(!window.SEPTA.started&&window.SEPTA.failed.indexOf('main.js')<0)window.SEPTA.loadFailed('main.js (the app did not start)');</script>
 
 </body>

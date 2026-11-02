@@ -136,7 +136,7 @@ def test_a_form_labels_placement_and_geocoding(root):
         assert info["ph"] == ["Start: address or intersection", "Destination: address or intersection"]
         assert info["btn"] == "Plan trip" and info["hasLoc"] and info["hasSwap"] and info["homeBtns"] == [True, True]
         for part in ("go to Photon (photon.komoot.io, OpenStreetMap data)", "rounded to 2 decimals", "A typed From or To address you did not pick from the suggestions", "go to Nominatim (OpenStreetMap) to be looked up", "rounds them to 4 decimals", "saved Home and place buttons", "Use my location and the map center",
-                     "exactly the same way as a typed address", "cannot be reached, is an older version", "unrounded, to 5 decimals", "is not a failure and is never re-sent"):
+                     "exactly the same way as a typed address", "cannot be reached, is an older version", "the same as through our server", "is not a failure and is never re-sent"):
             assert part in info["priv"], part
         assert info["attr"] == "Routing by OSRM / data \u00a9 OpenStreetMap contributors", info["attr"]
         # an intersection gets ", Philadelphia, PA" appended once; text with a comma is sent as typed
@@ -366,7 +366,7 @@ def test_f_geocode_miss_message_next_to_field(root):
         s.page.click("#tripGo")
         s.page.wait_for_selector("#tripToErr:not([hidden])")
         err = s.page.locator("#tripToErr")
-        assert err.inner_text() == "Couldn't find that address. Add a cross street or ZIP code." and err.get_attribute("role") == "alert"
+        assert err.inner_text() == "No match for that address. Try adding a cross street or a ZIP code." and err.get_attribute("role") == "alert"
         assert s.page.get_attribute("#tripTo", "aria-describedby") == "tripToErr"
         assert s.page.locator("#tripFromErr").is_hidden() and s.page.get_attribute("#tripFrom", "aria-describedby") is None
         assert not s.page.locator("#tripGo").is_disabled() and s.page.locator("#tripResults .tp-card").count() == 0

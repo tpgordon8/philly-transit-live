@@ -228,6 +228,8 @@
       '<b>Live</b> · updated ' + ago + ' s ago · ' + n + ' vehicle' + (n === 1 ? '' : 's') + ' shown';
   }
   /* ----- Search, location, radius, modes ----- */
+  var NO_MATCH =
+    'No match for that address. Try adding a cross street or a ZIP code.'; /* the same words as js/trip.js and js/boardadd.js */
   function setNote(msg, bad) {
     var n = $('#note');
     n.textContent = msg || '';
@@ -415,7 +417,7 @@
     geocode(q)
       .then(function (r) {
         if (!r) {
-          setNote('No match for that address. Try adding a cross street or a ZIP code.', true);
+          setNote(NO_MATCH, true);
           return;
         }
         setNote('Showing vehicles near ' + r.label + '.');
@@ -558,7 +560,11 @@
     var h = state.places.home,
       btn = $('#btnHome'),
       T = S.trip;
-    if (!h || btn.disabled) return;
+    if (!h) {
+      setNote('Set a Home in More to use this.'); /* the button stays focusable; this is its answer */
+      return;
+    }
+    if (btn.disabled) return;
     btn.disabled = true;
     sheetShow('trip', { open: true });
     T.tripSetField('to', h.name, { pt: { lat: h.lat, lng: h.lng, name: h.name } });

@@ -24,6 +24,8 @@
    and hands it a cancel handle (trip.ctx) that Clear trip and a new plan use to abandon the old plan's requests. The map drawing
    is one Leaflet layer group, separate from `markers`. */
   var tripLayer = L.layerGroup().addTo(map);
+  var NO_MATCH =
+    'No match for that address. Try adding a cross street or a ZIP code.'; /* the same words as js/panel.js and js/boardadd.js */
   var OUT_MSG = 'That place is outside the area this planner covers (Philadelphia region).';
   var trip = { seq: 0, ctx: null, busy: false, res: null, sel: 0, last: null, autoShown: false, view: null };
   var PHONE = window.matchMedia('(max-width:480px)');
@@ -83,7 +85,9 @@
       chips = $('#tripChips');
     $('#tripFromHome').hidden = !h;
     $('#tripToHome').hidden = !h;
-    $('#btnHome').hidden = !h;
+    if (h) $('#btnHome').removeAttribute('aria-disabled');
+    else $('#btnHome').setAttribute('aria-disabled', 'true');
+    $('#btnHome').title = h ? '' : 'Set a Home in More first';
     chips.replaceChildren();
     var all = [];
     if (h) all.push({ label: 'Home', p: h, title: 'Home: ' + h.name });
@@ -148,8 +152,7 @@
     }
     return geocode(text, { philly: true }).then(
       function (r) {
-        if (!r || !isNum(r.lat) || !isNum(r.lng))
-          return { err: "Couldn't find that address. Add a cross street or ZIP code." };
+        if (!r || !isNum(r.lat) || !isNum(r.lng)) return { err: NO_MATCH };
         return chk({ lat: r.lat, lng: r.lng, name: text.slice(0, 40) });
       },
       function () {
@@ -228,7 +231,12 @@
           if (seq !== trip.seq) return;
           tripBusy(false);
           if (!res.options.length) {
-            tripFail('No trip found. Try a different start or destination.', false, 'tripNone');
+            tripFail(
+              'No trip found. Try a different start or destination.' +
+                (state.filters.train ? ' Regional Rail trips are not planned here yet.' : ''),
+              false,
+              'tripNone'
+            );
             return;
           }
           trip.res = res;

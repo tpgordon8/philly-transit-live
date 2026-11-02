@@ -1,5 +1,5 @@
 /* alerts.css: service alerts, banners, leave-now rules and toasts. */
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-bottom:10px}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:6px;overflow:hidden;margin-bottom:10px}
 .seg button{border:0;background:var(--panel);min-height:44px;padding:5px 12px;font-size:12.5px;font-weight:600;color:var(--mute)}
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
 .alerts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
@@ -30,6 +30,10 @@
 .rule .rctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .rule .rtog{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding-right:6px;font-size:13px;font-weight:600;cursor:pointer}
 .rule .rtog input{accent-color:var(--accent);width:20px;height:20px;margin:0;cursor:pointer}
+#stopCard .alertnote{color:var(--mute);font-size:12.5px;font-weight:600;margin-top:2px}
+#stopCard .alertnote:empty{display:none}
+#rulesGoMap{margin-top:8px}
+@media (min-width:761px),(max-height:500px) and (orientation:landscape){#rulesGoMap{display:none}} /* the side panel shows the map and every section at once: no tab to go to */
 #notifyBox{margin-top:10px}
 #notifyBox p{margin:6px 0 0;color:var(--mute);font-size:12.5px}
 #toasts{position:fixed;z-index:1300;top:calc(8px + env(safe-area-inset-top,0px));left:404px;width:min(420px,calc(100vw - 416px));display:flex;flex-direction:column;gap:8px;pointer-events:none}

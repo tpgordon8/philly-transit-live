@@ -7,7 +7,7 @@
 input[type=text]{flex:1;min-width:0;min-height:44px;padding:9px 11px;font-size:16px;border:1px solid var(--line-strong);border-radius:6px;background:var(--paper);color:var(--ink)}
 input[type=text]::placeholder{color:var(--mute)}
 .sr-only{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
-.btn{min-height:44px;min-width:44px;padding:9px 13px;border:1px solid var(--line);border-radius:6px;background:var(--panel);font-weight:600;white-space:nowrap}
+.btn{min-height:44px;min-width:44px;padding:9px 13px;border:1px solid var(--line-strong);border-radius:6px;background:var(--panel);font-weight:600;white-space:nowrap}
 .btn:hover{border-color:var(--accent)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .btn.small{padding:5px 12px;font-size:13px;min-height:44px}
@@ -129,3 +129,4 @@ select{min-height:44px;font-size:16px}
   .sec-find h2{position:static;width:auto;height:auto;overflow:visible;clip-path:none}
   .search-bar input[type=text],.search-bar .btn{min-height:44px;border-radius:6px}
 }
+.qpill[aria-disabled=true]{opacity:.6;border-color:var(--line);background:var(--panel);color:var(--mute);cursor:default}

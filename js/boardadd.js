@@ -304,6 +304,8 @@
       showRows(rows, summary(rows, ' near ' + label));
     };
   }
+  var NO_MATCH =
+    'No match for that address. Try adding a cross street or a ZIP code.'; /* the same words as js/panel.js and js/trip.js */
   function textJob(q) {
     return function (n, mine) {
       var rows = nameStops(n, q);
@@ -313,7 +315,7 @@
       S.panel.geocode(q, { philly: true }).then(
         function (r) {
           if (mine !== seq) return;
-          if (!r) note('No match for that. Try adding a cross street or a ZIP code.');
+          if (!r) note(NO_MATCH);
           else nearJob(r, r.label || q)(n, mine);
         },
         function () {

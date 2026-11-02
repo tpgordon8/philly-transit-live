@@ -56,6 +56,12 @@ def test_w_route_falls_back_once_on_worker_5xx_or_network_error(root):
             assert len(s.mocks.worker_route_hits) == 1, (mode, "the Worker is tried once, not retried")
             assert len(s.mocks.direct_routing_hits) == 1, (mode, "exactly one fallback call")
             assert s.mocks.direct_routing_hits[0]["profile"] == "foot"
+            # Privacy: the direct fallback sends leg coordinates rounded to 4 decimals, like the Worker does.
+            s.mocks.direct_routing_hits.clear()
+            s.page.evaluate("window.__SEPTA_TEST__.resetPlannerCaches()")
+            s.page.evaluate(ROUTE_JS, [{"lat": 39.94123, "lng": -75.16456}, {"lat": 39.95789, "lng": -75.15234}])
+            h = s.mocks.direct_routing_hits[0]
+            assert h["from"] == (39.9412, -75.1646) and h["to"] == (39.9579, -75.1523), (mode, h)
 
 
 def test_w_route_worker_and_provider_both_down(root):
