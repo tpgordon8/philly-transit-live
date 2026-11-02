@@ -35,10 +35,16 @@ html:not(.app-ready)::before{content:"Septer";position:fixed;z-index:2147483000;
 html:not(.app-ready)::after{content:"";position:fixed;z-index:2147483001;left:50%;top:calc(50% + 34px);width:96px;height:4px;margin-left:-48px;border-radius:2px;background:linear-gradient(90deg,transparent 0,#1f5fae 50%,transparent 100%);background-size:200% 100%;animation:splashSweep 1.2s ease-in-out infinite}
 @keyframes splashSweep{0%{background-position:100% 0}100%{background-position:-100% 0}}
 @media (prefers-color-scheme:dark){html:not(.app-ready)::before{background:#0a1119;color:#e7eef6}html:not(.app-ready)::after{background-image:linear-gradient(90deg,transparent 0,#5da4f3 50%,transparent 100%)}}
+html[data-theme="dark"]:not(.app-ready)::before{background:#0a1119;color:#e7eef6}html[data-theme="dark"]:not(.app-ready)::after{background-image:linear-gradient(90deg,transparent 0,#5da4f3 50%,transparent 100%)}
+html[data-theme="light"]:not(.app-ready)::before{background:#eef1f4;color:#1f5fae}html[data-theme="light"]:not(.app-ready)::after{background-image:linear-gradient(90deg,transparent 0,#1f5fae 50%,transparent 100%)}
 @media (prefers-reduced-motion:reduce){html:not(.app-ready)::after{animation:none;background:#1f5fae;opacity:.5}}
 </style>
 <noscript><style>html::before,html::after{display:none!important}</style></noscript>
 <script>setTimeout(function(){document.documentElement.classList.add("app-ready")},8000);</script>
+<script>
+/* Theme (ARCHITECTURE.md 16.4): applied before first paint so there is no flash. septa.theme.v1 holds "light", "dark" or "system"; anything else, a blocked or empty store, or an error means System (no data-theme, the CSS follows the device). js/panel.js repeats this apply step when the More tab's control changes. */
+(function(){try{var t=JSON.parse(localStorage.getItem("septa.theme.v1")),d=document.documentElement;if(t!=="light"&&t!=="dark")return;d.setAttribute("data-theme",t);var m=document.querySelectorAll('meta[name="theme-color"]'),c=t==="dark"?"#111b27":"#1f5fae";for(var i=0;i<m.length;i++)m[i].setAttribute("content",c)}catch(e){}})();
+</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
@@ -172,6 +178,16 @@ html:not(.app-ready)::after{content:"";position:fixed;z-index:2147483001;left:50
           <button class="btn" type="button" id="btnSaveWork" style="flex:1">Set as Work</button>
         </div>
       </div>
+    </section>
+
+    <section class="sec" aria-labelledby="h-theme" data-tab="more">
+      <h2 id="h-theme">Theme</h2>
+      <div class="seg" role="group" aria-label="Theme" id="themeSeg">
+        <button type="button" data-theme-pick="system" aria-pressed="true">System</button>
+        <button type="button" data-theme-pick="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-pick="dark" aria-pressed="false">Dark</button>
+      </div>
+      <p class="empty-line" style="margin-top:0">System follows your device. The My stops board is always dark.</p>
     </section>
 
     <section class="sec" aria-labelledby="h-priv" data-tab="more">
