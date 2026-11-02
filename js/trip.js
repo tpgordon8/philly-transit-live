@@ -24,8 +24,7 @@
    and hands it a cancel handle (trip.ctx) that Clear trip and a new plan use to abandon the old plan's requests. The map drawing
    is one Leaflet layer group, separate from `markers`. */
   var tripLayer = L.layerGroup().addTo(map);
-  var NO_MATCH =
-    'No match for that address. Try adding a cross street or a ZIP code.'; /* the same words as js/panel.js and js/boardadd.js */
+  var NO_MATCH = 'No match for that address. Try adding a cross street or a ZIP code.';
   var OUT_MSG = 'That place is outside the area this planner covers (Philadelphia region).';
   var trip = { seq: 0, ctx: null, busy: false, res: null, sel: 0, last: null, autoShown: false, view: null };
   var PHONE = window.matchMedia('(max-width:480px)');
@@ -231,12 +230,8 @@
           if (seq !== trip.seq) return;
           tripBusy(false);
           if (!res.options.length) {
-            tripFail(
-              'No trip found. Try a different start or destination.' +
-                (state.filters.train ? ' Regional Rail trips are not planned here yet.' : ''),
-              false,
-              'tripNone'
-            );
+            var rail = state.filters.train ? ' Regional Rail trips are not planned here yet.' : '';
+            tripFail('No trip found. Try a different start or destination.' + rail, false, 'tripNone');
             return;
           }
           trip.res = res;

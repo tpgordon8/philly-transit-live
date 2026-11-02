@@ -864,7 +864,7 @@ def test_k_routing_failed_when_bus_legs_cannot_be_routed(root):
         assert "routing_failed" not in codes(res)
         # the routing service refuses every leg that starts at stop S12 (a bus exit), answers everything else
         s.page.evaluate("""() => { const f = window.fetch; window.fetch = function (u, o) {
-            if (String(u).includes('route/v1/driving/-75.15800,39.95750;') || String(u).includes('/route/') && String(u).includes('from=39.95750,-75.15800&')) return Promise.resolve(new Response('{}', {status: 500}));
+            if (String(u).includes('route/v1/driving/-75.1580,39.9575;') || String(u).includes('/route/') && String(u).includes('from=39.95750,-75.15800&')) return Promise.resolve(new Response('{}', {status: 500}));
             return f.call(window, u, o); }; }""")
         s.page.evaluate("window.__SEPTA_TEST__.resetPlannerCaches()")
         res = ok(plan_o(s, O, D, vs, today="20260601"))
