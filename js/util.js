@@ -304,7 +304,7 @@
         var c = cleanPlace(x, true);
         if (c) list.push({ id: c.id, name: c.name, lat: c.lat, lng: c.lng });
       });
-    return { home: cleanPlace(o.home, false), list: list };
+    return { home: cleanPlace(o.home, false), work: cleanPlace(o.work, false), list: list };
   }
   /* fresh: nothing saved yet (no prefs); the v2 and v3 migrations below skip a fresh browser. firstVisit: fresh and the page was not opened
      from a #stop= share link; it only decides whether the welcome card shows (the welcome flag is checked separately). A share link
@@ -360,7 +360,8 @@
       !isObj(p) ||
       (p.list != null && !Array.isArray(p.list)) ||
       n !== c.list.length ||
-      (p.home != null && !c.home)
+      (p.home != null && !c.home) ||
+      (p.work != null && !c.work)
     );
   });
   function cleanRoutes(r) {

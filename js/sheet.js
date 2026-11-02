@@ -14,7 +14,7 @@
     root = document.documentElement;
   var FIELD = 'input, select, textarea';
   var PEEK_CONTROLS =
-    /^(addr|btnSearch|btnLocate|btnHome|btnSavePlace|myPill|welcomeOk)$/; /* what the closed sheet shows: working them must not open it */
+    /^(addr|btnSearch|btnLocate|btnHome|btnWork|btnSavePlace|myPill|welcomeOk)$/; /* what the closed sheet shows: working them must not open it */
   var TEXT_FIELD =
     'input[type=text], input[type=search], input:not([type]), textarea'; /* focus raises an on-screen keyboard */
   var KEYBOARD_MIN_PX = 80; /* a visual viewport this much shorter than the layout viewport is an on-screen keyboard */

@@ -69,3 +69,7 @@
 .tp-mk.tp-below{flex-direction:column-reverse;transform:translate(-50%,-6px)}
 .tp-mk.tp-below .tp-dot{margin:0 0 2px}
 .tp-mk.tp-start{--c:var(--good)} .tp-mk.tp-end{--c:var(--bad)} .tp-mk.tp-stn{--c:var(--tp-bike)} .tp-mk.tp-stop{--c:var(--bus)}
+.tp-gm{margin-top:12px}
+.tp-gm .btn,.tp-gm .btn:visited{color:var(--ink)}
+.tp-gm .btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;box-sizing:border-box;max-width:100%;text-decoration:none;text-align:center}
+.tp-gm-note{margin:6px 0 0;font-size:12.5px}
