@@ -675,7 +675,7 @@ def test_l_real_network_smoke_center_city(root):
 
 # ------------------------------------------------------------------ (k) WP2: planner notes, schedule line, view restore, phone
 FAIL_S12 = """() => { const f = window.fetch; window.fetch = function (u, o) {
-    if (String(u).includes('route/v1/driving/-75.15800,39.95750;') || String(u).includes('/route/') && String(u).includes('from=39.95750,-75.15800&')) return Promise.resolve(new Response('{}', {status: 500}));
+    if (String(u).includes('route/v1/driving/-75.1580,39.9575;') || String(u).includes('/route/') && String(u).includes('from=39.95750,-75.15800&')) return Promise.resolve(new Response('{}', {status: 500}));
     return f.call(window, u, o); }; }"""
 NO_ROUTE_FOOT = """() => { const f = window.fetch; window.fetch = function (u, o) {
     if (String(u).includes('routed-foot')) window.__direct = (window.__direct || 0) + 1;
@@ -828,7 +828,9 @@ def test_k_no_trip_found_state(root):
         s.page.click("#tripGo")
         s.page.wait_for_selector("#tripNone", timeout=15000)
         msg = s.page.locator("#tripNone")
-        assert msg.inner_text() == "No trip found. Try a different start or destination." and msg.get_attribute("role") == "alert"
+        assert msg.inner_text().startswith("No trip found. Try a different start or destination.") and msg.get_attribute("role") == "alert"
+        base = "No trip found. Try a different start or destination."
+        assert msg.inner_text() in (base, base + " Regional Rail trips are not planned here yet."), msg.inner_text()
         assert not s.page.evaluate("window.__direct"), "the Worker's 422 NoRoute answer is final: nothing is re-sent to the provider"
         assert s.page.evaluate("document.activeElement.id") == "tripNone"
         assert s.page.locator("#tripResults .tp-card").count() == 0 and s.page.locator("#tripRetry").count() == 0

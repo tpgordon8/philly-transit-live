@@ -334,14 +334,15 @@ def test_get_me_home_without_location_guesses_nothing(root):
 def test_get_me_home_button_only_when_home_is_set(root):
     with session() as s:
         trip_boot(s)
-        assert s.page.locator("#btnHome").is_hidden()
+        assert s.page.locator("#btnHome").is_visible() and s.page.get_attribute("#btnHome", "aria-disabled") == "true"
         assert s.page.inner_text("#homeHelp") == "Set a Home to use Get me home" and s.page.locator("#homeHelp").is_visible()
         s.page.evaluate(f"localStorage.setItem('septa.places.v1', {json.dumps(PLACES)})")
         s.page.reload()
         s.wait_live()
-        assert s.page.locator("#btnHome").is_visible() and s.page.locator("#homeHelp").is_hidden()
+        assert s.page.locator("#btnHome").is_visible() and s.page.get_attribute("#btnHome", "aria-disabled") is None
+        assert s.page.locator("#homeHelp").is_hidden()
         s.page.click("#places button[aria-label='Remove Home']")
-        assert s.page.locator("#btnHome").is_hidden() and s.page.locator("#homeHelp").is_visible()
+        assert s.page.get_attribute("#btnHome", "aria-disabled") == "true" and s.page.locator("#homeHelp").is_visible()
 
 
 # ------------------------------------------------------------------ Plan trip with an empty From
