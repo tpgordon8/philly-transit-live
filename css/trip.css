@@ -28,7 +28,7 @@
   .tp-go{min-height:48px;border-radius:24px}
 }
 .tp-go{width:100%;margin-top:12px}
-.tp-scope{font-size:12.5px}
+.tp-scope{font-size:12.5px;margin:0 0 10px}
 #tripResults{margin-top:14px;min-width:0}
 #tripResults h3{margin:0 0 4px;font:700 20px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.04em}
 #tripResults h3:focus{outline:none}

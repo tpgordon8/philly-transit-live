@@ -176,9 +176,7 @@
         el(
           'li',
           'empty-line',
-          A.scope === 'all'
-            ? 'No active alerts system-wide.'
-            : 'No active alerts for the routes running near here.'
+          A.scope === 'all' ? 'No service alerts right now.' : 'No service alerts near here.'
         )
       );
       return;
@@ -415,10 +413,14 @@
     });
     if (changed) saveRules();
   }
+  /* The empty Alerts tab points back to where a stop is picked: the Map tab, through the tab bar's own switch (js/sheet.js). */
+  $('#rulesGoMap').addEventListener('click', function () {
+    if (S.sheet && S.sheet.show) S.sheet.show('map', { save: true });
+  });
   function renderRules() {
     var ul = $('#rules');
     ul.replaceChildren();
-    $('#rulesEmpty').hidden = rulesState.rules.length > 0;
+    $('#rulesEmpty').hidden = $('#rulesGoMap').hidden = rulesState.rules.length > 0;
     rulesState.rules.forEach(function (r) {
       var li = el('li', 'rule');
       li.dataset.id = r.id;
@@ -460,6 +462,7 @@
     });
     evalRules();
   }
+  var openNoteShown = false; /* the page-open note shows once per page session; nothing is stored */
   function alertRow(st) {
     var row = el('div', 'alertrow');
     row.appendChild(el('span', null, 'Alert me when route ' + st.route + ' is under'));
@@ -480,6 +483,9 @@
     b.type = 'button';
     b.id = 'addAlert';
     row.appendChild(b);
+    var once = el('div', 'alertnote');
+    once.id = 'alertOnce';
+    once.setAttribute('role', 'status');
     var live = el('div', 'live');
     live.id = 'alertLive';
     live.setAttribute('role', 'status');
@@ -508,6 +514,10 @@
         enabled: true,
         last: null
       });
+      if (!openNoteShown) {
+        openNoteShown = true;
+        once.textContent = 'Alerts only work while this page is open.';
+      }
       var saved = saveRules(true); /* a failure is spoken once, by the live line below */
       renderRules();
       updateAlertRow();
@@ -523,6 +533,7 @@
     var wrap = el('div');
     wrap.style.display = 'contents';
     wrap.appendChild(row);
+    wrap.appendChild(once);
     wrap.appendChild(live);
     return wrap;
   }

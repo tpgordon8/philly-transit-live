@@ -251,7 +251,7 @@ def check_welcome(root):
         s.page.wait_for_timeout(600)
         card = s.page.locator("#welcome")
         assert s.page.evaluate("localStorage.getItem('septa.seen.v1')") is None
-        assert card.is_visible() and card.locator("p").inner_text() == "Live SEPTA vehicles near you. Tap Near me or search an address."
+        assert card.is_visible() and card.locator("p").inner_text() == "Live SEPTA vehicles near you. Tap Near me or search an address. Trip plans a route, Board pins your stops, and Alerts tells you when to leave."
         ok = s.page.locator("#welcomeOk")
         assert ok.inner_text() == "Got it" and rect(s, "#welcomeOk")["h"] >= 44 - 0.5
         c, panel = rect(s, "#welcome"), rect(s, "#panel")

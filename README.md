@@ -147,8 +147,7 @@ Planning a trip sends data only as follows:
   each answer (routes one minute). The saved Home button and saved place buttons, Use my location and the map center are
   not geocoded, but their coordinates are sent as route legs exactly like the coordinates of a typed address.
 - Fallback: if the Worker cannot be reached, answers 404 (an older Worker) or answers 500, 502, 503 or 504, the page asks the
-  routing service and the Indego feed directly instead. Then the routing service receives the leg coordinates unrounded, to
-  5 decimals (about 1 m). A 4xx or 422 answer from the Worker, such as "no route between those points" or a place outside the
+  routing service and the Indego feed directly instead. Then the routing service receives the leg coordinates rounded to 4 decimals (about 10 m), the same as through our server. A 4xx or 422 answer from the Worker, such as "no route between those points" or a place outside the
   Philadelphia region, is an answer and is never re-sent anywhere.
 
 Nothing is stored in the page: the From and To text, the options and the drawn plan live only in the open page.
