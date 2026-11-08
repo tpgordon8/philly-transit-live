@@ -243,7 +243,7 @@
     var name = path.indexOf('?') >= 0 ? path : path.split('/')[0];
     return fetchOnce(name).catch(function () {
       return new Promise(function (res) {
-        setTimeout(res, FETCH_RETRY_MS);
+        setTimeout(res, S.util.backoffMs(0, FETCH_RETRY_MS, FETCH_TIMEOUT_MS));
       }).then(function () {
         return fetchOnce(name);
       });

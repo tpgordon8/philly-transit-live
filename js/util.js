@@ -463,4 +463,25 @@
   S.util.routeFilterOn = routeFilterOn;
   S.util.state = state;
   S.util.el = el;
+  /* Capped exponential backoff with jitter: the delay for retry number `attempt` (0 = first retry) is
+   min(capMs, baseMs * 2^attempt), then spread over its upper half so many pages never retry in lockstep.
+   Never longer than the un-jittered value, so a caller's stated pause is still its upper bound. */
+  S.util.backoffMs = function (attempt, baseMs, capMs) {
+    var d = Math.min(capMs, baseMs * Math.pow(2, attempt));
+    return Math.round(d / 2 + (Math.random() * d) / 2);
+  };
+  /* A fetch() init with an AbortSignal that fires after `ms`. Merges into `init`; `done()` clears the timer. */
+  S.util.withTimeout = function (init, ms) {
+    var ctl = new AbortController(),
+      t = setTimeout(function () {
+        ctl.abort();
+      }, ms),
+      o = Object.assign({}, init, { signal: ctl.signal });
+    return {
+      init: o,
+      done: function () {
+        clearTimeout(t);
+      }
+    };
+  };
 })();

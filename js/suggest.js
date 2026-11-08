@@ -18,6 +18,7 @@
     MIN_CHARS = 3,
     DEBOUNCE_MS = 250,
     GAP_MS = 1000 /* at most one Photon request per second */,
+    FETCH_TIMEOUT_MS = 8000 /* one Photon request: give up after this long */,
     PHOTON_LIMIT = 6,
     MAX_LANDMARKS = 4,
     MAX_ITEMS = 8,
@@ -206,7 +207,8 @@
     j.timer = setTimeout(function () {
       job = null;
       lastStart = Date.now();
-      var ctl = typeof AbortController === 'function' ? new AbortController() : null;
+      var timedOut = false,
+        ctl = typeof AbortController === 'function' ? new AbortController() : null;
       inflight = ctl;
       var url =
         PHOTON_URL +
@@ -218,6 +220,12 @@
         '&bbox=' +
         [BOX.w, BOX.s, BOX.e, BOX.n].join(',') +
         '&lang=en';
+      var tm = ctl
+        ? setTimeout(function () {
+            timedOut = true;
+            ctl.abort();
+          }, FETCH_TIMEOUT_MS)
+        : 0;
       fetch(url, ctl ? { signal: ctl.signal } : {})
         .then(function (r) {
           if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -237,7 +245,10 @@
         .catch(function () {
           /* Quiet failure (offline, blocked, rate limited, aborted): no suggestions; the submit path still works. */
           if (inflight === ctl) inflight = null;
-          if (!ctl || !ctl.signal.aborted) done(null);
+          if (!ctl || !ctl.signal.aborted || timedOut) done(null);
+        })
+        .finally(function () {
+          clearTimeout(tm);
         });
     }, wait);
   }

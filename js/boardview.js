@@ -395,12 +395,15 @@
     reloadTry = now + RELOAD_RETRY_MS;
     if (navigator.onLine === false || typeof fetch !== 'function') return;
     reloadBusy = true;
-    fetch(location.href.split('#')[0], { cache: 'no-store' }).then(
+    var rq = S.util.withTimeout({ cache: 'no-store' }, 15000);
+    fetch(location.href.split('#')[0], rq.init).then(
       function (r) {
+        rq.done();
         reloadBusy = false;
         if (r && r.ok) api.reload();
       },
       function () {
+        rq.done();
         reloadBusy = false;
       }
     );

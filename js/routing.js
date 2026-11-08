@@ -139,7 +139,7 @@
     return tpFetch(url, noStore, ctx).catch(function (e) {
       if ((e && e.final) || (ctx && ctx.dead)) throw e;
       return new Promise(function (res) {
-        setTimeout(res, TP.RETRY_MS);
+        setTimeout(res, S.util.backoffMs(0, TP.RETRY_MS, TP.TIMEOUT_MS));
       }).then(function () {
         if (ctx && ctx.dead) throw e;
         return tpFetch(url, noStore, ctx);

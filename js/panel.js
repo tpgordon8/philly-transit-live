@@ -355,6 +355,7 @@
   var GEO_TIMEOUT_MS = 9000 /* browser location request: give up after this long */,
     GEO_MAX_AGE_MS = 30000 /* and accept a cached fix this old */,
     GEO_GAP_MS = 1100,
+    GEO_FETCH_MS = 10000 /* one Nominatim request: give up after this long */,
     geoNext = 0,
     geoCache = {};
   function geocode(q, opts) {
@@ -368,11 +369,13 @@
       at = Math.max(now, geoNext);
     if (at - now > GEO_GAP_MS * 20) at = now; /* the clock moved backwards: do not wait for a stale slot */
     geoNext = at + GEO_GAP_MS;
+    var geoReq = null;
     return new Promise(function (res) {
       setTimeout(res, at - now);
     })
       .then(function () {
-        return fetch(GEO_URL + encodeURIComponent(q), { headers: { Accept: 'application/json' } });
+        geoReq = S.util.withTimeout({ headers: { Accept: 'application/json' } }, GEO_FETCH_MS);
+        return fetch(GEO_URL + encodeURIComponent(q), geoReq.init);
       })
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -386,6 +389,9 @@
         }
         geoCache[key] = out;
         return out && { lat: out.lat, lng: out.lng, label: out.label };
+      })
+      .finally(function () {
+        if (geoReq) geoReq.done();
       });
   }
   /* A picked suggestion carries its coordinates, so submit uses them and does not geocode; editing the text discards the pick. */
