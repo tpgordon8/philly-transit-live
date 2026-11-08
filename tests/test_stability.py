@@ -106,10 +106,11 @@ def test_preconnect_hints(root):
     head = html[: html.index("</head>")]
     pre = re.findall(r'<link rel="preconnect" href="([^"]+)"( crossorigin)?>', head)
     assert pre == [("https://septa-proxy.tpgordon8.workers.dev", " crossorigin"), ("https://fonts.gstatic.com", " crossorigin"),
-                   ("https://tile.openstreetmap.org", " crossorigin")], pre
+                   ("https://tile.openstreetmap.org", " crossorigin"), ("https://cdnjs.cloudflare.com", " crossorigin"),
+                   ("https://fonts.googleapis.com", "")], pre
     # every external host named in the head is one we know about; the Leaflet tag keeps its SRI
     hosts = set(re.findall(r'(?:href|src)="https?://([^/"]+)', head))
-    assert hosts <= {"septa-proxy.tpgordon8.workers.dev", "fonts.gstatic.com", "tile.openstreetmap.org", "fonts.googleapis.com"}, hosts
+    assert hosts <= {"septa-proxy.tpgordon8.workers.dev", "fonts.gstatic.com", "tile.openstreetmap.org", "fonts.googleapis.com", "cdnjs.cloudflare.com"}, hosts
     assert 'integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"' in html
     assert "Content-Security-Policy" not in html
 
